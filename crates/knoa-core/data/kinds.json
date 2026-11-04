@@ -14,7 +14,7 @@
   "video": {
     "label": "Video",
     "plural": "Videos",
-    "description": "A single video to watch: YouTube, Vimeo, a talk recording. Not a full-length feature film.",
+    "description": "A video to watch, or an album of video clips: YouTube, Vimeo, a talk recording. Not a full-length feature film.",
     "key_facts": ["duration", "channel"],
     "fields": [
       { "name": "channel", "type": "text", "description": "Channel or uploader" },
