@@ -22,3 +22,5 @@ Knoa is a native macOS bookmark app in Rust using GPUI (Zed's UI framework). Rea
 - Logging: `tracing`, never `println!`.
 - Keep the UI on the main thread; do I/O and LLM calls on GPUI's background executor.
 - Record significant technical decisions as a new ADR in `docs/adr/`.
+- License is GPL-3.0-or-later. Only add dependencies with GPLv3-compatible licenses (MIT,
+  Apache-2.0, BSD, MPL-2.0, ...); never GPLv2-only or proprietary ones.

@@ -67,3 +67,17 @@ docs/               vision, architecture, roadmap, ADRs
 The workspace is set up for more crates (`crates/*`); the planned split is in
 [ARCHITECTURE](docs/ARCHITECTURE.md#crates). Lints are defined once in the root
 `Cargo.toml` under `[workspace.lints]` and inherited by every crate.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md); commits are signed off
+under the DCO (`git commit -s`).
+
+## License
+
+Knoa is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License v3.0 or later](LICENSE). Anyone who distributes Knoa, modified or
+not, free or paid, must make the full source available under the same license.
+
+The name "Knoa" and its logo are not covered by the license: forks must use their own name
+and branding. See [TRADEMARK.md](TRADEMARK.md).
