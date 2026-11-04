@@ -66,6 +66,14 @@ impl Store {
     }
 }
 
+impl Store {
+    /// Whether anything was ever imported from `source`; the first import is metadata-only.
+    pub fn has_source(&self, source: &str) -> Result<bool> {
+        let sql = "SELECT EXISTS (SELECT 1 FROM bookmarks WHERE source = ?1)";
+        Ok(self.conn.query_row(sql, [source], |row| row.get(0))?)
+    }
+}
+
 fn insert(
     tx: &rusqlite::Transaction<'_>,
     source: &str,

@@ -7,10 +7,12 @@ old one.
 | # | Decision | Status |
 | --- | --- | --- |
 | [0001](0001-gpui-via-gpui-pre-snapshots.md) | GPUI via the `gpui-pre` snapshot crates | Accepted |
-| [0002](0002-sqlite-local-first-storage.md) | SQLite for local storage, FTS5 for search | Accepted (planned) |
-| [0003](0003-openrouter-thin-client.md) | OpenRouter through a thin hand-written client | Accepted (planned) |
-| [0004](0004-hybrid-ui-components.md) | gpui-component for primitives, own design on top | Accepted (planned) |
-| [0005](0005-typed-bookmarks-and-folders.md) | Typed bookmarks and one-level folders | Accepted (planned) |
-| [0006](0006-tokio-runtime-for-network.md) | A dedicated tokio runtime for network work | Accepted (planned) |
-| [0007](0007-main-screen-rendering.md) | Masonry, glass panels and the date rail in GPUI | Accepted (planned) |
-| [0008](0008-credential-storage.md) | Keychain in signed builds, plain file in dev builds | Accepted (planned) |
+| [0002](0002-sqlite-local-first-storage.md) | SQLite for local storage, FTS5 for search | Accepted |
+| [0003](0003-openrouter-thin-client.md) | OpenRouter through a thin hand-written client | Accepted |
+| [0004](0004-hybrid-ui-components.md) | gpui-component for primitives, own design on top | Accepted |
+| [0005](0005-typed-bookmarks-and-folders.md) | Typed bookmarks and one-level folders | Accepted |
+| [0006](0006-tokio-runtime-for-network.md) | A dedicated tokio runtime for network work | Accepted |
+| [0007](0007-main-screen-rendering.md) | Masonry, glass panels and the date rail in GPUI | Accepted |
+| [0008](0008-credential-storage.md) | Keychain in signed builds, plain file in dev builds | Accepted |
+| [0009](0009-provider-neutral-ai.md) | Provider-neutral AI behind two traits | Accepted |
+| [0010](0010-bookmark-sync-by-file-watch.md) | Bookmark sync by file watch, with a slow rescan | Accepted |

@@ -1,6 +1,6 @@
 # 0005: Typed bookmarks and one-level folders
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context
@@ -12,7 +12,8 @@ two hours". Users also want some manual organization, but not deep folder trees.
 ## Decision
 
 - **Kinds:** a fixed set (Article, Video, Movie, Recipe, Product, Repository, Book, Image,
-  Other), each with typed fields. Kind definitions are data in an embedded file in
+  App, Podcast, Place, Other; the last three added after the
+  [enrichment research](../research/llm-enrichment.md)), each with typed fields. Kind definitions are data in an embedded file in
   `knoa-core`.
 - **Extras:** free-form key/value facts the AI adds when a kind's fields don't cover
   something. Searchable, no typed filters.

@@ -1,6 +1,6 @@
 # 0002: SQLite for local storage, FTS5 for search
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context

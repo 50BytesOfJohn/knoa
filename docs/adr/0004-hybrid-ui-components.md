@@ -1,6 +1,6 @@
 # 0004: gpui-component for primitives, own design on top
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context

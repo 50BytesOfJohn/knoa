@@ -171,8 +171,7 @@ A user-managed queue of bookmarks to read or watch:
 See [ADR 0007](../adr/0007-main-screen-rendering.md) for masonry, glass panels and the
 date rail in GPUI.
 
-## Open questions
+## Decided after approval
 
-- Workspaces are planned for after the alpha, but the design gives them a prominent
-  place. Either workspaces move into the alpha, or the card shows the single library
-  until they ship. Decide before building M1.
+- Workspaces stay after the alpha. Until they ship, the workspace card shows the single
+  library under the name chosen in onboarding, and has no switcher.

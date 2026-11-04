@@ -1,0 +1,186 @@
+//! Knoa's themes: colors, type, spacing and radii. Several themes, not only light and dark;
+//! the default is a calm, solid light one. gpui-component's theme is derived from ours so
+//! inputs and scrollbars match.
+
+use gpui::{App, Global, Hsla, Pixels, hsla, px};
+
+pub const DEFAULT_THEME: &str = "paper";
+
+/// Space around and between floating panels.
+pub const MARGIN: Pixels = px(12.);
+pub const SIDEBAR_WIDTH: Pixels = px(232.);
+pub const DETAIL_WIDTH: Pixels = px(340.);
+pub const PANEL_RADIUS: Pixels = px(18.);
+pub const CARD_RADIUS: Pixels = px(14.);
+pub const SERIF: &str = "Charter";
+
+#[derive(Debug, Clone)]
+pub struct Theme {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub dark: bool,
+    /// The window background behind the floating panels.
+    pub canvas: Hsla,
+    pub panel: Hsla,
+    pub hairline: Hsla,
+    pub card: Hsla,
+    pub card_hover_shadow: Hsla,
+    pub text: Hsla,
+    pub muted: Hsla,
+    pub faint: Hsla,
+    /// The theme's accent: selected place, primary buttons.
+    pub accent: Hsla,
+    pub on_accent: Hsla,
+    pub soft: Hsla,
+    pub hover: Hsla,
+    /// AI-made values (✦), separate from the accent on purpose.
+    pub ai: Hsla,
+    pub ai_soft: Hsla,
+    pub code_card: Hsla,
+    pub code_text: Hsla,
+    pub danger: Hsla,
+    pub folders: [Hsla; 8],
+}
+
+impl Global for Theme {}
+
+impl Theme {
+    pub fn get(cx: &App) -> &Theme {
+        cx.global::<Theme>()
+    }
+
+    pub fn all() -> [Theme; 4] {
+        [paper(), sage(), night(), dusk()]
+    }
+
+    pub fn by_id(id: &str) -> Theme {
+        Theme::all()
+            .into_iter()
+            .find(|t| t.id == id)
+            .unwrap_or_else(paper)
+    }
+
+    pub fn folder_color(&self, index: u8) -> Hsla {
+        self.folders[usize::from(index) % self.folders.len()]
+    }
+
+    /// Makes `id` the current theme, here and in gpui-component.
+    pub fn apply(id: &str, cx: &mut App) {
+        let theme = Theme::by_id(id);
+        let component = gpui_component::Theme::global_mut(cx);
+        component.mode = if theme.dark {
+            gpui_component::ThemeMode::Dark
+        } else {
+            gpui_component::ThemeMode::Light
+        };
+        let c = &mut component.colors;
+        c.background = theme.panel;
+        c.foreground = theme.text;
+        c.border = theme.hairline;
+        c.input = theme.hairline;
+        c.ring = theme.accent.opacity(0.5);
+        c.caret = theme.accent;
+        c.selection = theme.accent.opacity(0.25);
+        c.muted = theme.soft;
+        c.muted_foreground = theme.muted;
+        c.primary = theme.accent;
+        c.popover = theme.panel;
+        c.popover_foreground = theme.text;
+        c.scrollbar = gpui::transparent_black();
+        c.scrollbar_thumb = theme.faint.opacity(0.5);
+        component.font_size = px(14.);
+        component.radius = px(10.);
+        cx.set_global(theme);
+        cx.refresh_windows();
+    }
+}
+
+fn rgb(hex: u32) -> Hsla {
+    gpui::rgb(hex).into()
+}
+
+fn folder_palette(dark: bool) -> [Hsla; 8] {
+    let lightness = if dark { 0.66 } else { 0.55 };
+    [0.02, 0.08, 0.13, 0.36, 0.5, 0.58, 0.72, 0.9].map(|hue| hsla(hue, 0.55, lightness, 1.))
+}
+
+fn paper() -> Theme {
+    Theme {
+        id: "paper",
+        name: "Paper",
+        dark: false,
+        canvas: rgb(0x00ef_ece6),
+        panel: rgb(0x00fb_faf7),
+        hairline: rgb(0x00e2_ddd4),
+        card: rgb(0x00ff_ffff),
+        card_hover_shadow: hsla(0.08, 0.3, 0.2, 0.14),
+        text: rgb(0x0022_201c),
+        muted: rgb(0x006f_6a61),
+        faint: rgb(0x00a3_9d92),
+        accent: rgb(0x002f_5d50),
+        on_accent: rgb(0x00ff_ffff),
+        soft: rgb(0x00f0_ede6),
+        hover: rgb(0x00ec_e8e0),
+        ai: rgb(0x00b2_6a1d),
+        ai_soft: rgb(0x00f8_ecdc),
+        code_card: rgb(0x0024_2a2e),
+        code_text: rgb(0x00e8_ecee),
+        danger: rgb(0x00b3_3a2b),
+        folders: folder_palette(false),
+    }
+}
+
+fn sage() -> Theme {
+    Theme {
+        id: "sage",
+        name: "Sage",
+        canvas: rgb(0x00e3_e9e1),
+        panel: rgb(0x00f6_f8f4),
+        hairline: rgb(0x00d5_ddd2),
+        soft: rgb(0x00e9_eee6),
+        hover: rgb(0x00e2_e8de),
+        accent: rgb(0x003d_6b45),
+        ..paper()
+    }
+}
+
+fn night() -> Theme {
+    Theme {
+        id: "night",
+        name: "Night",
+        dark: true,
+        canvas: rgb(0x0012_1314),
+        panel: rgb(0x001c_1d1f),
+        hairline: rgb(0x002e_3033),
+        card: rgb(0x0023_2427),
+        card_hover_shadow: hsla(0., 0., 0., 0.45),
+        text: rgb(0x00ec_eae6),
+        muted: rgb(0x009c_9891),
+        faint: rgb(0x0068_655f),
+        accent: rgb(0x008f_c7b4),
+        on_accent: rgb(0x0012_1314),
+        soft: rgb(0x0026_2729),
+        hover: rgb(0x002b_2d30),
+        ai: rgb(0x00e3_a35a),
+        ai_soft: rgb(0x0036_2a1c),
+        code_card: rgb(0x000f_1215),
+        code_text: rgb(0x00d8_dee2),
+        danger: rgb(0x00e0_6e5c),
+        folders: folder_palette(true),
+    }
+}
+
+fn dusk() -> Theme {
+    Theme {
+        id: "dusk",
+        name: "Dusk",
+        canvas: rgb(0x0017_1520),
+        panel: rgb(0x0021_1e2c),
+        hairline: rgb(0x0034_3045),
+        card: rgb(0x0028_2536),
+        soft: rgb(0x002c_2839),
+        hover: rgb(0x0032_2e42),
+        accent: rgb(0x00c3_a6f2),
+        ..night()
+    }
+}

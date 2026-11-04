@@ -1,6 +1,6 @@
 # 0006: A dedicated tokio runtime for network work
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context

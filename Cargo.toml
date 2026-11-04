@@ -22,6 +22,8 @@ gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", features =
 ] }
 
 gpui-component = "=0.9.0"
+# Lucide icons as SVG assets, the same set gpui-component uses.
+gpui-kit-assets = "=0.9.0"
 
 knoa-ai = { path = "crates/knoa-ai" }
 knoa-browser = { path = "crates/knoa-browser" }
@@ -79,6 +81,9 @@ cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
 cast_sign_loss = "allow"
 cast_possible_wrap = "allow"
+# View render helpers are methods even when they only need `cx`; it keeps call sites uniform.
+unused_self = "allow"
+similar_names = "allow"
 # Restriction lints we opt into.
 dbg_macro = "warn"
 todo = "warn"

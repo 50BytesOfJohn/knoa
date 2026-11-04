@@ -30,12 +30,13 @@ impl Store {
         &mut self,
         name: &str,
         description: &str,
+        auto_assign: bool,
         color: FolderColor,
     ) -> Result<FolderId> {
         self.conn.execute(
-            "INSERT INTO folders (name, description, color, position)
-             VALUES (?1, ?2, ?3, (SELECT coalesce(max(position), 0) + 1 FROM folders))",
-            params![name, description, color.0],
+            "INSERT INTO folders (name, description, auto_assign, color, position)
+             VALUES (?1, ?2, ?3, ?4, (SELECT coalesce(max(position), 0) + 1 FROM folders))",
+            params![name, description, auto_assign, color.0],
         )?;
         Ok(FolderId(self.conn.last_insert_rowid()))
     }
@@ -124,7 +125,9 @@ mod tests {
                 NewBookmarks::Organize,
             )
             .unwrap();
-        let folder = store.create_folder("Reading", "", FolderColor(0)).unwrap();
+        let folder = store
+            .create_folder("Reading", "", true, FolderColor(0))
+            .unwrap();
         let job = store.take_jobs(0, 1).unwrap().remove(0);
         let enrichment = Enrichment {
             kind: Kind::Article,

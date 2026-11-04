@@ -1,6 +1,6 @@
 # 0007: Rendering the main screen in GPUI
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context

@@ -1,6 +1,6 @@
 # 0003: OpenRouter through a thin hand-written client
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context

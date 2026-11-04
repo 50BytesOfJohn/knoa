@@ -1,5 +1,74 @@
-//! Views. Each top-level view gets its own module as the UI grows.
+//! Views. The root shows onboarding until it's done, then the main screen.
 
-mod root;
+pub mod components;
+mod main;
+mod onboarding;
+pub mod theme;
 
-pub use root::RootView;
+use gpui::{
+    AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, Styled as _, Window,
+    div,
+};
+
+pub use main::bind_keys;
+
+use crate::state::{
+    library::Library,
+    settings::{SettingsFile, WindowFrame},
+};
+
+pub struct RootView {
+    library: Entity<Library>,
+    onboarding: Option<Entity<onboarding::Onboarding>>,
+    main: Option<Entity<main::MainView>>,
+}
+
+impl RootView {
+    pub fn new(
+        library: Entity<Library>,
+        window: &mut Window,
+        cx: &mut Context<'_, RootView>,
+    ) -> RootView {
+        cx.observe_window_bounds(window, |_, window, cx| {
+            let bounds = window.window_bounds().get_bounds();
+            let frame = WindowFrame {
+                x: bounds.origin.x.into(),
+                y: bounds.origin.y.into(),
+                width: bounds.size.width.into(),
+                height: bounds.size.height.into(),
+            };
+            if SettingsFile::get(cx).window != Some(frame) {
+                SettingsFile::update(cx, |s| s.window = Some(frame));
+            }
+        })
+        .detach();
+        RootView {
+            library,
+            onboarding: None,
+            main: None,
+        }
+    }
+}
+
+impl Render for RootView {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        let screen = if SettingsFile::get(cx).onboarded {
+            self.onboarding = None;
+            let library = self.library.clone();
+            self.main
+                .get_or_insert_with(|| cx.new(|cx| main::MainView::new(library, window, cx)))
+                .clone()
+                .into_any_element()
+        } else {
+            self.main = None;
+            let library = self.library.clone();
+            self.onboarding
+                .get_or_insert_with(|| {
+                    cx.new(|cx| onboarding::Onboarding::new(library, window, cx))
+                })
+                .clone()
+                .into_any_element()
+        };
+        div().size_full().child(screen)
+    }
+}

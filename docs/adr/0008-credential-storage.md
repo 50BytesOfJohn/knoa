@@ -1,6 +1,6 @@
 # 0008: Keychain in signed builds, plain file in dev builds
 
-- Status: Accepted (not implemented yet)
+- Status: Accepted
 - Date: 2026-11-04
 
 ## Context

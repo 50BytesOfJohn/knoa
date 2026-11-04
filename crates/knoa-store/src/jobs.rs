@@ -8,13 +8,11 @@ use rusqlite::{OptionalExtension as _, params};
 
 use crate::{Result, Store, search};
 
-/// A bookmark taken from the queue, with the page evidence stored by an earlier fetch.
+/// A bookmark taken from the queue.
 #[derive(Debug, Clone)]
 pub struct Job {
     pub bookmark: Bookmark,
     pub attempts: u32,
-    /// `None` until the page has been fetched once.
-    pub evidence: Option<String>,
 }
 
 impl Store {
@@ -45,17 +43,15 @@ impl Store {
     /// Takes up to `limit` due jobs and marks their bookmarks as organizing.
     pub fn take_jobs(&mut self, now: i64, limit: usize) -> Result<Vec<Job>> {
         let tx = self.conn.transaction()?;
-        let due: Vec<(i64, u32, Option<String>)> = {
+        let due: Vec<(i64, u32)> = {
             let mut stmt = tx.prepare(
-                "SELECT j.bookmark_id, j.attempts, b.page_evidence FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+                "SELECT j.bookmark_id, j.attempts FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
                  WHERE j.run_after <= ?1 AND b.status = 'queued' ORDER BY b.added_at DESC LIMIT ?2",
             )?;
-            stmt.query_map(params![now, limit], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            })?
-            .collect::<rusqlite::Result<_>>()?
+            stmt.query_map(params![now, limit], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()?
         };
-        for (id, _, _) in &due {
+        for (id, _) in &due {
             tx.execute(
                 "UPDATE bookmarks SET status = 'organizing' WHERE id = ?1",
                 [id],
@@ -64,13 +60,9 @@ impl Store {
         tx.commit()?;
 
         let mut jobs = Vec::with_capacity(due.len());
-        for (id, attempts, evidence) in due {
+        for (id, attempts) in due {
             if let Some(bookmark) = self.bookmark(BookmarkId(id))? {
-                jobs.push(Job {
-                    bookmark,
-                    attempts,
-                    evidence,
-                });
+                jobs.push(Job { bookmark, attempts });
             }
         }
         Ok(jobs)

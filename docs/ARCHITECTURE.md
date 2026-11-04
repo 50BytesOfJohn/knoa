@@ -1,7 +1,7 @@
 # Architecture
 
-The design for the alpha. Only the app shell is built so far. When part of this becomes
-code, update this file in the same change. Product decisions are in [VISION](VISION.md).
+The design for the alpha, and what is built of it. When code changes this, update this
+file in the same change. Product decisions are in [VISION](VISION.md).
 
 ## Overview
 
@@ -31,9 +31,12 @@ One process. The UI thread only renders and handles input:
 
 | Crate | Role | Depends on GPUI? |
 | --- | --- | --- |
-| `knoa` (exists) | App binary: windows, views, actions; sync and AI as modules | yes |
+| `knoa` | App binary: views, settings, credentials; services that run sync and the organizing queue | yes |
 | `knoa-core` | Domain types (`Bookmark`, `Kind`, `Field`, `Folder`, `Query`), kind definitions | no |
-| `knoa-store` | SQLite schema, migrations, queries, full-text search | no |
+| `knoa-store` | SQLite schema, migrations, queries, full-text search, the job queue | no |
+| `knoa-browser` | Chromium profile discovery, `Bookmarks` parsing, file watching | no |
+| `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails | no |
+| `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
 
 ## Data model
 
@@ -61,9 +64,12 @@ cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 ## Sync
 
 - Reads Chromium-family bookmark files
-  (`~/Library/Application Support/<vendor>/<Profile>/Bookmarks`) for Chrome, Arc, Brave,
-  Helium and others, with profile discovery.
-- Watches them with `notify`, debounced.
+  (`~/Library/Application Support/<vendor>/<Profile>/Bookmarks`) for Helium, Chrome,
+  Brave, Edge, Vivaldi and Chromium, with profile discovery from `Local State`. Arc is
+  left out: its sidebar lives in `StorableSidebar.json`.
+- Watches the profile directories with `notify` (FSEvents), debounced 1.5 s, plus a
+  rescan every 10 minutes as a backup; both skip files whose checksum is unchanged
+  ([ADR 0010](adr/0010-bookmark-sync-by-file-watch.md)).
 - One-way, browser → Knoa. Bookmarks are keyed on URL plus the browser's GUID, so
   re-imports are idempotent. The browser folder path is stored and passed to the AI as a
   hint.
@@ -81,20 +87,25 @@ network requests), so quitting the app loses no work.
    - site-specific extractors for popular sites (YouTube, Vimeo, IMDb, GitHub, ...);
    - structured data on the page: schema.org JSON-LD, Open Graph, oEmbed;
    - LLM extraction from the page text when the above is not enough.
-3. **Organize** with the LLM through OpenRouter Chat Completions with
-   `response_format: { type: "json_schema", strict: true }`. Output: kind, fields, extras,
-   tags, summary, folders. Input: the user's instructions, descriptions of auto-assign
-   folders, existing tags, the extracted metadata and truncated page text.
-4. **Store** the result with the model name and instruction version.
+3. **Organize** with one structured chat call (`json_schema`, `strict: true`, generic
+   name/value fields). Output: kind, summary, fields, extras, tags. Input: the user's
+   instructions, the extracted evidence and about 4k characters of page text. Values read
+   from the page override the model's.
+4. **Folders** come from a yes/no classifier, one question per auto-assign folder
+   (OpenRouter Decisions, with a sentinel question). A provider without a classifier
+   picks folders in the chat call instead.
+5. **Store** the result with the model name. Without AI, steps 3 and 4 are skipped and the
+   page's own metadata is stored.
 
-The default models are small and cheap; result quality matters more than cost. Before the
-queue is built, a proof of concept compares one request per bookmark with two or three
-focused requests (for example, folder matching on its own) on real bookmarks.
+Models and request shape follow the [enrichment research](research/llm-enrichment.md):
+`openai/gpt-6-luna` with `anthropic/claude-haiku-5.5` as fallback, and
+`perplexity/pplx-decider-v1.2` for folders.
 
 Folder "find bookmarks" and re-scan run folder matching over bookmarks that are already
 processed. They only add.
 
-The OpenRouter client is a small hand-written module
+AI providers sit behind two traits in `knoa-ai`
+([ADR 0009](adr/0009-provider-neutral-ai.md)); OpenRouter is a small hand-written client
 ([ADR 0003](adr/0003-openrouter-thin-client.md)). The API key is stored in the macOS
 Keychain in release builds and in a plain file in dev builds
 ([ADR 0008](adr/0008-credential-storage.md)).

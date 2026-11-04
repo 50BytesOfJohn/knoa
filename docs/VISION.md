@@ -53,7 +53,7 @@ quality are a priority from the first milestone.
 | **Up next** | Queue of things to read or watch | User only | An essay, a film for Friday |
 
 - **Kinds** are a fixed set: Article, Video, Movie, Recipe, Product, Repository, Book,
-  Image, Other. Each kind has typed fields, which makes filters like "movies with this
+  Image, App, Podcast, Place, Other. Each kind has typed fields, which makes filters like "movies with this
   actor" or "videos longer than an hour" possible.
 - **Extras** hold facts the kind's fields don't cover. They are shown and searchable, but
   have no typed filters.
