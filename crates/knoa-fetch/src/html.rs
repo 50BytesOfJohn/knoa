@@ -3,7 +3,10 @@
 use std::sync::LazyLock;
 
 use scraper::{ElementRef, Html, Node, Selector};
+use serde::Serialize;
 use serde_json::Value;
+
+use crate::jsonld;
 
 /// What the page says about itself.
 #[derive(Debug, Default)]
@@ -17,7 +20,22 @@ pub struct HtmlMeta {
     /// `itemprop="duration"`, which YouTube and many video sites set as ISO 8601.
     pub duration: Option<String>,
     pub json_ld: Vec<Value>,
+    pub media: Media,
     pub text: String,
+}
+
+/// Video players on the page. Galleries tagged `og:type=article` often embed several, and
+/// without this the AI never learns the page is about video.
+#[derive(Debug, Default, Serialize)]
+pub struct Media {
+    pub videos: usize,
+    pub video_iframes: usize,
+}
+
+impl Media {
+    pub fn is_empty(&self) -> bool {
+        self.videos == 0 && self.video_iframes == 0
+    }
 }
 
 fn selector(css: &str) -> Selector {
@@ -30,6 +48,8 @@ static HTML: LazyLock<Selector> = LazyLock::new(|| selector("html"));
 static JSON_LD: LazyLock<Selector> =
     LazyLock::new(|| selector(r#"script[type="application/ld+json"]"#));
 static BODY: LazyLock<Selector> = LazyLock::new(|| selector("body"));
+static VIDEO: LazyLock<Selector> = LazyLock::new(|| selector("video"));
+static IFRAME: LazyLock<Selector> = LazyLock::new(|| selector("iframe"));
 
 /// Elements whose text is navigation or code, not the page's content.
 const SKIPPED: &[&str] = &[
@@ -50,6 +70,26 @@ pub fn parse(html: &str) -> HtmlMeta {
             .map(str::to_owned),
         ..HtmlMeta::default()
     };
+    read_meta_tags(&doc, &mut meta);
+    meta.json_ld = doc
+        .select(&JSON_LD)
+        .filter_map(|script| serde_json::from_str::<Value>(&script.text().collect::<String>()).ok())
+        .collect();
+    // Many video pages set no `og:image`, but their player still names a still.
+    meta.image = meta
+        .image
+        .or_else(|| jsonld::video_thumbnail(&meta.json_ld))
+        .or_else(|| first_poster(&doc));
+    meta.media = media(&doc);
+    if let Some(body) = doc.select(&BODY).next() {
+        let mut text = String::new();
+        readable_text(body, &mut text);
+        meta.text = collapse(&text);
+    }
+    meta
+}
+
+fn read_meta_tags(doc: &Html, meta: &mut HtmlMeta) {
     for tag in doc.select(&META) {
         let key = tag
             .attr("property")
@@ -81,16 +121,32 @@ pub fn parse(html: &str) -> HtmlMeta {
             *slot = Some(content);
         }
     }
-    meta.json_ld = doc
-        .select(&JSON_LD)
-        .filter_map(|script| serde_json::from_str::<Value>(&script.text().collect::<String>()).ok())
-        .collect();
-    if let Some(body) = doc.select(&BODY).next() {
-        let mut text = String::new();
-        readable_text(body, &mut text);
-        meta.text = collapse(&text);
+}
+
+fn first_poster(doc: &Html) -> Option<String> {
+    doc.select(&VIDEO)
+        .filter_map(|video| video.attr("poster"))
+        .map(str::trim)
+        .find(|poster| !poster.is_empty())
+        .map(str::to_owned)
+}
+
+fn media(doc: &Html) -> Media {
+    Media {
+        videos: doc.select(&VIDEO).count(),
+        video_iframes: doc.select(&IFRAME).filter(|f| is_video_iframe(*f)).count(),
     }
-    meta
+}
+
+/// Embedded players ask for picture-in-picture or DRM, or say "player" or "video" in their
+/// address; maps, forms and social embeds do neither.
+fn is_video_iframe(iframe: ElementRef<'_>) -> bool {
+    let allow = iframe.attr("allow").unwrap_or_default();
+    let src = iframe.attr("src").unwrap_or_default().to_ascii_lowercase();
+    allow.contains("picture-in-picture")
+        || allow.contains("encrypted-media")
+        || src.contains("player")
+        || src.contains("video")
 }
 
 fn readable_text(element: ElementRef<'_>, out: &mut String) {
@@ -135,5 +191,17 @@ mod tests {
         assert_eq!(meta.language.as_deref(), Some("pl"));
         assert_eq!(meta.text, "Mix the flour.");
         assert_eq!(meta.json_ld.len(), 1);
+    }
+
+    #[test]
+    fn video_pages_without_og_image_use_the_player_still() {
+        let thumbnail = parse(
+            r#"<html><head><script type="application/ld+json">
+            {"@graph": [{"@type": "VideoObject", "thumbnailUrl": [{"@type": "ImageObject", "url": "/t.jpg"}]}]}
+            </script></head><body><video poster="/p.jpg"></video></body></html>"#,
+        );
+        assert_eq!(thumbnail.image.as_deref(), Some("/t.jpg"));
+        let poster = parse(r#"<html><body><video poster=" /p.jpg "></video></body></html>"#);
+        assert_eq!(poster.image.as_deref(), Some("/p.jpg"));
     }
 }

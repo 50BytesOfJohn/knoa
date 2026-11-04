@@ -68,6 +68,8 @@ struct Evidence<'a> {
     language: Option<&'a str>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     structured_data: Vec<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    media: Option<&'a html::Media>,
     #[serde(skip_serializing_if = "Fields::is_empty")]
     known_fields: &'a Fields,
     #[serde(skip_serializing_if = "str::is_empty")]
@@ -197,6 +199,7 @@ impl Fetcher {
             og_type: meta.og_type.as_deref(),
             language: meta.language.as_deref(),
             structured_data: if readable { json_ld } else { Vec::new() },
+            media: Some(&meta.media).filter(|m| readable && !m.is_empty()),
             text: &prompt_text,
             ..bare(url, quality, &fields)
         });
@@ -244,6 +247,7 @@ fn bare<'a>(url: &'a Url, quality: Quality, fields: &'a Fields) -> Evidence<'a> 
         og_type: None,
         language: None,
         structured_data: Vec::new(),
+        media: None,
         known_fields: fields,
         text: "",
     }

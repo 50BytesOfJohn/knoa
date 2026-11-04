@@ -34,6 +34,31 @@ pub fn compact(items: &[Value]) -> Vec<Value> {
         .collect()
 }
 
+/// The still a `VideoObject` names, read from the raw items since `compact` drops images.
+pub fn video_thumbnail(items: &[Value]) -> Option<String> {
+    items
+        .iter()
+        .flat_map(flatten)
+        .filter(|item| type_of(item).as_deref() == Some("VideoObject"))
+        .find_map(|video| {
+            ["thumbnailUrl", "image"]
+                .iter()
+                .find_map(|key| image_url(video.get(key)?))
+        })
+}
+
+/// A URL given as a string, a list, or an `ImageObject`.
+fn image_url(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_owned()),
+        Value::Array(items) => items.iter().find_map(image_url),
+        Value::Object(map) => ["url", "contentUrl"]
+            .iter()
+            .find_map(|key| image_url(map.get(*key)?)),
+        _ => None,
+    }
+}
+
 fn flatten(item: &Value) -> Vec<Value> {
     match item {
         Value::Array(items) => items.iter().flat_map(flatten).collect(),
