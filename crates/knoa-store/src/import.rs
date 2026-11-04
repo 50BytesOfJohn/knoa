@@ -1,8 +1,8 @@
-//! Idempotent import of browser bookmarks.
+//! Getting bookmarks in: idempotent browser imports and links added by hand.
 
 use std::collections::HashSet;
 
-use knoa_core::{NewBookmark, site_of};
+use knoa_core::{BookmarkId, NewBookmark, WorkspaceId, site_of};
 use rusqlite::{OptionalExtension as _, params};
 
 use crate::{Result, Store, search};
@@ -21,14 +21,23 @@ pub enum NewBookmarks {
     Organize,
 }
 
+/// A link the user added by hand.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AddedLink {
+    pub id: BookmarkId,
+    /// False when the workspace already had this URL.
+    pub is_new: bool,
+}
+
 impl Store {
-    /// Brings the library in line with a browser's current bookmarks.
+    /// Brings a workspace in line with a browser's current bookmarks.
     ///
-    /// `source` names the browser profile. Bookmarks are keyed on URL, so importing the same
-    /// list twice changes nothing. Bookmarks from `source` that are gone from `bookmarks` are
-    /// marked as removed from the browser, never deleted.
+    /// `source` names the browser profile. Bookmarks are keyed on workspace and URL, so
+    /// importing the same list twice changes nothing. Bookmarks from `source` that are gone
+    /// from `bookmarks` are marked as removed from the browser, never deleted.
     pub fn import(
         &mut self,
+        workspace: WorkspaceId,
         source: &str,
         bookmarks: &[NewBookmark],
         new: NewBookmarks,
@@ -42,8 +51,8 @@ impl Store {
             }
             let existing: Option<i64> = tx
                 .query_row(
-                    "SELECT id FROM bookmarks WHERE url = ?1",
-                    [&bookmark.url],
+                    "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND url = ?2",
+                    params![workspace.0, bookmark.url],
                     |row| row.get(0),
                 )
                 .optional()?;
@@ -56,26 +65,68 @@ impl Store {
                 id
             } else {
                 report.added += 1;
-                insert(&tx, source, bookmark, new)?
+                insert(&tx, workspace, source, bookmark, new)?
             };
             search::reindex(&tx, id)?;
         }
-        report.removed = mark_removed(&tx, source, &seen)?;
+        report.removed = mark_removed(&tx, workspace, source, &seen)?;
         tx.commit()?;
         Ok(report)
     }
 }
 
 impl Store {
-    /// Whether anything was ever imported from `source`; the first import is metadata-only.
-    pub fn has_source(&self, source: &str) -> Result<bool> {
-        let sql = "SELECT EXISTS (SELECT 1 FROM bookmarks WHERE source = ?1)";
-        Ok(self.conn.query_row(sql, [source], |row| row.get(0))?)
+    /// Whether anything was ever imported from `source` into `workspace`; the first import
+    /// is metadata-only.
+    pub fn has_source(&self, workspace: WorkspaceId, source: &str) -> Result<bool> {
+        let sql = "SELECT EXISTS (SELECT 1 FROM bookmarks WHERE workspace_id = ?1 AND source = ?2)";
+        Ok(self
+            .conn
+            .query_row(sql, params![workspace.0, source], |row| row.get(0))?)
+    }
+
+    /// Adds a link by hand and queues it for organizing. The user chose it, so the
+    /// workspace's guideline never sets it aside. The URL stands in as the title until the
+    /// page is fetched.
+    pub fn add_link(&mut self, workspace: WorkspaceId, url: &str, now: i64) -> Result<AddedLink> {
+        let tx = self.conn.transaction()?;
+        let existing: Option<i64> = tx
+            .query_row(
+                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND url = ?2",
+                params![workspace.0, url],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(id) = existing {
+            tx.execute(
+                "UPDATE bookmarks SET kept = 1, set_aside = NULL WHERE id = ?1",
+                [id],
+            )?;
+            tx.commit()?;
+            return Ok(AddedLink {
+                id: BookmarkId(id),
+                is_new: false,
+            });
+        }
+        tx.execute(
+            "INSERT INTO bookmarks (workspace_id, url, title, site, added_at, status, kept)
+             VALUES (?1, ?2, ?2, ?3, ?4, 'queued', 1)",
+            params![workspace.0, url, site_of(url), now],
+        )?;
+        let id = tx.last_insert_rowid();
+        tx.execute("INSERT INTO jobs (bookmark_id) VALUES (?1)", [id])?;
+        search::reindex(&tx, id)?;
+        tx.commit()?;
+        Ok(AddedLink {
+            id: BookmarkId(id),
+            is_new: true,
+        })
     }
 }
 
 fn insert(
     tx: &rusqlite::Transaction<'_>,
+    workspace: WorkspaceId,
     source: &str,
     bookmark: &NewBookmark,
     new: NewBookmarks,
@@ -85,8 +136,8 @@ fn insert(
         NewBookmarks::Organize => "queued",
     };
     tx.execute(
-        "INSERT INTO bookmarks (url, title, site, added_at, status, source, browser_guid, browser_folder)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO bookmarks (workspace_id, url, title, site, added_at, status, source, browser_guid, browser_folder)
+         VALUES (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             bookmark.url,
             bookmark.title,
@@ -95,7 +146,8 @@ fn insert(
             status,
             source,
             bookmark.browser_guid,
-            bookmark.browser_folder
+            bookmark.browser_folder,
+            workspace.0
         ],
     )?;
     let id = tx.last_insert_rowid();
@@ -107,13 +159,15 @@ fn insert(
 
 fn mark_removed(
     tx: &rusqlite::Transaction<'_>,
+    workspace: WorkspaceId,
     source: &str,
     present: &HashSet<&str>,
 ) -> Result<usize> {
-    let mut stmt =
-        tx.prepare("SELECT id, url FROM bookmarks WHERE source = ?1 AND removed_from_browser = 0")?;
+    let mut stmt = tx.prepare(
+        "SELECT id, url FROM bookmarks WHERE workspace_id = ?1 AND source = ?2 AND removed_from_browser = 0",
+    )?;
     let stored = stmt
-        .query_map([source], |row| {
+        .query_map(params![workspace.0, source], |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -133,10 +187,10 @@ fn mark_removed(
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{BookmarkId, Place, Query};
+    use knoa_core::{BookmarkId, Enrichment, Kind, Place, Query};
 
     use super::*;
-    use crate::test_support::bookmark;
+    use crate::test_support::{WORKSPACE, bookmark};
 
     #[test]
     fn reimport_is_idempotent_and_marks_removed_bookmarks() {
@@ -147,7 +201,12 @@ mod tests {
             bookmark("https://a.dev/", "A again", 3),
         ];
         let report = store
-            .import("helium:Default", &first, NewBookmarks::MetadataOnly)
+            .import(
+                WORKSPACE,
+                "helium:Default",
+                &first,
+                NewBookmarks::MetadataOnly,
+            )
             .unwrap();
         assert_eq!(
             report,
@@ -158,7 +217,12 @@ mod tests {
         );
 
         let report = store
-            .import("helium:Default", &first[..1], NewBookmarks::Organize)
+            .import(
+                WORKSPACE,
+                "helium:Default",
+                &first[..1],
+                NewBookmarks::Organize,
+            )
             .unwrap();
         assert_eq!(
             report,
@@ -182,5 +246,62 @@ mod tests {
             2
         );
         assert!(store.bookmark(BookmarkId(b.id.0)).unwrap().is_some());
+    }
+
+    #[test]
+    fn a_browser_feeds_each_workspace_its_own_copy() {
+        let mut store = Store::open_in_memory().unwrap();
+        let work = store.create_workspace("Work", 1).unwrap();
+        let links = [bookmark("https://a.dev/", "A", 1)];
+        for workspace in [WORKSPACE, work] {
+            store
+                .import(workspace, "helium:Default", &links, NewBookmarks::Organize)
+                .unwrap();
+        }
+        let in_work = Query {
+            workspace: Some(work),
+            ..Query::default()
+        };
+        assert_eq!(store.count(&Query::default()).unwrap(), 2);
+        assert_eq!(store.count(&in_work).unwrap(), 1);
+
+        store
+            .import(work, "helium:Default", &[], NewBookmarks::Organize)
+            .unwrap();
+        let personal = store
+            .search(
+                &Query {
+                    workspace: Some(WORKSPACE),
+                    ..Query::default()
+                },
+                1,
+            )
+            .unwrap();
+        assert!(!personal[0].removed_from_browser, "workspaces sync apart");
+    }
+
+    #[test]
+    fn a_kept_link_is_never_set_aside() {
+        let mut store = Store::open_in_memory().unwrap();
+        let added = store.add_link(WORKSPACE, "https://a.dev/", 1).unwrap();
+        let job = store.take_jobs(1, 1).unwrap().remove(0);
+        assert_eq!(job.bookmark.id, added.id);
+        let enrichment = Enrichment {
+            kind: Kind::Article,
+            summary: None,
+            fields: knoa_core::Fields::new(),
+            extras: Vec::new(),
+            tags: Vec::new(),
+            folders: Vec::new(),
+            set_aside: Some("not about work".into()),
+            model: "test".into(),
+        };
+        store.finish_organized(added.id, &enrichment, 2).unwrap();
+        let set_aside = Query {
+            place: Place::SetAside,
+            ..Query::default()
+        };
+        assert_eq!(store.count(&set_aside).unwrap(), 0);
+        assert_eq!(store.count(&Query::default()).unwrap(), 1);
     }
 }

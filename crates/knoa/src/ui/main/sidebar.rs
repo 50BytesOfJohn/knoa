@@ -8,10 +8,9 @@ use gpui::{
 };
 use knoa_core::Place;
 
-use super::{MainView, OpenSettings};
+use super::{MainView, NewLink, OpenSettings, Overlay};
 use crate::{
     services::organizer::AiStatus,
-    state::settings::SettingsFile,
     ui::{
         components::{icon, workspace_mark},
         theme::{MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
@@ -32,24 +31,12 @@ impl MainView {
         let counts = library.counts();
         let current = library.place();
         let folders = library.folders().to_vec();
-        let workspace = SettingsFile::get(cx).workspace.clone();
+        let (name, color) = library
+            .workspace()
+            .map(|w| (w.name.clone(), w.color))
+            .unwrap_or_default();
 
-        let places = [
-            (Place::Everything, "Everything", "layers", counts.everything),
-            (Place::UpNext, "Up next", "bookmark", counts.up_next),
-            (Place::Unsorted, "Unsorted", "inbox", counts.unsorted),
-            (
-                Place::NotOrganized,
-                "Not organized",
-                "sparkles",
-                counts.not_organized,
-            ),
-        ];
-
-        let mut list = div().flex().flex_col().gap_0p5().px_2();
-        for (place, label, icon_name, count) in places {
-            list = list.child(self.place_row(place, current, label, icon_name, count, None, cx));
-        }
+        let list = self.places(counts, current, cx);
 
         let mut folder_list = div().flex().flex_col().gap_0p5().px_2();
         for (index, folder) in folders.iter().enumerate() {
@@ -109,7 +96,7 @@ impl MainView {
             .border_color(theme.hairline)
             .shadow_sm()
             .child(div().h(px(TITLEBAR_HEIGHT)).flex_none())
-            .child(self.workspace_card(&workspace.name, workspace.color, counts.everything, cx))
+            .child(self.workspace_card(&name, color, counts.everything, cx))
             .child(div().mt_3().child(list))
             .child(
                 div()
@@ -131,6 +118,35 @@ impl MainView {
             .child(self.footer(counts.organizing, cx))
     }
 
+    fn places(
+        &self,
+        counts: knoa_store::Counts,
+        current: Place,
+        cx: &mut Context<'_, MainView>,
+    ) -> gpui::Div {
+        let places = [
+            (Place::Everything, "Everything", "layers", counts.everything),
+            (Place::UpNext, "Up next", "bookmark", counts.up_next),
+            (Place::Unsorted, "Unsorted", "inbox", counts.unsorted),
+            (
+                Place::NotOrganized,
+                "Not organized",
+                "sparkles",
+                counts.not_organized,
+            ),
+            (Place::SetAside, "Set aside", "archive", counts.set_aside),
+        ];
+        let mut list = div().flex().flex_col().gap_0p5().px_2();
+        for (place, label, icon_name, count) in places {
+            // Set aside only shows while the guideline has set something aside.
+            if place == Place::SetAside && count == 0 && current != place {
+                continue;
+            }
+            list = list.child(self.place_row(place, current, label, icon_name, count, None, cx));
+        }
+        list
+    }
+
     fn workspace_card(
         &self,
         name: &str,
@@ -140,6 +156,7 @@ impl MainView {
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
         div()
+            .id("workspace-card")
             .mx_2()
             .p_2()
             .flex()
@@ -147,9 +164,13 @@ impl MainView {
             .gap_2p5()
             .rounded(px(12.))
             .bg(theme.soft)
+            .cursor_pointer()
+            .hover(|s| s.bg(theme.hover))
+            .on_click(cx.listener(|this, _, _, cx| this.open_overlay(Overlay::Workspaces, cx)))
             .child(workspace_mark(name, color, px(32.), cx))
             .child(
                 div()
+                    .flex_1()
                     .flex()
                     .flex_col()
                     .min_w_0()
@@ -167,6 +188,7 @@ impl MainView {
                             .child(format!("{count} bookmarks")),
                     ),
             )
+            .child(icon("chevrons-up-down", px(14.), theme.faint))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -246,6 +268,21 @@ impl MainView {
             )
             .child(div().text_xs().text_color(ai_color).child(ai_label))
             .child(div().flex_1())
+            .child(
+                div()
+                    .id("add-link")
+                    .size(px(28.))
+                    .rounded_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.hover))
+                    .child(icon("plus", px(16.), theme.muted))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.new_link(&NewLink, window, cx);
+                    })),
+            )
             .child(
                 div()
                     .id("settings")

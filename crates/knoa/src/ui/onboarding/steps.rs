@@ -337,7 +337,10 @@ impl Onboarding {
                         counts.not_organized
                     )))
                     .child(div().flex().justify_center().child(button("organize-existing", "Yes, organize them", Tone::Soft, cx).on_click(cx.listener(|this, _, _, cx| {
-                        this.library.update(cx, |library, cx| library.change(cx, |store| store.queue_not_organized().map(drop)));
+                        this.library.update(cx, |library, cx| {
+                            let workspace = library.workspace_id();
+                            library.change(cx, move |store| store.queue_not_organized(workspace).map(drop));
+                        });
                         Organizer::wake(cx);
                         this.finish(cx);
                     })))),

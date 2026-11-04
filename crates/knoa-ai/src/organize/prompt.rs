@@ -70,6 +70,14 @@ pub fn messages(input: &OrganizeInput<'_>, folders_in_answer: bool) -> Vec<Messa
             input.instructions.trim()
         );
     }
+    if let Some(guideline) = input.guideline {
+        let _ = writeln!(
+            context,
+            "This workspace only keeps bookmarks that fit the user's guideline:\n{guideline}\n\
+             Set fits to false only when the bookmark clearly falls outside it, and say why in \
+             fit_reason in one short sentence. When unsure, it fits.\n"
+        );
+    }
     if folders_in_answer && !input.folders.is_empty() {
         context.push_str(
             "The user's folders. Put the bookmark in at most two that clearly fit, or none:\n",

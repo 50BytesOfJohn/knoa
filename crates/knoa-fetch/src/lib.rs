@@ -201,6 +201,7 @@ impl Fetcher {
             ..bare(url, quality, &fields)
         });
         Page {
+            title: meta.title.clone().or_else(|| site.title.clone()),
             image,
             text: if readable {
                 meta.text.chars().take(SEARCH_TEXT_CHARS).collect()
@@ -221,6 +222,7 @@ impl Fetcher {
             None => None,
         };
         Page {
+            title: site.title,
             image,
             description: site.description,
             kind: site.kind,

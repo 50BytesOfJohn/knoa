@@ -66,6 +66,16 @@ quality are a priority from the first milestone.
     not removed.
 - A bookmark the user removes from a folder is never added back to it by the AI.
 
+## Workspaces
+
+- A workspace is a separate library (e.g. Work and Personal) with its own browsers,
+  instructions and folders.
+- Each workspace syncs the browser profiles it chose. Everything from those profiles
+  lands in it. Knoa never decides between workspaces.
+- A workspace can have a guideline for what it keeps, off by default. With it on, the AI
+  sets aside bookmarks that don't fit, with the reason; the user can keep them anyway.
+- Links can also be added by hand. They are always kept.
+
 ## Sync
 
 - New browser bookmarks are imported and organized automatically.
@@ -83,5 +93,4 @@ Planned, but not part of the alpha:
   fields with counts. It edits the same query as the search bar.
 - User-defined kinds and fields.
 - Firefox and Safari support.
-- Workspaces: separate libraries (e.g. Work and Personal) with their own folders and
-  instructions, including hidden workspaces.
+- Hidden workspaces.

@@ -19,6 +19,11 @@ struct Raw {
     tags: Vec<String>,
     #[serde(default)]
     folders: Vec<String>,
+    /// Missing when the workspace doesn't screen, which means it fits.
+    #[serde(default)]
+    fits: Option<bool>,
+    #[serde(default)]
+    fit_reason: String,
 }
 
 #[derive(Deserialize)]
@@ -34,6 +39,8 @@ pub struct Answer {
     pub extras: Vec<(String, String)>,
     pub tags: Vec<String>,
     pub folders: Vec<FolderId>,
+    /// Why the bookmark doesn't fit the workspace's guideline, when it doesn't.
+    pub set_aside: Option<String>,
 }
 
 /// Parses and cleans the answer. `kind_override` is a kind the page itself declared, which
@@ -80,6 +87,15 @@ pub fn parse(
         .take(2)
         .collect();
 
+    let set_aside = (raw.fits == Some(false)).then(|| {
+        let reason = raw.fit_reason.trim();
+        if reason.is_empty() {
+            "It doesn't fit this workspace's guideline.".to_owned()
+        } else {
+            reason.chars().take(MAX_SUMMARY_CHARS).collect()
+        }
+    });
+
     Ok(Answer {
         kind,
         summary,
@@ -87,6 +103,7 @@ pub fn parse(
         extras,
         tags: clean_tags(&raw.tags, kind),
         folders,
+        set_aside,
     })
 }
 
@@ -139,5 +156,23 @@ mod tests {
         );
         assert_eq!(answer.tags, ["film-noir", "vienna"]);
         assert_eq!(answer.folders, [FolderId(7)]);
+    }
+
+    #[test]
+    fn only_an_explicit_misfit_is_set_aside() {
+        let answer = |extra: Value| {
+            let mut json =
+                json!({"kind": "article", "summary": "", "fields": [], "extras": [], "tags": []});
+            json.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            parse(json, None, &[]).unwrap().set_aside
+        };
+        assert_eq!(answer(json!({})), None);
+        assert_eq!(answer(json!({"fits": true, "fit_reason": "work"})), None);
+        assert_eq!(
+            answer(json!({"fits": false, "fit_reason": " A recipe, not work. "})).as_deref(),
+            Some("A recipe, not work.")
+        );
     }
 }

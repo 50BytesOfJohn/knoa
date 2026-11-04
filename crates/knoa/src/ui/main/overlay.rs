@@ -1,4 +1,5 @@
-//! Floating panels over the main screen: settings, view options and the folder editor.
+//! Floating panels over the main screen: settings, view options, the workspace switcher,
+//! the folder and workspace editors, and adding a link.
 //! Clicking outside closes them.
 
 use gpui::{
@@ -23,7 +24,10 @@ impl MainView {
         let panel: AnyElement = match self.overlay.as_ref()? {
             Overlay::Settings(panel) => panel.clone().into_any_element(),
             Overlay::Folder(editor) => editor.clone().into_any_element(),
+            Overlay::Workspace(editor) => editor.clone().into_any_element(),
+            Overlay::AddLink(panel) => panel.clone().into_any_element(),
             Overlay::ViewOptions => self.view_options(cx).into_any_element(),
+            Overlay::Workspaces => self.workspace_switcher(cx).into_any_element(),
         };
         let scrim = div()
             .id("scrim")

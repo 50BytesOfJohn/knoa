@@ -14,7 +14,7 @@ use knoa_ai::ProviderKind;
 use knoa_browser::Profile;
 
 use crate::{
-    services::{ai, sync},
+    services::ai,
     state::{library::Library, settings::SettingsFile},
     ui::theme::Theme,
 };
@@ -83,24 +83,31 @@ impl Onboarding {
                 (p, count)
             })
             .collect();
-        let chosen = default_profiles(&profiles);
-        let settings = SettingsFile::get(cx).clone();
+        let workspace = library.read(cx).workspace().cloned();
+        let chosen = match &workspace {
+            Some(w) if !w.browsers.is_empty() => w.browsers.clone(),
+            _ => default_profiles(&profiles),
+        };
         let key = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder("Paste your key: sk-or-v1-…")
                 .masked(true)
         });
         let name = cx.new(|cx| InputState::new(window, cx).placeholder("Personal"));
-        name.update(cx, |input, cx| {
-            input.set_value(settings.workspace.name.clone(), window, cx);
-        });
+        if let Some(workspace) = &workspace {
+            name.update(cx, |input, cx| {
+                input.set_value(workspace.name.clone(), window, cx);
+            });
+        }
         let instructions = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .placeholder("Optional. Write it like you'd tell a friend.")
         });
-        instructions.update(cx, |input, cx| {
-            input.set_value(settings.instructions.clone(), window, cx);
-        });
+        if let Some(workspace) = &workspace {
+            instructions.update(cx, |input, cx| {
+                input.set_value(workspace.instructions.clone(), window, cx);
+            });
+        }
         Onboarding {
             library,
             step: Step::Hello,
@@ -109,7 +116,7 @@ impl Onboarding {
             key,
             key_check: KeyCheck::Idle,
             name,
-            color: settings.workspace.color,
+            color: workspace.map_or(0, |w| w.color),
             instructions,
         }
     }
@@ -158,27 +165,33 @@ impl Onboarding {
         cx.notify();
     }
 
-    /// Saves everything chosen so far and starts syncing. Shown on the last step, which
-    /// stays up until the user opens the library.
+    /// Saves everything chosen so far into the current workspace, which starts syncing.
+    /// Shown on the last step, which stays up until the user opens the library.
     fn apply(&mut self, cx: &mut Context<'_, Onboarding>) {
         let name = self.name.read(cx).value().trim().to_owned();
         let instructions = self.instructions.read(cx).value().trim().to_owned();
-        let (chosen, color) = (self.chosen.clone(), self.color);
-        SettingsFile::update(cx, |s| {
-            s.workspace.name = if name.is_empty() {
-                "Personal".into()
-            } else {
-                name
-            };
-            s.workspace.color = color;
-            s.instructions = instructions;
-            s.browsers = chosen;
+        let (browsers, color) = (self.chosen.clone(), self.color);
+        self.library.update(cx, |library, cx| {
+            let id = library.workspace_id();
+            library.change(cx, move |store| {
+                let Some(mut workspace) = store.workspace(id)? else {
+                    return Ok(());
+                };
+                workspace.name = if name.is_empty() {
+                    "Personal".into()
+                } else {
+                    name
+                };
+                workspace.color = color;
+                workspace.instructions = instructions;
+                workspace.browsers = browsers;
+                store.update_workspace(&workspace)
+            });
         });
         if matches!(self.key_check, KeyCheck::Passed) {
             let key = self.key.read(cx).value().trim().to_owned();
             ai::enable(ProviderKind::OpenRouter, &key, cx).detach_and_log_err(cx);
         }
-        sync::restart(self.library.clone(), cx);
     }
 
     /// One click to the library with defaults: the detected browser, no AI.

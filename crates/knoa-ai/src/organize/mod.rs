@@ -1,6 +1,6 @@
 //! The provider-neutral organizing pipeline: one structured chat call for kind, summary,
-//! fields, extras and tags, then folders from the classifier (or from the same call when
-//! the provider has none).
+//! fields, extras, tags and, when the workspace has a guideline, whether the bookmark fits;
+//! then folders from the classifier (or from the same call when the provider has none).
 
 mod answer;
 mod folders;
@@ -33,7 +33,11 @@ pub struct FolderInput {
 
 pub struct OrganizeInput<'a> {
     pub bookmark: BookmarkInput<'a>,
+    /// The workspace's organizing instructions.
     pub instructions: &'a str,
+    /// What the workspace keeps, when it screens bookmarks. The bookmark is still
+    /// organized either way, so keeping it later costs nothing.
+    pub guideline: Option<&'a str>,
     /// Folders with auto-assign on.
     pub folders: &'a [FolderInput],
 }
@@ -47,7 +51,10 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     let request = StructuredRequest {
         messages: prompt::messages(input, folders_in_answer),
         schema_name: "bookmark",
-        schema: schema::answer_schema(folders_in_answer.then_some(input.folders)),
+        schema: schema::answer_schema(
+            folders_in_answer.then_some(input.folders),
+            input.guideline.is_some(),
+        ),
         max_tokens: MAX_TOKENS,
     };
     let reply = model.generate(&request).await?;
@@ -58,6 +65,8 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     }
 
     let folders = match classifier {
+        // A bookmark set aside isn't filed; it gets folders once the user keeps it.
+        _ if answer.set_aside.is_some() => Vec::new(),
         Some(classifier) => folders::pick(classifier, input, &answer).await?,
         // Chat models give no probability; record their picks as certain.
         None => answer.folders.iter().map(|id| (*id, 1.0)).collect(),
@@ -69,6 +78,7 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         extras: answer.extras,
         tags: answer.tags,
         folders,
+        set_aside: answer.set_aside,
         model: reply.model,
     })
 }

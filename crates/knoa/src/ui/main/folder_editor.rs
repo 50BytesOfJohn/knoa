@@ -85,9 +85,10 @@ impl FolderEditor {
                 });
             }
             None => self.library.update(cx, |library, cx| {
+                let workspace = library.workspace_id();
                 library.change(cx, move |store| {
                     store
-                        .create_folder(&name, &description, auto_assign, color)
+                        .create_folder(workspace, &name, &description, auto_assign, color)
                         .map(drop)
                 });
             }),

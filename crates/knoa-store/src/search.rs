@@ -30,8 +30,17 @@ impl Filter {
             filter.params.push(Value::Text(expr));
             filter.ranked = true;
         }
+        if let Some(workspace) = query.workspace {
+            conditions.push("b.workspace_id = ?".into());
+            filter.params.push(Value::Integer(workspace.0));
+        }
+        if query.place == Place::SetAside {
+            conditions.push("b.set_aside IS NOT NULL".into());
+        } else {
+            conditions.push("b.set_aside IS NULL".into());
+        }
         match query.place {
-            Place::Everything => {}
+            Place::Everything | Place::SetAside => {}
             Place::UpNext => conditions.push("b.up_next = 1".into()),
             Place::Unsorted => conditions.push(
                 "NOT EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id)".into(),

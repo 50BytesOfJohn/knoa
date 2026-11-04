@@ -45,7 +45,7 @@ Builds the approved [main screen design](design/main-screen.md).
 - [x] `knoa-store`: SQLite, migrations, queries, tests
       ([ADR 0005](adr/0005-typed-bookmarks-and-folders.md))
 - [x] Show bookmarks from the database in the masonry view
-- [ ] Manual add and remove, for development
+- [x] Manual add by URL (⌘N); remove is still to do
 
 ## M3: Chromium sync
 
@@ -93,6 +93,8 @@ Builds the approved [main screen design](design/main-screen.md).
 - [ ] Optional filter sidebar
 - [ ] User-defined kinds and fields
 - [ ] Firefox and Safari support
-- [ ] Workspaces
+- [x] Workspaces: own browsers, instructions, folders and an optional keep guideline
+      ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md))
+- [ ] Hidden workspaces
 - [ ] Re-evaluate Apple's on-device model when a stronger version ships; rejected for now
       ([research](research/apple-intelligence.md))

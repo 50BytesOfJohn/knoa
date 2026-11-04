@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::{FieldType, FolderId, Kind, field::parse_minutes};
+use crate::{FieldType, FolderId, Kind, WorkspaceId, field::parse_minutes};
 
 /// The sidebar selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -14,11 +14,16 @@ pub enum Place {
     Unsorted,
     /// Bookmarks the AI hasn't organized yet.
     NotOrganized,
+    /// Bookmarks the AI found don't fit the workspace's guideline. Every other place
+    /// leaves them out.
+    SetAside,
     Folder(FolderId),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Query {
+    /// `None` searches every workspace.
+    pub workspace: Option<WorkspaceId>,
     pub place: Place,
     /// Free text, matched with full-text search.
     pub text: String,
@@ -47,8 +52,9 @@ pub enum Comparison {
 impl Query {
     /// Parses search bar input. Tokens with a known prefix become filters, the rest is text:
     /// `kind:movie`, `site:github.com`, `#noir`, `runtime>2h`, `year:1999`.
-    pub fn parse(input: &str, place: Place) -> Query {
+    pub fn parse(input: &str, workspace: Option<WorkspaceId>, place: Place) -> Query {
         let mut query = Query {
+            workspace,
             place,
             ..Query::default()
         };
@@ -138,6 +144,7 @@ mod tests {
     fn search_text_splits_into_filters_and_words() {
         let query = Query::parse(
             "noir kind:movies runtime>2h #classic site:imdb.com night",
+            None,
             Place::Everything,
         );
         assert_eq!(query.text, "noir night");
@@ -156,7 +163,7 @@ mod tests {
 
     #[test]
     fn unknown_prefixes_stay_text() {
-        let query = Query::parse("http://example.com foo:bar", Place::Everything);
+        let query = Query::parse("http://example.com foo:bar", None, Place::Everything);
         assert_eq!(query.text, "http://example.com foo:bar");
     }
 }

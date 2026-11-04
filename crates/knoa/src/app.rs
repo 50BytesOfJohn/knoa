@@ -11,7 +11,10 @@ use gpui::{
 use crate::{
     paths::Paths,
     services::{ai, credentials::Credentials, network::Network, organizer::Organizer, sync},
-    state::{library::Library, settings::SettingsFile},
+    state::{
+        library::Library,
+        settings::{self, SettingsFile},
+    },
     ui::{RootView, theme::Theme},
 };
 
@@ -28,18 +31,17 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     Credentials::init(paths.dev_credentials(), cx);
     Network::init(cx)?;
 
-    let store = knoa_store::Store::open(&paths.database())
+    let mut store = knoa_store::Store::open(&paths.database())
         .with_context(|| format!("opening {}", paths.database().display()))?;
+    settings::adopt_legacy(&mut store, cx).context("moving settings into the workspace")?;
     let library = cx.new(|cx| Library::new(Arc::new(Mutex::new(store)), cx));
+    sync::init(&library, cx);
     Organizer::init(
         library.clone(),
         knoa_fetch::Fetcher::new(paths.thumbnails())?,
         cx,
     );
     ai::connect(cx);
-    if SettingsFile::get(cx).onboarded {
-        sync::restart(library.clone(), cx);
-    }
 
     cx.on_action(|_: &Quit, cx| cx.quit());
     cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);

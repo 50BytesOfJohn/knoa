@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use url::Url;
 
-use crate::{Fields, FolderLink, Kind};
+use crate::{Fields, FolderLink, Kind, WorkspaceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BookmarkId(pub i64);
@@ -100,6 +100,7 @@ impl Image {
 #[derive(Debug, Clone)]
 pub struct Bookmark {
     pub id: BookmarkId,
+    pub workspace: WorkspaceId,
     pub url: String,
     pub title: String,
     pub site: String,
@@ -116,6 +117,9 @@ pub struct Bookmark {
     pub image: Option<Image>,
     pub browser_folder: Option<String>,
     pub removed_from_browser: bool,
+    /// Why the AI set this bookmark aside as not fitting the workspace's guideline. Set
+    /// aside bookmarks only show in their own place until the user keeps them.
+    pub set_aside: Option<String>,
     /// The model that organized this bookmark, for the detail panel's "why".
     pub model: Option<String>,
 }
@@ -158,4 +162,41 @@ pub fn site_of(url: &str) -> String {
                 .map(|h| h.trim_start_matches("www.").to_owned())
         })
         .unwrap_or_default()
+}
+
+/// Turns what the user typed or pasted into a web URL, adding `https://` when the scheme
+/// is missing. `None` when it isn't a web address.
+pub fn parse_link(input: &str) -> Option<String> {
+    let input = input.trim();
+    if input.is_empty() || input.contains(char::is_whitespace) {
+        return None;
+    }
+    let url = if input.contains("://") {
+        Url::parse(input)
+    } else {
+        Url::parse(&format!("https://{input}"))
+    }
+    .ok()?;
+    let web = matches!(url.scheme(), "http" | "https");
+    // Credentials in a link are almost always a paste mistake (`mailto:` read as a user).
+    let credentials = !url.username().is_empty() || url.password().is_some();
+    let host = url.host_str()?;
+    (web && !credentials && (host.contains('.') || host == "localhost")).then(|| url.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn typed_links_become_web_urls() {
+        assert_eq!(
+            parse_link(" example.com/a ").as_deref(),
+            Some("https://example.com/a")
+        );
+        assert_eq!(parse_link("http://x.dev").as_deref(), Some("http://x.dev/"));
+        assert_eq!(parse_link("not a link"), None);
+        assert_eq!(parse_link("mailto:me@x.dev"), None);
+        assert_eq!(parse_link("notes"), None);
+    }
 }

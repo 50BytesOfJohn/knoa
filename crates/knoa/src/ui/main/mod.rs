@@ -1,5 +1,6 @@
 //! The main screen: sidebar, search pill, library cards and the detail panel.
 
+mod add_link;
 mod cards;
 mod content;
 mod detail;
@@ -11,6 +12,8 @@ mod overlay;
 mod search;
 mod settings_panel;
 mod sidebar;
+mod workspace_editor;
+mod workspaces;
 
 use gpui::{
     App, AppContext as _, ClipboardItem, Context, Entity, FocusHandle, Focusable as _,
@@ -18,7 +21,7 @@ use gpui::{
     ScrollHandle, Styled as _, Subscription, Window, actions, div, prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{BookmarkId, FolderId, Place};
+use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
 
 use crate::{
     services::organizer::Organizer,
@@ -28,9 +31,11 @@ use crate::{
     },
     ui::theme::Theme,
 };
+use add_link::AddLink;
 use content::LayoutCache;
 use folder_editor::FolderEditor;
 use settings_panel::SettingsPanel;
+use workspace_editor::WorkspaceEditor;
 
 actions!(
     cards,
@@ -46,7 +51,7 @@ actions!(
         Dismiss
     ]
 );
-actions!(knoa, [FocusSearch, OpenSettings]);
+actions!(knoa, [FocusSearch, OpenSettings, NewLink]);
 
 /// Bindings for the card grid. They live in their own key context so they never fire while
 /// typing in the search field.
@@ -65,6 +70,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-f", FocusSearch, None),
         KeyBinding::new("cmd-k", FocusSearch, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
+        KeyBinding::new("cmd-n", NewLink, None),
     ]);
 }
 
@@ -73,6 +79,10 @@ pub enum Overlay {
     Settings(Entity<SettingsPanel>),
     ViewOptions,
     Folder(Entity<FolderEditor>),
+    /// The workspace switcher.
+    Workspaces,
+    Workspace(Entity<WorkspaceEditor>),
+    AddLink(Entity<AddLink>),
 }
 
 pub struct MainView {
@@ -182,6 +192,49 @@ impl MainView {
         let this = cx.entity().downgrade();
         let editor = cx.new(|cx| FolderEditor::new(existing, library, this, window, cx));
         self.open_overlay(Overlay::Folder(editor), cx);
+    }
+
+    /// Opens the workspace editor; `None` creates a new workspace.
+    pub fn edit_workspace(
+        &mut self,
+        workspace: Option<WorkspaceId>,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        let existing = workspace.and_then(|id| {
+            self.library
+                .read(cx)
+                .workspaces()
+                .iter()
+                .find(|w| w.id == id)
+                .cloned()
+        });
+        let library = self.library.clone();
+        let this = cx.entity().downgrade();
+        let editor = cx.new(|cx| WorkspaceEditor::new(existing, library, this, window, cx));
+        self.open_overlay(Overlay::Workspace(editor), cx);
+    }
+
+    pub fn switch_workspace(
+        &mut self,
+        id: WorkspaceId,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        self.library
+            .update(cx, |library, cx| library.set_workspace(id, cx));
+        self.selected = None;
+        self.detail_open = false;
+        self.scroll
+            .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
+        self.close_overlay(window, cx);
+    }
+
+    fn new_link(&mut self, _: &NewLink, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let library = self.library.clone();
+        let this = cx.entity().downgrade();
+        let panel = cx.new(|cx| AddLink::new(library, this, window, cx));
+        self.open_overlay(Overlay::AddLink(panel), cx);
     }
 
     fn open_settings(
@@ -302,6 +355,7 @@ impl Render for MainView {
             .on_key_down(cx.listener(Self::type_to_search))
             .on_action(cx.listener(Self::open_settings))
             .on_action(cx.listener(Self::focus_search))
+            .on_action(cx.listener(Self::new_link))
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
             .child(self.render_sidebar(window, cx))

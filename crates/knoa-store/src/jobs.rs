@@ -3,7 +3,7 @@
 //! A job is a row in `jobs`. It stays there until the bookmark is organized or gives up,
 //! so quitting the app mid-way loses nothing.
 
-use knoa_core::{Bookmark, BookmarkId, Enrichment, Page};
+use knoa_core::{Bookmark, BookmarkId, Enrichment, Page, WorkspaceId};
 use rusqlite::{OptionalExtension as _, params};
 
 use crate::{Result, Store, search};
@@ -16,13 +16,15 @@ pub struct Job {
 }
 
 impl Store {
-    /// Queues every bookmark the AI hasn't organized, and returns how many were added.
-    pub fn queue_not_organized(&mut self) -> Result<usize> {
+    /// Queues every bookmark in the workspace the AI hasn't organized, and returns how many
+    /// were added.
+    pub fn queue_not_organized(&mut self, workspace: WorkspaceId) -> Result<usize> {
         let tx = self.conn.transaction()?;
         let ids: Vec<i64> = {
-            let mut stmt =
-                tx.prepare("SELECT id FROM bookmarks WHERE status IN ('new', 'failed')")?;
-            stmt.query_map([], |row| row.get(0))?
+            let mut stmt = tx.prepare(
+                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND status IN ('new', 'failed')",
+            )?;
+            stmt.query_map([workspace.0], |row| row.get(0))?
                 .collect::<rusqlite::Result<_>>()?
         };
         for id in &ids {
@@ -95,7 +97,7 @@ impl Store {
     }
 
     /// Stores what the page fetch found. Values read from the page fill in kind, fields and
-    /// summary until the AI provides its own.
+    /// summary until the AI provides its own, and the title of a link added by hand.
     pub fn save_page(&mut self, id: BookmarkId, page: &Page, now: i64) -> Result<()> {
         let tx = self.conn.transaction()?;
         let image = page.image.as_ref();
@@ -105,7 +107,8 @@ impl Store {
                 image_height = coalesce(?7, image_height),
                 summary = CASE WHEN model IS NULL THEN coalesce(?8, summary) ELSE summary END,
                 kind = CASE WHEN model IS NULL THEN coalesce(?9, kind) ELSE kind END,
-                fields = CASE WHEN model IS NULL THEN ?10 ELSE fields END
+                fields = CASE WHEN model IS NULL THEN ?10 ELSE fields END,
+                title = CASE WHEN source IS NULL AND title = url THEN coalesce(?11, title) ELSE title END
              WHERE id = ?1",
             params![
                 id.0,
@@ -118,6 +121,7 @@ impl Store {
                 page.description,
                 page.kind.map(knoa_core::Kind::slug),
                 serde_json::to_string(&page.fields)?,
+                page.title,
             ],
         )?;
         search::reindex(&tx, id.0)?;
@@ -125,7 +129,8 @@ impl Store {
         Ok(())
     }
 
-    /// Stores the AI's answer and takes the bookmark off the queue.
+    /// Stores the AI's answer and takes the bookmark off the queue. A bookmark the user kept
+    /// is never set aside.
     pub fn finish_organized(
         &mut self,
         id: BookmarkId,
@@ -135,7 +140,8 @@ impl Store {
         let tx = self.conn.transaction()?;
         tx.execute(
             "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
-                status = 'organized', organized_at = ?7, error = NULL WHERE id = ?1",
+                status = 'organized', organized_at = ?7, error = NULL,
+                set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END WHERE id = ?1",
             params![
                 id.0,
                 enrichment.kind.slug(),
@@ -144,6 +150,7 @@ impl Store {
                 serde_json::to_string(&enrichment.extras)?,
                 enrichment.model,
                 now,
+                enrichment.set_aside,
             ],
         )?;
         Store::replace_ai_tags(&tx, id, &enrichment.tags)?;

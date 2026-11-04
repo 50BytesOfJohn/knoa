@@ -9,17 +9,14 @@ use std::{sync::Arc, time::Duration};
 use futures::{FutureExt as _, StreamExt as _, channel::mpsc, stream::FuturesUnordered};
 use gpui::{App, AppContext as _, AsyncApp, BackgroundExecutor, Context, Entity, Global, Task};
 use knoa_ai::{BookmarkInput, FolderInput, OrganizeInput, Provider};
-use knoa_core::{BookmarkId, Enrichment, Page};
+use knoa_core::{BookmarkId, Enrichment, Page, WorkspaceId};
 use knoa_fetch::Fetcher;
 use knoa_store::Job;
 use tokio::runtime::Handle;
 
 use crate::{
     services::network::Network,
-    state::{
-        library::{Library, SharedStore, lock},
-        settings::SettingsFile,
-    },
+    state::library::{Library, SharedStore, lock},
 };
 
 /// About four network requests at a time, as the architecture plans.
@@ -51,7 +48,6 @@ struct Work {
     store: SharedStore,
     fetcher: Arc<Fetcher>,
     provider: Option<Arc<Provider>>,
-    instructions: String,
     background: BackgroundExecutor,
     network: Handle,
 }
@@ -176,7 +172,6 @@ fn work_for(organizer: &Organizer, store: &SharedStore, fetcher: &Arc<Fetcher>, 
         store: store.clone(),
         fetcher: fetcher.clone(),
         provider: organizer.provider.clone(),
-        instructions: SettingsFile::get(cx).instructions.clone(),
         background: cx.background_executor().clone(),
         network: Network::handle(cx),
     }
@@ -283,26 +278,21 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
     };
 
     let store = work.store.clone();
-    let folders = work
+    let workspace = bookmark.workspace;
+    let context = work
         .background
-        .spawn(async move { lock(&store).folders() })
+        .spawn(async move { WorkspaceContext::load(&store, workspace) })
         .await;
-    let folders: Vec<FolderInput> = folders
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|f| f.auto_assign)
-        .map(|f| FolderInput {
-            id: f.id,
-            name: f.name,
-            description: f.description,
-        })
-        .collect();
-    let (title, url, browser_folder, instructions) = (
-        bookmark.title.clone(),
-        bookmark.url.clone(),
-        bookmark.browser_folder.clone(),
-        work.instructions.clone(),
-    );
+    let context = match context {
+        Ok(context) => context,
+        Err(err) => return Outcome::Failed(err.to_string()),
+    };
+    // A link added by hand has its URL as its title until the page names it.
+    let title = match &page.title {
+        Some(title) if bookmark.title == bookmark.url => title.clone(),
+        _ => bookmark.title.clone(),
+    };
+    let (url, browser_folder) = (bookmark.url.clone(), bookmark.browser_folder.clone());
     let answer = work
         .network
         .spawn(async move {
@@ -315,8 +305,9 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
                     page_kind: page.kind,
                     page_fields: &page.fields,
                 },
-                instructions: &instructions,
-                folders: &folders,
+                instructions: &context.instructions,
+                guideline: context.guideline.as_deref(),
+                folders: &context.folders,
             };
             knoa_ai::organize(&*provider, provider.classifier(), &input).await
         })
@@ -327,6 +318,42 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         Ok(Err(err)) if err.is_transient() => retry(err.to_string(), job.attempts),
         Ok(Err(err)) => Outcome::Failed(err.to_string()),
         Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
+    }
+}
+
+/// What the bookmark's workspace tells the AI: its instructions, guideline and the folders
+/// it may file into.
+struct WorkspaceContext {
+    instructions: String,
+    guideline: Option<String>,
+    folders: Vec<FolderInput>,
+}
+
+impl WorkspaceContext {
+    fn load(store: &SharedStore, id: WorkspaceId) -> knoa_store::Result<WorkspaceContext> {
+        let store = lock(store);
+        let workspace = store.workspace(id)?;
+        let folders = store
+            .folders(id)?
+            .into_iter()
+            .filter(|f| f.auto_assign)
+            .map(|f| FolderInput {
+                id: f.id,
+                name: f.name,
+                description: f.description,
+            })
+            .collect();
+        Ok(WorkspaceContext {
+            instructions: workspace
+                .as_ref()
+                .map(|w| w.instructions.clone())
+                .unwrap_or_default(),
+            guideline: workspace
+                .as_ref()
+                .and_then(|w| w.screening.active_guideline())
+                .map(str::to_owned),
+            folders,
+        })
     }
 }
 

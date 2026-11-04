@@ -6,7 +6,8 @@ use serde_json::{Value, json};
 
 use super::FolderInput;
 
-pub fn answer_schema(folders: Option<&[FolderInput]>) -> Value {
+/// `screening` adds `fits` and `fit_reason`, the answer to the workspace's guideline.
+pub fn answer_schema(folders: Option<&[FolderInput]>, screening: bool) -> Value {
     let pair = json!({
         "type": "object",
         "additionalProperties": false,
@@ -27,6 +28,11 @@ pub fn answer_schema(folders: Option<&[FolderInput]>) -> Value {
         properties["folders"] =
             json!({ "type": "array", "items": { "type": "string", "enum": ids } });
         required.push("folders");
+    }
+    if screening {
+        properties["fits"] = json!({ "type": "boolean" });
+        properties["fit_reason"] = json!({ "type": "string" });
+        required.extend(["fits", "fit_reason"]);
     }
     json!({ "type": "object", "additionalProperties": false, "required": required, "properties": properties })
 }

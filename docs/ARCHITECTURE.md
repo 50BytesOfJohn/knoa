@@ -32,7 +32,7 @@ One process. The UI thread only renders and handles input:
 | Crate | Role | Depends on GPUI? |
 | --- | --- | --- |
 | `knoa` | App binary: views, settings, credentials; services that run sync and the organizing queue | yes |
-| `knoa-core` | Domain types (`Bookmark`, `Kind`, `Field`, `Folder`, `Query`), kind definitions | no |
+| `knoa-core` | Domain types (`Workspace`, `Bookmark`, `Kind`, `Field`, `Folder`, `Query`), kind definitions | no |
 | `knoa-store` | SQLite schema, migrations, queries, full-text search, the job queue | no |
 | `knoa-browser` | Chromium profile discovery, `Bookmarks` parsing, file watching | no |
 | `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails | no |
@@ -42,6 +42,9 @@ One process. The UI thread only renders and handles input:
 
 See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md).
 
+- Workspaces own their bookmarks, folders, instructions, synced browser profiles and an
+  optional keep guideline ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md)). URLs are
+  unique per workspace.
 - Kind definitions (kinds and their typed fields) are data in an embedded file in
   `knoa-core`.
 - A bookmark stores its kind, `fields` and `extras`. Fields and extras are JSON columns;
@@ -70,10 +73,11 @@ cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 - Watches the profile directories with `notify` (FSEvents), debounced 1.5 s, plus a
   rescan every 10 minutes as a backup; both skip files whose checksum is unchanged
   ([ADR 0010](adr/0010-bookmark-sync-by-file-watch.md)).
-- One-way, browser → Knoa. Bookmarks are keyed on URL plus the browser's GUID, so
-  re-imports are idempotent. The browser folder path is stored and passed to the AI as a
+- One-way, browser → Knoa. Each profile is imported into every workspace that syncs it.
+  Bookmarks are keyed on workspace and URL, so re-imports are idempotent. The browser folder path is stored and passed to the AI as a
   hint.
 - A bookmark deleted in the browser is marked, not deleted.
+- Links added by hand go straight into the organizing queue and are always kept.
 - The first import stores metadata only. AI processing of those bookmarks starts when the
   user triggers it. Later bookmarks are processed automatically.
 
@@ -88,10 +92,13 @@ network requests), so quitting the app loses no work.
    - structured data on the page: schema.org JSON-LD, Open Graph, oEmbed;
    - LLM extraction from the page text when the above is not enough.
 3. **Organize** with one structured chat call (`json_schema`, `strict: true`, generic
-   name/value fields). Output: kind, summary, fields, extras, tags. Input: the user's
-   instructions, the extracted evidence and about 4k characters of page text. Values read
+   name/value fields). Output: kind, summary, fields, extras, tags, and whether it fits
+   when the workspace has a guideline. Input: the workspace's instructions and guideline,
+   the extracted evidence and about 4k characters of page text. A bookmark that doesn't
+   fit is stored as set aside, with the reason, and gets no folders. Values read
    from the page override the model's.
-4. **Folders** come from a yes/no classifier, one question per auto-assign folder
+4. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
+   bookmark's workspace
    (OpenRouter Decisions, with a sentinel question). A provider without a classifier
    picks folders in the chat call instead.
 5. **Store** the result with the model name. Without AI, steps 3 and 4 are skipped and the
@@ -120,7 +127,7 @@ Keychain in release builds and in a plain file in dev builds
 
 ## UI
 
-- Main screen: a floating sidebar (workspace, places, folders), a floating search pill
+- Main screen: a floating sidebar (workspace card with the switcher, places, folders), a floating search pill
   with kind chips, masonry cards grouped by date with a date rail, and a floating detail
   panel. The approved layout is in the [main screen design](design/main-screen.md); the
   research behind it is in [research](research/main-screen.md).

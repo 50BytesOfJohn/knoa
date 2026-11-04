@@ -1,4 +1,4 @@
-//! Keeps the library in step with the chosen browser profiles.
+//! Keeps each workspace in step with the browser profiles it chose.
 //!
 //! Changes arrive through a file watch (FSEvents, debounced), so a new bookmark shows up a
 //! couple of seconds after it's saved. A slow periodic rescan backs that up in case an
@@ -10,49 +10,63 @@ use std::{collections::HashMap, time::Duration};
 use futures::{StreamExt as _, channel::mpsc};
 use gpui::{App, AppContext as _, Context, Entity, Global, Task};
 use knoa_browser::{Profile, ProfileId};
+use knoa_core::WorkspaceId;
 use knoa_store::NewBookmarks;
 
-use crate::state::library::{Library, lock};
+use crate::state::library::{BrowsersChanged, Library, lock};
 
 const RESCAN_EVERY: Duration = Duration::from_mins(10);
 
-/// The running sync, replaced whenever the chosen profiles change.
+/// The running sync, replaced whenever a workspace's browsers change.
 /// Holding the entity keeps the sync and its file watch alive.
 struct SyncGlobal(#[allow(dead_code)] Option<Entity<BrowserSync>>);
 
 impl Global for SyncGlobal {}
 
-/// (Re)starts syncing the profiles chosen in settings.
-pub fn restart(library: Entity<Library>, cx: &mut App) {
-    let profiles = crate::state::settings::SettingsFile::get(cx)
-        .browsers
-        .clone();
-    let sync = (!profiles.is_empty()).then(|| BrowserSync::start(&profiles, library, cx));
+/// Syncs the browsers each workspace chose, restarting whenever that choice changes.
+pub fn init(library: &Entity<Library>, cx: &mut App) {
+    cx.set_global(SyncGlobal(None));
+    cx.subscribe(library, |library, _: &BrowsersChanged, cx| {
+        restart(library, cx);
+    })
+    .detach();
+}
+
+fn restart(library: Entity<Library>, cx: &mut App) {
+    let mut feeds: HashMap<ProfileId, Vec<WorkspaceId>> = HashMap::new();
+    for workspace in library.read(cx).workspaces() {
+        for id in workspace
+            .browsers
+            .iter()
+            .filter_map(|id| ProfileId::parse(id))
+        {
+            feeds.entry(id).or_default().push(workspace.id);
+        }
+    }
+    let sync = (!feeds.is_empty()).then(|| BrowserSync::start(feeds, library, cx));
     cx.set_global(SyncGlobal(sync));
 }
 
 pub struct BrowserSync {
     library: Entity<Library>,
     profiles: Vec<Profile>,
+    /// The workspaces each profile feeds.
+    feeds: HashMap<ProfileId, Vec<WorkspaceId>>,
     checksums: HashMap<ProfileId, String>,
     _watcher: Option<knoa_browser::Watcher>,
     _tasks: Vec<Task<()>>,
 }
 
 impl BrowserSync {
-    /// Starts syncing `profile_ids`, importing each once right away.
-    pub fn start(
-        profile_ids: &[String],
+    /// Starts syncing each profile into its workspaces, importing once right away.
+    fn start(
+        feeds: HashMap<ProfileId, Vec<WorkspaceId>>,
         library: Entity<Library>,
         cx: &mut App,
     ) -> Entity<BrowserSync> {
-        let wanted: Vec<ProfileId> = profile_ids
-            .iter()
-            .filter_map(|id| ProfileId::parse(id))
-            .collect();
         let profiles: Vec<Profile> = knoa_browser::discover_profiles()
             .into_iter()
-            .filter(|p| wanted.contains(&p.id))
+            .filter(|p| feeds.contains_key(&p.id))
             .collect();
         cx.new(|cx| {
             let (tx, rx) = mpsc::unbounded::<ProfileId>();
@@ -65,6 +79,7 @@ impl BrowserSync {
             let mut sync = BrowserSync {
                 library,
                 profiles,
+                feeds,
                 checksums: HashMap::new(),
                 _watcher: watcher,
                 _tasks: tasks,
@@ -103,12 +118,14 @@ impl BrowserSync {
         }
     }
 
+    /// Reads the profile's bookmarks once and imports them into every workspace it feeds.
     fn import(&mut self, id: &ProfileId, cx: &mut Context<'_, BrowserSync>) {
         let Some(profile) = self.profiles.iter().find(|p| &p.id == id) else {
             return;
         };
         let path = profile.bookmarks_path.clone();
         let source = id.to_string();
+        let workspaces = self.feeds.get(id).cloned().unwrap_or_default();
         let last_checksum = self.checksums.get(id).cloned();
         let store = self.library.read(cx).store();
         let task = cx.background_spawn(async move {
@@ -117,22 +134,26 @@ impl BrowserSync {
                 return anyhow::Ok(None);
             }
             let mut store = lock(&store);
-            let new = if store.has_source(&source)? {
-                NewBookmarks::Organize
-            } else {
-                NewBookmarks::MetadataOnly
-            };
-            let report = store.import(&source, &file.bookmarks, new)?;
-            Ok(Some((file.checksum, report)))
+            let mut added = 0;
+            for workspace in workspaces {
+                let new = if store.has_source(workspace, &source)? {
+                    NewBookmarks::Organize
+                } else {
+                    NewBookmarks::MetadataOnly
+                };
+                let report = store.import(workspace, &source, &file.bookmarks, new)?;
+                tracing::info!(%source, ?workspace, added = report.added, removed = report.removed, "imported bookmarks");
+                added += report.added;
+            }
+            Ok(Some((file.checksum, added)))
         });
         let id = id.clone();
         cx.spawn(async move |this, cx| match task.await {
-            Ok(Some((checksum, report))) => {
-                tracing::info!(%id, added = report.added, removed = report.removed, "imported bookmarks");
+            Ok(Some((checksum, added))) => {
                 let _ = this.update(cx, |this, cx| {
                     this.checksums.insert(id, checksum);
                     this.library.update(cx, Library::refresh);
-                    if report.added > 0 {
+                    if added > 0 {
                         crate::services::organizer::Organizer::wake(cx);
                     }
                 });

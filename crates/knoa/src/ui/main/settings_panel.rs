@@ -1,23 +1,18 @@
-//! Settings: appearance, AI, organizing instructions and browsers.
+//! Settings: appearance and AI. Browsers and instructions belong to each workspace.
 
 use gpui::{
     AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
-    TaskExt as _, WeakEntity, Window, div, prelude::FluentBuilder as _, px,
+    TaskExt as _, WeakEntity, Window, div, px,
 };
-use gpui_component::{
-    input::{Input, InputState, Textarea, TextareaState},
-    switch::Switch,
-};
+use gpui_component::input::{Input, InputState};
 use knoa_ai::ProviderKind;
-use knoa_browser::Profile;
 
 use super::MainView;
 use crate::{
     services::{
         ai,
         organizer::{AiStatus, Organizer},
-        sync,
     },
     state::{library::Library, settings::SettingsFile},
     ui::{
@@ -33,8 +28,6 @@ pub struct SettingsPanel {
     library: Entity<Library>,
     main: WeakEntity<MainView>,
     key: Entity<InputState>,
-    instructions: Entity<TextareaState>,
-    profiles: Vec<Profile>,
     key_message: Option<(String, bool)>,
     checking: Option<Task<()>>,
 }
@@ -51,20 +44,12 @@ impl SettingsPanel {
                 .placeholder("sk-or-…")
                 .masked(true)
         });
-        let instructions = cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .placeholder("e.g. Keep work and personal apart. Tag recipes by cuisine.")
-        });
-        let current = SettingsFile::get(cx).instructions.clone();
-        instructions.update(cx, |input, cx| input.set_value(current, window, cx));
         cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify())
             .detach();
         SettingsPanel {
             library,
             main,
             key,
-            instructions,
-            profiles: knoa_browser::discover_profiles(),
             key_message: None,
             checking: None,
         }
@@ -98,26 +83,12 @@ impl SettingsPanel {
         cx.notify();
     }
 
-    fn save_instructions(&mut self, cx: &mut Context<'_, SettingsPanel>) {
-        let text = self.instructions.read(cx).value().trim().to_owned();
-        SettingsFile::update(cx, |s| s.instructions = text);
-    }
-
-    fn toggle_profile(&mut self, id: String, cx: &mut Context<'_, SettingsPanel>) {
-        SettingsFile::update(cx, |s| {
-            if let Some(at) = s.browsers.iter().position(|p| *p == id) {
-                s.browsers.remove(at);
-            } else {
-                s.browsers.push(id);
-            }
-        });
-        sync::restart(self.library.clone(), cx);
-        cx.notify();
-    }
-
     fn organize_existing(&mut self, cx: &mut Context<'_, SettingsPanel>) {
         self.library.update(cx, |library, cx| {
-            library.change(cx, |store| store.queue_not_organized().map(drop));
+            let workspace = library.workspace_id();
+            library.change(cx, move |store| {
+                store.queue_not_organized(workspace).map(drop)
+            });
         });
         Organizer::wake(cx);
     }
@@ -149,8 +120,7 @@ impl Render for SettingsPanel {
             )
             .child(self.appearance(cx))
             .child(self.ai_section(cx))
-            .child(self.instructions_section(cx))
-            .child(self.browsers_section(cx))
+            .child(self.workspace_section(cx))
             .child(
                 div()
                     .flex()
@@ -285,7 +255,7 @@ impl SettingsPanel {
                             .gap_3()
                             .rounded(px(12.))
                             .bg(theme.ai_soft)
-                            .child(div().flex_1().text_sm().child(format!("{not_organized} bookmarks aren't organized yet. About ${cost:.2} to do them all.")))
+                            .child(div().flex_1().text_sm().child(format!("{not_organized} bookmarks in this workspace aren't organized yet. About ${cost:.2} to do them all.")))
                             .child(button("organize-all", "Organize", Tone::Primary, cx).on_click(cx.listener(|this, _, _, cx| this.organize_existing(cx)))),
                     );
                 }
@@ -302,58 +272,30 @@ impl SettingsPanel {
         section("AI", &theme).child(body)
     }
 
-    fn instructions_section(&self, cx: &mut Context<'_, SettingsPanel>) -> impl IntoElement {
+    fn workspace_section(&self, cx: &mut Context<'_, SettingsPanel>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        section("How should things be organized?", &theme)
-            .child(Textarea::new(&self.instructions).h(px(90.)))
-            .child(
-                div().flex().child(
-                    button("save-instructions", "Save instructions", Tone::Soft, cx)
-                        .on_click(cx.listener(|this, _, _, cx| this.save_instructions(cx))),
-                ),
-            )
-    }
-
-    fn browsers_section(&self, cx: &mut Context<'_, SettingsPanel>) -> impl IntoElement {
-        let theme = Theme::get(cx).clone();
-        let chosen = SettingsFile::get(cx).browsers.clone();
-        let mut list = div().flex().flex_col().gap_2();
-        for (index, profile) in self.profiles.iter().enumerate() {
-            let id = profile.id.to_string();
-            let on = chosen.contains(&id);
-            list = list.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .text_sm()
-                    .child(div().flex_1().child(format!(
-                        "{} · {}",
-                        profile.id.browser.name(),
-                        profile.name
-                    )))
-                    .child(
-                        Switch::new(("profile", index))
-                            .checked(on)
-                            .on_click(cx.listener(move |this, _: &bool, _, cx| {
-                                this.toggle_profile(id.clone(), cx);
-                            })),
-                    ),
-            );
-        }
-        if self.profiles.is_empty() {
-            list = list.child(div().text_sm().text_color(theme.muted).child("No Chromium-based browser found. Knoa reads Helium, Chrome, Brave, Edge, Vivaldi and Chromium."));
-        }
-        section("Browsers", &theme)
-            .child(list)
-            .when(!chosen.is_empty(), |s| {
-                s.child(
-                    div()
-                        .text_xs()
-                        .text_color(theme.faint)
-                        .child("Knoa only reads bookmarks; it never changes them in the browser."),
-                )
-            })
+        let workspace = self.library.read(cx).workspace().cloned();
+        let name = workspace
+            .as_ref()
+            .map(|w| w.name.clone())
+            .unwrap_or_default();
+        let id = workspace.map(|w| w.id);
+        section("Workspace", &theme).child(
+            div()
+                .flex()
+                .items_center()
+                .gap_3()
+                .child(div().flex_1().text_sm().text_color(theme.muted).child(format!(
+                    "Browsers, organizing instructions and what to keep are set per workspace, here for {name}."
+                )))
+                .child(button("edit-workspace", "Edit workspace", Tone::Soft, cx).on_click(
+                    cx.listener(move |this, _, window, cx| {
+                        let _ = this
+                            .main
+                            .update(cx, |main, cx| main.edit_workspace(id, window, cx));
+                    }),
+                )),
+        )
     }
 }
 

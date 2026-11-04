@@ -16,3 +16,4 @@ old one.
 | [0008](0008-credential-storage.md) | Keychain in signed builds, plain file in dev builds | Accepted |
 | [0009](0009-provider-neutral-ai.md) | Provider-neutral AI behind two traits | Accepted |
 | [0010](0010-bookmark-sync-by-file-watch.md) | Bookmark sync by file watch, with a slow rescan | Accepted |
+| [0011](0011-workspaces-fed-by-browsers.md) | Workspaces are fed by browsers, with an optional guideline | Accepted |

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use knoa_core::{
     Bookmark, BookmarkId, FolderId, FolderLink, Image, Kind, Origin, Place, Query, Status,
+    WorkspaceId,
 };
 use rusqlite::{OptionalExtension as _, Row, params_from_iter};
 
@@ -16,6 +17,7 @@ pub struct Counts {
     pub up_next: usize,
     pub unsorted: usize,
     pub not_organized: usize,
+    pub set_aside: usize,
     /// Queued or being organized right now: the AI activity indicator.
     pub organizing: usize,
 }
@@ -23,7 +25,8 @@ pub struct Counts {
 const COLUMNS: &str = "b.id, b.url, b.title, b.site, b.added_at, b.kind, b.summary, b.fields, b.extras, b.status,
     b.up_next, b.image_path, b.image_width, b.image_height, b.browser_folder, b.removed_from_browser, b.model,
     (SELECT json_group_array(json_array(tag, origin)) FROM bookmark_tags WHERE bookmark_id = b.id),
-    (SELECT json_group_array(json_array(folder_id, origin, probability)) FROM bookmark_folders WHERE bookmark_id = b.id)";
+    (SELECT json_group_array(json_array(folder_id, origin, probability)) FROM bookmark_folders WHERE bookmark_id = b.id),
+    b.workspace_id, b.set_aside";
 
 impl Store {
     /// Bookmarks matching `query`, best match first when there is text, newest first otherwise.
@@ -78,9 +81,11 @@ impl Store {
             .query_row(&sql, params_from_iter(&filter.params), |row| row.get(0))?)
     }
 
-    pub fn counts(&self) -> Result<Counts> {
+    /// The workspace's place counts. The AI indicator counts every workspace's queue.
+    pub fn counts(&self, workspace: WorkspaceId) -> Result<Counts> {
         let place = |place| {
             self.count(&Query {
+                workspace: Some(workspace),
                 place,
                 ..Query::default()
             })
@@ -95,6 +100,7 @@ impl Store {
             up_next: place(Place::UpNext)?,
             unsorted: place(Place::Unsorted)?,
             not_organized: place(Place::NotOrganized)?,
+            set_aside: place(Place::SetAside)?,
             organizing,
         })
     }
@@ -107,11 +113,21 @@ impl Store {
         )?;
         Ok(())
     }
+
+    /// Keeps a bookmark the AI set aside. The guideline never sets it aside again.
+    pub fn keep(&mut self, id: BookmarkId) -> Result<()> {
+        self.conn.execute(
+            "UPDATE bookmarks SET kept = 1, set_aside = NULL WHERE id = ?1",
+            [id.0],
+        )?;
+        Ok(())
+    }
 }
 
 /// A row as stored, before the JSON columns are parsed.
 struct RawBookmark {
     id: i64,
+    workspace: i64,
     url: String,
     title: String,
     site: String,
@@ -128,6 +144,7 @@ struct RawBookmark {
     model: Option<String>,
     tags: String,
     folders: String,
+    set_aside: Option<String>,
 }
 
 impl RawBookmark {
@@ -135,6 +152,7 @@ impl RawBookmark {
         let image_path: Option<String> = row.get(11)?;
         Ok(RawBookmark {
             id: row.get(0)?,
+            workspace: row.get(19)?,
             url: row.get(1)?,
             title: row.get(2)?,
             site: row.get(3)?,
@@ -154,6 +172,7 @@ impl RawBookmark {
             model: row.get(16)?,
             tags: row.get(17)?,
             folders: row.get(18)?,
+            set_aside: row.get(20)?,
         })
     }
 
@@ -162,6 +181,7 @@ impl RawBookmark {
         let folders: Vec<(i64, String, Option<f32>)> = serde_json::from_str(&self.folders)?;
         Ok(Bookmark {
             id: BookmarkId(self.id),
+            workspace: WorkspaceId(self.workspace),
             url: self.url,
             title: self.title,
             site: self.site,
@@ -191,6 +211,7 @@ impl RawBookmark {
             }),
             browser_folder: self.browser_folder,
             removed_from_browser: self.removed_from_browser,
+            set_aside: self.set_aside,
             model: self.model,
         })
     }
@@ -202,7 +223,10 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::{NewBookmarks, test_support::bookmark};
+    use crate::{
+        NewBookmarks,
+        test_support::{WORKSPACE, bookmark},
+    };
 
     #[test]
     fn search_combines_prefix_text_with_field_filters() {
@@ -212,7 +236,7 @@ mod tests {
             bookmark("https://imdb.com/2", "The Thin Red Line", 2),
         ];
         store
-            .import("test", &movies, NewBookmarks::Organize)
+            .import(WORKSPACE, "test", &movies, NewBookmarks::Organize)
             .unwrap();
         for (job, runtime) in store.take_jobs(0, 2).unwrap().into_iter().zip([170, 104]) {
             let mut fields = Fields::new();
@@ -224,6 +248,7 @@ mod tests {
                 extras: Vec::new(),
                 tags: Vec::new(),
                 folders: Vec::new(),
+                set_aside: None,
                 model: "test".into(),
             };
             store
@@ -233,7 +258,7 @@ mod tests {
 
         let titles = |input: &str| -> Vec<String> {
             let found = store
-                .search(&Query::parse(input, Place::Everything), 10)
+                .search(&Query::parse(input, None, Place::Everything), 10)
                 .unwrap();
             let mut titles: Vec<String> = found.into_iter().map(|b| b.title).collect();
             titles.sort();
@@ -243,7 +268,7 @@ mod tests {
         assert_eq!(titles("thi noir runtime>2h"), ["The Thin Red Line"]);
         assert_eq!(
             store
-                .kind_counts(&Query::parse("noir", Place::Everything))
+                .kind_counts(&Query::parse("noir", None, Place::Everything))
                 .unwrap(),
             [(Kind::Movie, 2)]
         );

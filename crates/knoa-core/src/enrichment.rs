@@ -5,6 +5,8 @@ use crate::{Fields, FolderId, Image, Kind};
 /// What a page fetch found, before the AI looks at it.
 #[derive(Debug, Clone, Default)]
 pub struct Page {
+    /// The page's own title, for links added by hand that have no browser title.
+    pub title: Option<String>,
     pub image: Option<Image>,
     /// Readable page text, kept locally for search.
     pub text: String,
@@ -29,5 +31,7 @@ pub struct Enrichment {
     pub tags: Vec<String>,
     /// Folders the classifier picked, with its probability.
     pub folders: Vec<(FolderId, f32)>,
+    /// Why the bookmark doesn't fit the workspace's guideline, when it doesn't.
+    pub set_aside: Option<String>,
     pub model: String,
 }

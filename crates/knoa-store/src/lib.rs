@@ -1,5 +1,5 @@
-//! Knoa's library on disk: one SQLite file with bookmarks, folders, tags, the organizing
-//! queue and a full-text index.
+//! Knoa's library on disk: one SQLite file with workspaces, bookmarks, folders, tags, the
+//! organizing queue and a full-text index.
 //!
 //! `Store` is synchronous. The app runs it on GPUI's background executor, never on the UI
 //! thread.
@@ -11,12 +11,13 @@ mod read;
 mod schema;
 mod search;
 mod tags;
+mod workspaces;
 
 use std::path::Path;
 
 use rusqlite::Connection;
 
-pub use import::{ImportReport, NewBookmarks};
+pub use import::{AddedLink, ImportReport, NewBookmarks};
 pub use jobs::Job;
 pub use read::Counts;
 
@@ -46,7 +47,6 @@ impl Store {
 
     fn init(conn: Connection) -> Result<Store> {
         conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         let mut store = Store { conn };
         schema::migrate(&mut store.conn)?;
@@ -56,7 +56,10 @@ impl Store {
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use knoa_core::NewBookmark;
+    use knoa_core::{NewBookmark, WorkspaceId};
+
+    /// The workspace every database starts with.
+    pub const WORKSPACE: WorkspaceId = WorkspaceId(1);
 
     pub fn bookmark(url: &str, title: &str, added_at: i64) -> NewBookmark {
         NewBookmark {

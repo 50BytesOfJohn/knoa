@@ -173,5 +173,6 @@ date rail in GPUI.
 
 ## Decided after approval
 
-- Workspaces stay after the alpha. Until they ship, the workspace card shows the single
-  library under the name chosen in onboarding, and has no switcher.
+- Workspaces shipped without hidden workspaces. The switcher lists them with the
+  browsers each syncs; the pencil opens the workspace editor. "Set aside" shows in
+  places only while the workspace's guideline has set something aside.

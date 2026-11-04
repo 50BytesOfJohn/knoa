@@ -41,6 +41,7 @@ impl MainView {
                     .flex()
                     .flex_col()
                     .gap_4()
+                    .children(self.detail_set_aside(&bookmark, cx))
                     .child(self.detail_about(&bookmark, cx))
                     .children(fields(&bookmark, &theme))
                     .children(self.detail_tags(&bookmark, cx))
@@ -187,6 +188,44 @@ impl MainView {
                         }),
                     )
                 }),
+        )
+    }
+
+    /// Why the workspace's guideline set this bookmark aside, and the way to keep it.
+    fn detail_set_aside(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Option<Div> {
+        let reason = bookmark.set_aside.clone()?;
+        let theme = Theme::get(cx).clone();
+        let (id, library) = (bookmark.id, self.library.clone());
+        Some(
+            div()
+                .p_3()
+                .flex()
+                .items_center()
+                .gap_3()
+                .rounded(px(12.))
+                .bg(theme.soft)
+                .text_sm()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap_0p5()
+                        .child(
+                            div()
+                                .font_weight(FontWeight::MEDIUM)
+                                .child("✦ Set aside: doesn't fit this workspace"),
+                        )
+                        .child(div().text_color(theme.muted).child(reason)),
+                )
+                .child(
+                    button("keep", "Keep", Tone::Primary, cx).on_click(move |_, _, cx| {
+                        library.update(cx, |library, cx| {
+                            library.change(cx, move |store| store.keep(id));
+                        });
+                    }),
+                ),
         )
     }
 

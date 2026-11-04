@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
+use knoa_store::Store;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -11,23 +12,37 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     /// Onboarding finished or skipped.
     pub onboarded: bool,
-    pub workspace: Workspace,
-    /// Browser profiles to sync, as `helium:Default`.
-    pub browsers: Vec<String>,
+    /// The workspace shown, by id.
+    pub current_workspace: Option<i64>,
     /// `None` when the user runs Knoa without AI.
     pub ai: Option<ProviderConfig>,
-    /// How the user wants things organized, in their own words. Sent with every request.
-    pub instructions: String,
     pub theme: String,
     pub show_up_next: bool,
     pub show_summaries: bool,
     pub window: Option<WindowFrame>,
+    #[serde(flatten, skip_serializing)]
+    pub legacy: Legacy,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Workspace {
+/// Settings from before workspaces, read once and moved into the first workspace.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct Legacy {
+    pub workspace: Option<LegacyWorkspace>,
+    pub browsers: Vec<String>,
+    pub instructions: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct LegacyWorkspace {
     pub name: String,
     pub color: u8,
+}
+
+impl Legacy {
+    fn is_empty(&self) -> bool {
+        *self == Legacy::default()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -42,17 +57,13 @@ impl Default for Settings {
     fn default() -> Settings {
         Settings {
             onboarded: false,
-            workspace: Workspace {
-                name: "Personal".into(),
-                color: 0,
-            },
-            browsers: Vec::new(),
+            current_workspace: None,
             ai: None,
-            instructions: String::new(),
             theme: crate::ui::theme::DEFAULT_THEME.into(),
             show_up_next: true,
             show_summaries: true,
             window: None,
+            legacy: Legacy::default(),
         }
     }
 }
@@ -90,6 +101,29 @@ impl SettingsFile {
             tracing::error!("can't save settings: {err:#}");
         }
     }
+}
+
+/// Moves pre-workspace settings into the first workspace, once.
+pub fn adopt_legacy(store: &mut Store, cx: &mut App) -> knoa_store::Result<()> {
+    let legacy = SettingsFile::get(cx).legacy.clone();
+    if legacy.is_empty() {
+        return Ok(());
+    }
+    if let Some(mut workspace) = store.workspaces()?.into_iter().next() {
+        if let Some(old) = legacy.workspace {
+            workspace.name = old.name;
+            workspace.color = old.color;
+        }
+        workspace.browsers = legacy.browsers;
+        workspace.instructions = legacy.instructions;
+        store.update_workspace(&workspace)?;
+        tracing::info!(
+            "moved browsers and instructions into workspace {}",
+            workspace.name
+        );
+    }
+    SettingsFile::update(cx, |s| s.legacy = Legacy::default());
+    Ok(())
 }
 
 /// Writes to a temporary file and renames it, so a crash never leaves half a file.

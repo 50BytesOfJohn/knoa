@@ -403,16 +403,17 @@ impl MainView {
                 "Try fewer words, or filters like kind:movie, site:github.com or #tag.".to_owned(),
             )
         } else if library.place() == Place::Everything {
-            let browsers = &SettingsFile::get(cx).browsers;
-            if browsers.is_empty() {
+            let synced = library.workspace().is_some_and(|w| !w.browsers.is_empty());
+            if synced {
                 (
-                    "Your library is empty",
-                    "Pick a browser in Settings and its bookmarks show up here.".to_owned(),
+                    "Nothing here yet",
+                    "Bookmark something in your browser and it lands here a moment later."
+                        .to_owned(),
                 )
             } else {
                 (
-                    "Your library is empty",
-                    "Bookmark something in your browser and it lands here a moment later."
+                    "Nothing here yet",
+                    "Add a link with ⌘N, or pick a browser for this workspace from the workspace card."
                         .to_owned(),
                 )
             }
