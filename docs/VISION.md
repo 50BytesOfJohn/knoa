@@ -1,88 +1,82 @@
 # Vision
 
-## The idea
+## What Knoa is
 
-Bookmarking is already a habit: one click on the browser's star. What's broken is
-everything after. Bookmarks pile up in one flat folder, nobody organizes them, and they're
-never found again.
+A macOS app that turns browser bookmarks into an organized, searchable library.
 
-Knoa keeps the habit and fixes the rest:
+1. **Capture stays in the browser.** You bookmark as usual. Knoa reads the browser's
+   bookmarks and picks up new ones automatically.
+2. **Organizing is automatic.** For each new bookmark, Knoa fetches the page and uses an LLM
+   to work out what it is, its key facts, tags, a short summary and which of your folders it
+   belongs in. There is no review step.
+3. **You steer with instructions.** You describe in plain language how you want things
+   organized, globally and per folder. Every organizing request includes these
+   instructions.
+4. **You find things in Knoa.** Search and filters over everything Knoa knows about each
+   bookmark.
 
-1. **Capture stays in the browser.** You keep clicking the bookmark icon. Knoa syncs those
-   bookmarks automatically; there is no new capture flow to learn.
-2. **AI does the organizing.** Each new bookmark is fetched, read and understood by an LLM,
-   then categorized, tagged, summarized and filed.
-3. **You organize by describing, not by dragging.** During onboarding you write, in plain
-   language, how you want things organized ("keep work and personal apart", "group recipes
-   by cuisine", "anything about Rust goes under Programming"). Those instructions are part of
-   every organizing request, and you can edit them whenever you like.
-4. **Browsing happens in Knoa.** A fast native app built for looking things up and revisiting
-   them, rather than a list of titles.
+## Audience
 
-## UX principles
+The first release is a public alpha, built mainly for the author's own use. Feedback from
+early users is welcome. Rough edges are acceptable; poor design is not. UI and design
+quality are a priority from the first milestone.
 
-- **Minimal on the surface, powerful underneath.** Great defaults that most people never
-  change. Advanced features exist but stay out of the way until needed.
-- **Content-aware presentation.** A video shows its thumbnail, an image shows the image, an
-  article shows a preview card with title, source, summary and reading time. Appearance
-  settings can be tuned per content type.
-- **Fast and calm.** Native GPU rendering, instant search, no spinners for things that are
-  already local. AI work happens in the background and never blocks browsing.
-- **Trustworthy automation.** Every AI decision is visible and reversible: why it was filed
-  there, which tags were added, a one-click undo. The user's corrections teach the
-  organizing instructions.
-- **Local-first and private.** The library lives on the user's machine. The only things
-  that leave it are LLM requests to the provider the user configured, with their own key.
+## Principles
 
-## Workspaces
+- **Simple by default.** Good defaults, with no setup required. Advanced filtering is
+  available but out of the way.
+- **Search is the main control.** The main screen is a search bar above the library. Text
+  search and filters (kind, site, folder, tag, field values) share the same bar; filters
+  show as chips.
+- **Content-aware cards.** Each kind of bookmark is presented in its own way: a video shows
+  its thumbnail and duration, a movie its poster, year and cast, an article its image,
+  source and summary.
+- **Fast.** Instant search, smooth scrolling, no waiting on local data. Network and AI work
+  run in the background and never block the UI.
+- **Visible, reversible automation.** Every value the AI sets is marked as AI-made, shows
+  why it was set, and can be undone in one click. User edits always win over the AI.
+- **Local and private.** The library is stored on the user's machine. Only page fetches
+  and LLM requests (to OpenRouter, with the user's own key) leave it.
 
-Separate libraries for separate parts of life, such as **Work** and **Personal**, and one
-switch to move between them.
+## Library model
 
-- **Each workspace is its own space:** its own collections, tags and organizing
-  instructions ("work: group by client and project" vs. "personal: recipes by cuisine").
-- **Bookmarks land in the right place automatically.** A workspace can be fed by specific
-  browser profiles (the Chrome "Work" profile goes to Work), and the AI can route the
-  remaining ones based on the instructions. Moving an item is one action.
-- **Fast switching:** a keyboard shortcut and a switcher in the sidebar; search stays within
-  the current workspace by default.
-- **Hidden workspaces.** A workspace can be hidden: it doesn't appear in the switcher, in
-  "all workspaces" search, or in previews until you reveal it. Optionally lock it behind
-  Touch ID. Good for things you'd rather not have pop up when sharing your screen.
-- **Zero setup by default:** everyone starts with one workspace and never sees the concept
-  until they create a second one.
+| Concept | Purpose | Set by | Example |
+| --- | --- | --- | --- |
+| **Kind** + fields | What the bookmark is | AI and page metadata | Movie: title, year, runtime, director, cast |
+| **Extras** | Other useful facts | AI | `awards: Oscar Best Picture` |
+| **Tags** | Labels | AI and user | `noir`, `to-rewatch` |
+| **Folders** | Personal organization | User; AI can assign | "Client X", "Watch with kids" |
 
-## Content types
+- **Kinds** are a fixed set: Article, Video, Movie, Recipe, Product, Repository, Book,
+  Image, Other. Each kind has typed fields, which makes filters like "movies with this
+  actor" or "videos longer than an hour" possible.
+- **Extras** hold facts the kind's fields don't cover. They are shown and searchable, but
+  have no typed filters.
+- **Folders** are one level deep and created only by the user. A bookmark can be in
+  several folders. Each folder has:
+  - an optional description of what belongs in it, which the AI uses for matching;
+  - an auto-assign switch, on by default, that lets the AI add new bookmarks to it;
+  - a "find bookmarks that belong here" action (offered when the folder is empty) and a
+    re-scan action. Both only add bookmarks. Bookmarks that no longer match are marked,
+    not removed.
+- A bookmark the user removes from a folder is never added back to it by the AI.
 
-| Type | Preview |
-| --- | --- |
-| Video (YouTube, Vimeo, ...) | Thumbnail, duration, channel |
-| Image | The image itself |
-| Article / blog post | Open Graph image, title, site, AI summary, reading time |
-| Repository / docs | Project name, description, language/stars where available |
-| Product, tool, other | Favicon + Open Graph card |
+## Sync
 
-## AI providers
+- New browser bookmarks are imported and organized automatically.
+- The first import only reads titles, URLs and browser folders. It is instant and free,
+  and the bookmarks are immediately searchable. Running the AI over these existing
+  bookmarks is a separate action that shows the count and estimated cost first.
+- Deleting a bookmark in the browser does not delete it from Knoa; Knoa marks it as removed
+  from the browser.
 
-- **OpenRouter first and only, initially.** One API key gives access to many models;
-  sensible default model, changeable in advanced settings.
-- **Later, maybe:** use models through an existing Claude or ChatGPT/Codex subscription,
-  for example by driving the locally installed `claude` or `codex` CLI in headless mode.
-  Before building this, check each provider's terms on using subscriptions from
-  third-party apps. Parked until OpenRouter is solid.
+## After the alpha
 
-## Parked ideas (later)
+Planned, but not part of the alpha:
 
-These came up early and are worth doing, but not before the core is good:
-
-- **Archive.** A quiet place for things that are done or no longer interesting, kept out of
-  the main views but still searchable.
-- **Relevance check.** Periodically re-evaluate saved items: is this article still accurate,
-  still worth reading, has the link died, is a newer version out?
-- **Automatic mark/archive.** Suggest (later: automatically do) archiving of items that are
-  too old or no longer relevant, governed by the user's instructions.
-- **Semantic search / RAG.** "That article about database indexing I saved last spring", and
-  questions answered from the library's own contents. See
-  [ARCHITECTURE](ARCHITECTURE.md#search).
-- **Read-later states.** Unread / reading / done, with reading-time estimates.
-- **Dead-link handling.** Detect broken links and offer an archived copy.
+- An optional filter sidebar, hidden by default, showing kinds, sites, folders, tags and
+  fields with counts. It edits the same query as the search bar.
+- User-defined kinds and fields.
+- Firefox and Safari support.
+- Workspaces: separate libraries (e.g. Work and Personal) with their own folders and
+  instructions, including hidden workspaces.

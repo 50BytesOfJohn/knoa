@@ -2,11 +2,10 @@
 
 An intelligent bookmark library for the desktop.
 
-Keep bookmarking the way you already do: click the star in your browser. Knoa picks those
-bookmarks up, has an LLM read and understand each one, then categorizes, tags and organizes
-it according to instructions you write in plain language. You browse, search and revisit
-everything in a fast native app with rich previews: video thumbnails, images, article
-cards.
+Bookmark in your browser as usual. Knoa imports those bookmarks, fetches each page and uses
+an LLM to record what it is (an article, a video, a movie, ...), its key facts, tags and a
+summary, and to file it into your folders following instructions you write in plain
+language. You search and filter the library in a native macOS app.
 
 > **Status: foundation.** The app opens a window with its title, and nothing else yet.
 > Read [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
@@ -15,9 +14,9 @@ cards.
 
 | Doc | What's in it |
 | --- | --- |
-| [docs/VISION.md](docs/VISION.md) | The product: what Knoa is, the UX principles, the ideas parked for later |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The planned technical design: crates, data flow, storage, AI, search |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones in order, from this skeleton to v1 and beyond |
+| [docs/VISION.md](docs/VISION.md) | The product: what Knoa is, its principles, the library model |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The technical design: crates, data flow, storage, sync, AI, search |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones toward the public alpha |
 | [docs/adr/](docs/adr/) | Architecture decision records: why each big choice was made |
 
 ## Tech
@@ -25,7 +24,8 @@ cards.
 - **Rust** (edition 2024), pinned in [`rust-toolchain.toml`](rust-toolchain.toml)
 - **[GPUI](https://gpui.rs)**, Zed's GPU-accelerated UI framework, consumed via the
   `gpui-pre` crates.io snapshots ([ADR 0001](docs/adr/0001-gpui-via-gpui-pre-snapshots.md))
-- Planned: SQLite + FTS5 for storage and search, OpenRouter for LLM calls
+- Planned: SQLite + FTS5 for storage and search, OpenRouter for LLM calls, gpui-component
+  for UI primitives
   ([ARCHITECTURE](docs/ARCHITECTURE.md))
 
 ## Getting started
@@ -64,7 +64,7 @@ crates/knoa/        the desktop app (binary)
 docs/               vision, architecture, roadmap, ADRs
 ```
 
-The workspace is set up for more crates (`crates/*`); the planned split is in
+The workspace is set up for more crates (`crates/*`); the planned crates are in
 [ARCHITECTURE](docs/ARCHITECTURE.md#crates). Lints are defined once in the root
 `Cargo.toml` under `[workspace.lints]` and inherited by every crate.
 

@@ -5,23 +5,22 @@
 
 ## Context
 
-Knoa needs an LLM to categorize, tag and summarize bookmarks, with structured (JSON) output.
-The user brings their own key. Many models should be available without per-provider code.
+Knoa needs an LLM to classify, extract and summarize bookmarks, with structured JSON
+output. The user brings their own API key. Many models should be available without
+provider-specific code.
 
 ## Decision
 
-- OpenRouter is the only provider at first.
-- A small client in `knoa-ai` on `reqwest` + `serde`, covering just what we use: Chat
-  Completions with `response_format: json_schema` (`strict: true`), the models list, and
-  later embeddings. No third-party SDK.
-- The provider sits behind a narrow trait (`classify`, `summarize`, `embed`) so additional
-  providers (Claude/Codex subscriptions via their CLIs, a local model) can be added without
-  touching the pipeline.
+- OpenRouter is the only provider.
+- A small client on `reqwest` + `serde` that covers only what we use: Chat Completions with
+  `response_format: json_schema` (`strict: true`) and the models list. No third-party SDK.
+- The client sits behind a narrow trait so the pipeline can be tested with a fake.
 - The API key is stored in the macOS Keychain.
 
 ## Consequences
 
-- We own retries, rate-limit handling and timeouts; worth it for a small, stable surface.
-- Structured-output support varies by model; the default model must support it, and the
-  request sets `provider.require_parameters: true` so OpenRouter routes only to endpoints
+- We implement retries, rate-limit handling and timeouts ourselves; the API surface is
+  small and stable.
+- Structured-output support varies by model. The default model must support it, and
+  requests set `provider.require_parameters: true` so OpenRouter only routes to endpoints
   that do.
