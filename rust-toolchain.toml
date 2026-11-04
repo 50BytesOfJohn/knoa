@@ -1,0 +1,5 @@
+# GPUI tracks the latest stable Rust; bump this together with the gpui-pre pins.
+[toolchain]
+channel = "1.99"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
