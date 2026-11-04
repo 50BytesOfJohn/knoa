@@ -265,12 +265,21 @@ fn cover(bookmark: &Bookmark, path: std::path::PathBuf, height: f32, theme: &The
             .justify_center()
             .child(icon(name, px(13.), gpui::white()))
     };
+    // GPUI clips overflow to a rectangle, so the card's rounding doesn't reach the image;
+    // round it to the card's inner edge, inside its 1 px border.
+    let radius = CARD_RADIUS - px(1.);
     let mut cover = div()
         .relative()
         .w_full()
         .h(px(height))
+        .rounded_t(radius)
         .bg(theme.soft)
-        .child(img(path).size_full().object_fit(ObjectFit::Cover))
+        .child(
+            img(path)
+                .size_full()
+                .rounded_t(radius)
+                .object_fit(ObjectFit::Cover),
+        )
         .child(
             div()
                 .absolute()
