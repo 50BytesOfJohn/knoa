@@ -52,6 +52,9 @@ it for changes (`notify` crate, debounced).
 | Firefox family (Firefox, Zen) | `places.sqlite` in the profile dir | Locked while the browser runs: open read-only with `immutable=1`, or copy first. |
 | Safari | `~/Library/Safari/Bookmarks.plist` | Needs Full Disk Access; the onboarding must explain and request it. |
 
+Each source (browser + profile) maps to a workspace (see [Workspaces](#workspaces)); unmapped
+sources go to the default workspace, or to whichever workspace the AI routes them to.
+
 Sync is **one-way** at first (browser → Knoa), keyed on URL plus the browser's own GUID, so
 re-imports are idempotent. A browser extension that pushes bookmarks in directly (and adds
 "save to Knoa" with a note) is a later option, not a requirement.
@@ -64,15 +67,19 @@ embedded, versioned migrations (`rusqlite_migration` or `refinery`). The file li
 
 Sketch of the schema:
 
-- `bookmarks`: id, url, canonical_url, title, source_browser, source_guid, added_at,
+- `workspaces`: id, name, icon, position, `hidden`, `locked` (Touch ID), organizing
+  instructions
+- `sources`: synced browser profiles, each mapped to a workspace
+- `bookmarks`: id, workspace_id, url, canonical_url, title, source_browser, source_guid, added_at,
   content_kind, status (inbox / library / archived), metadata JSON (Open Graph, duration,
   dimensions), summary, reading_time, enriched_at, enrichment_model
 - `tags`, `bookmark_tags`: many-to-many, with `origin` (ai / user) so user edits win
 - `collections`: AI- or user-created groupings
 - `jobs`: durable queue for enrichment work (retries, backoff), so nothing is lost when the
   app quits mid-run
-- `settings`, including the user's organizing instructions (versioned, so we can see which
-  instructions produced which decisions)
+- `settings`: global preferences and global organizing instructions (per-workspace ones
+  live on `workspaces`; both versioned, so we can see which instructions produced which
+  decisions)
 - `bookmarks_fts`: FTS5 virtual table over title, url, summary, tags, extracted text
 
 Thumbnails and preview images are cached on disk under the app's cache directory, not in the
@@ -81,6 +88,23 @@ database.
 Why SQLite: one file, transactional, very fast for this data size, first-class full-text
 search, and a proven path to vector search later. See
 [ADR 0002](adr/0002-sqlite-local-first-storage.md).
+
+## Workspaces
+
+A workspace is a column on the rows it owns (`bookmarks`, `collections`, `tags`), not a
+separate database file. One file keeps moving items, global search and backups simple, and
+every query is scoped by `workspace_id`. A default workspace always exists.
+
+- **Routing:** a new bookmark goes to its source's workspace. Bookmarks from an unmapped
+  source can be routed by the LLM, which sees the list of workspaces and their
+  instructions.
+- **Instructions:** the prompt combines global instructions with the target workspace's
+  instructions.
+- **Hidden workspaces** are excluded from the switcher, cross-workspace search, notifications
+  and previews until revealed for the session. A locked one also needs Touch ID
+  (`LocalAuthentication`) to reveal. This is privacy from casual view, not encryption: the
+  data is in the same database file. If real encryption is ever wanted, it means a separate
+  encrypted database (SQLCipher) for that workspace, and an ADR.
 
 ## AI enrichment
 

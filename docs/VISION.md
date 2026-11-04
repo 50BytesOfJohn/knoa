@@ -34,6 +34,24 @@ Knoa keeps the habit and fixes the rest:
 - **Local-first and private.** The library lives on the user's machine. The only things
   that leave it are LLM requests to the provider the user configured, with their own key.
 
+## Workspaces
+
+Separate libraries for separate parts of life, such as **Work** and **Personal**, and one
+switch to move between them.
+
+- **Each workspace is its own space:** its own collections, tags and organizing
+  instructions ("work: group by client and project" vs. "personal: recipes by cuisine").
+- **Bookmarks land in the right place automatically.** A workspace can be fed by specific
+  browser profiles (the Chrome "Work" profile goes to Work), and the AI can route the
+  remaining ones based on the instructions. Moving an item is one action.
+- **Fast switching:** a keyboard shortcut and a switcher in the sidebar; search stays within
+  the current workspace by default.
+- **Hidden workspaces.** A workspace can be hidden: it doesn't appear in the switcher, in
+  "all workspaces" search, or in previews until you reveal it. Optionally lock it behind
+  Touch ID. Good for things you'd rather not have pop up when sharing your screen.
+- **Zero setup by default:** everyone starts with one workspace and never sees the concept
+  until they create a second one.
+
 ## Content types
 
 | Type | Preview |

@@ -21,7 +21,8 @@ Small, high-quality steps. Each milestone should leave the app working and the d
 ## M2: Local library
 
 - [ ] `knoa-core` domain types
-- [ ] `knoa-store`: SQLite, migrations, repository API, tests
+- [ ] `knoa-store`: SQLite, migrations, repository API, tests (`workspace_id` on rows from
+      the first migration, so workspaces (M6) need no data migration)
 - [ ] Render real bookmarks in the list from the database (virtualized list)
 - [ ] Manual add/remove for development
 
@@ -49,7 +50,15 @@ Small, high-quality steps. Each milestone should leave the app working and the d
 - [ ] Categories, tags, summaries; "why it's here" and one-click undo
 - [ ] User corrections always win over AI on re-runs
 
-## M6: Search
+## M6: Workspaces
+
+- [ ] `workspaces` table; everything scoped by workspace, with a default one
+- [ ] Switcher in the sidebar + keyboard shortcut
+- [ ] Map browser profiles to workspaces; AI routing for unmapped sources
+- [ ] Per-workspace organizing instructions
+- [ ] Hidden workspaces (out of the switcher and search until revealed), optional Touch ID lock
+
+## M7: Search
 
 - [ ] FTS5 index and instant search UI
 - [ ] Filters: kind, tag, collection, source, date
