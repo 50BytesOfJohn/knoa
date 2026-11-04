@@ -1,0 +1,17 @@
+# Tests state their assumptions with unwrap; a panic there is the failure report.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+# Product names that read wrong in backticks.
+doc-valid-idents = [
+  "..",
+  "YouTube",
+  "PostHog",
+  "GitHub",
+  "OpenRouter",
+  "FSEvents",
+  "SQLite",
+  "JavaScript",
+  "macOS",
+  "Helium",
+  "TypeSafe",
+]

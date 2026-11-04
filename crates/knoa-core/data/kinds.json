@@ -1,0 +1,139 @@
+{
+  "article": {
+    "label": "Article",
+    "plural": "Articles",
+    "description": "A written piece meant to be read: blog post, news story, essay, documentation page, tutorial.",
+    "key_facts": ["author", "reading_minutes"],
+    "fields": [
+      { "name": "author", "type": "text", "description": "Author's name" },
+      { "name": "published", "type": "date", "description": "Publication date, YYYY-MM-DD" },
+      { "name": "reading_minutes", "type": "duration", "description": "Estimated reading time in minutes" },
+      { "name": "language", "type": "text", "description": "Language of the text, English name" }
+    ]
+  },
+  "video": {
+    "label": "Video",
+    "plural": "Videos",
+    "description": "A single video to watch: YouTube, Vimeo, a talk recording. Not a full-length feature film.",
+    "key_facts": ["duration", "channel"],
+    "fields": [
+      { "name": "channel", "type": "text", "description": "Channel or uploader" },
+      { "name": "duration", "type": "duration", "description": "Length in minutes" },
+      { "name": "published", "type": "date", "description": "Upload date, YYYY-MM-DD" },
+      { "name": "platform", "type": "text", "description": "YouTube, Vimeo, ..." }
+    ]
+  },
+  "movie": {
+    "label": "Movie",
+    "plural": "Movies",
+    "description": "A film or TV series: a page about it on IMDb, Letterboxd, Wikipedia, a streaming service.",
+    "key_facts": ["year", "runtime"],
+    "fields": [
+      { "name": "year", "type": "integer", "description": "Release year" },
+      { "name": "runtime", "type": "duration", "description": "Runtime in minutes" },
+      { "name": "director", "type": "list", "description": "Directors" },
+      { "name": "cast", "type": "list", "description": "Main cast, at most 5" },
+      { "name": "genre", "type": "list", "description": "Genres" },
+      { "name": "rating", "type": "number", "description": "Rating out of 10" }
+    ]
+  },
+  "recipe": {
+    "label": "Recipe",
+    "plural": "Recipes",
+    "description": "Instructions for cooking or baking a dish or drink.",
+    "key_facts": ["total_time", "cuisine"],
+    "fields": [
+      { "name": "cuisine", "type": "text", "description": "Cuisine, e.g. Italian" },
+      { "name": "total_time", "type": "duration", "description": "Total time in minutes" },
+      { "name": "servings", "type": "integer", "description": "Number of servings" },
+      { "name": "diet", "type": "list", "description": "Diets it fits, e.g. vegetarian" }
+    ]
+  },
+  "product": {
+    "label": "Product",
+    "plural": "Products",
+    "description": "A physical or digital product for sale: shop page, product listing.",
+    "key_facts": ["price", "brand"],
+    "fields": [
+      { "name": "brand", "type": "text", "description": "Brand or maker" },
+      { "name": "price", "type": "number", "description": "Price as a number" },
+      { "name": "currency", "type": "text", "description": "ISO currency code" },
+      { "name": "category", "type": "text", "description": "Product category" }
+    ]
+  },
+  "repository": {
+    "label": "Repository",
+    "plural": "Code",
+    "description": "A source code repository or package: GitHub, GitLab, crates.io, npm.",
+    "key_facts": ["language", "stars"],
+    "fields": [
+      { "name": "owner", "type": "text", "description": "Owner or organization" },
+      { "name": "name", "type": "text", "description": "Repository name" },
+      { "name": "language", "type": "text", "description": "Main programming language" },
+      { "name": "stars", "type": "integer", "description": "Star count" },
+      { "name": "license", "type": "text", "description": "License, SPDX id" }
+    ]
+  },
+  "book": {
+    "label": "Book",
+    "plural": "Books",
+    "description": "A book: a page about it on a store, Goodreads, a publisher, or the book itself.",
+    "key_facts": ["author", "year"],
+    "fields": [
+      { "name": "author", "type": "list", "description": "Authors" },
+      { "name": "year", "type": "integer", "description": "Publication year" },
+      { "name": "pages", "type": "integer", "description": "Page count" },
+      { "name": "publisher", "type": "text", "description": "Publisher" }
+    ]
+  },
+  "image": {
+    "label": "Image",
+    "plural": "Images",
+    "description": "A picture, illustration, photo or design shot, saved for how it looks.",
+    "key_facts": ["author"],
+    "fields": [{ "name": "author", "type": "text", "description": "Artist or photographer" }]
+  },
+  "app": {
+    "label": "App",
+    "plural": "Apps",
+    "description": "Software you use: a web app, SaaS, dashboard, developer tool, desktop or mobile app, or its landing page.",
+    "key_facts": ["category", "pricing"],
+    "fields": [
+      { "name": "maker", "type": "text", "description": "Company or developer" },
+      { "name": "category", "type": "text", "description": "What it is for, e.g. analytics" },
+      { "name": "pricing", "type": "text", "description": "free, freemium, paid, open source" },
+      { "name": "platform", "type": "list", "description": "web, macOS, iOS, ..." }
+    ]
+  },
+  "podcast": {
+    "label": "Podcast",
+    "plural": "Podcasts",
+    "description": "A podcast show or episode.",
+    "key_facts": ["show", "duration"],
+    "fields": [
+      { "name": "show", "type": "text", "description": "Show name" },
+      { "name": "host", "type": "list", "description": "Hosts" },
+      { "name": "duration", "type": "duration", "description": "Episode length in minutes" },
+      { "name": "published", "type": "date", "description": "Publication date, YYYY-MM-DD" }
+    ]
+  },
+  "place": {
+    "label": "Place",
+    "plural": "Places",
+    "description": "A physical place: restaurant, shop, venue, hotel, sight, a map link.",
+    "key_facts": ["city", "category"],
+    "fields": [
+      { "name": "category", "type": "text", "description": "restaurant, cafe, hotel, museum, ..." },
+      { "name": "address", "type": "text", "description": "Street address" },
+      { "name": "city", "type": "text", "description": "City" },
+      { "name": "country", "type": "text", "description": "Country" }
+    ]
+  },
+  "other": {
+    "label": "Other",
+    "plural": "Other",
+    "description": "Anything that fits none of the other kinds.",
+    "key_facts": [],
+    "fields": []
+  }
+}
