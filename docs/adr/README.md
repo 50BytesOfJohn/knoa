@@ -13,3 +13,4 @@ old one.
 | [0005](0005-typed-bookmarks-and-folders.md) | Typed bookmarks and one-level folders | Accepted (planned) |
 | [0006](0006-tokio-runtime-for-network.md) | A dedicated tokio runtime for network work | Accepted (planned) |
 | [0007](0007-main-screen-rendering.md) | Masonry, glass panels and the date rail in GPUI | Accepted (planned) |
+| [0008](0008-credential-storage.md) | Keychain in signed builds, plain file in dev builds | Accepted (planned) |

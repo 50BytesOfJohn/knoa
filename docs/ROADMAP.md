@@ -93,3 +93,5 @@ Builds the approved [main screen design](design/main-screen.md).
 - [ ] User-defined kinds and fields
 - [ ] Firefox and Safari support
 - [ ] Workspaces
+- [ ] Re-evaluate Apple's on-device model when a stronger version ships; rejected for now
+      ([research](research/apple-intelligence.md))

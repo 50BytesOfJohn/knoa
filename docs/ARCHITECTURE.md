@@ -96,7 +96,8 @@ processed. They only add.
 
 The OpenRouter client is a small hand-written module
 ([ADR 0003](adr/0003-openrouter-thin-client.md)). The API key is stored in the macOS
-Keychain (`keyring` crate).
+Keychain in release builds and in a plain file in dev builds
+([ADR 0008](adr/0008-credential-storage.md)).
 
 ## Search
 
