@@ -2,8 +2,10 @@
 
 use gpui::{
     AnyElement, App, Div, ElementId, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, SharedString, Styled as _, Svg, div, px, svg,
+    ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Svg,
+    div, px, svg,
 };
+use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
 use knoa_core::Kind;
 
 use crate::ui::theme::Theme;
@@ -114,6 +116,37 @@ pub fn site_mark(site: &str, size: Pixels, cx: &App) -> AnyElement {
         .font_weight(gpui::FontWeight::SEMIBOLD)
         .child(letter.to_string())
         .into_any_element()
+}
+
+/// Tells the user which installed browsers macOS hides from Knoa, with a button to the
+/// setting that unblocks them. `None` when nothing is blocked.
+pub fn blocked_browsers_notice(blocked: &[Browser], cx: &App) -> Option<Div> {
+    if blocked.is_empty() {
+        return None;
+    }
+    let theme = Theme::get(cx);
+    let names: Vec<&str> = blocked.iter().map(|b| b.name()).collect();
+    let text = format!(
+        "{} is installed, but macOS keeps its bookmarks private. Give Knoa Full Disk Access, then restart Knoa.",
+        names.join(" and ")
+    );
+    Some(
+        div()
+            .p_3()
+            .flex()
+            .flex_col()
+            .items_start()
+            .gap_2()
+            .rounded(px(12.))
+            .bg(theme.soft)
+            .text_xs()
+            .text_color(theme.muted)
+            .child(text)
+            .child(
+                button("full-disk-access", "Open Privacy settings", Tone::Soft, cx)
+                    .on_click(|_, _, cx| cx.open_url(FULL_DISK_ACCESS_SETTINGS)),
+            ),
+    )
 }
 
 /// The coloured square with a workspace's initial.

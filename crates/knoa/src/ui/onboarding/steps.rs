@@ -12,7 +12,7 @@ use super::{KeyCheck, Onboarding, Step};
 use crate::{
     services::organizer::Organizer,
     ui::{
-        components::{Tone, button, icon, workspace_mark},
+        components::{Tone, blocked_browsers_notice, button, icon, workspace_mark},
         theme::{SERIF, Theme},
     },
 };
@@ -142,7 +142,7 @@ impl Onboarding {
                     })),
             );
         }
-        if self.profiles.is_empty() {
+        if self.profiles.is_empty() && self.blocked.is_empty() {
             list = list.child(
                 div().p_4().rounded(px(14.)).bg(theme.soft).text_sm().text_color(theme.muted).child(
                     "I couldn't find a Chromium-based browser here (Helium, Chrome, Brave, Edge, Vivaldi). No worries: you can pick one later in Settings.",
@@ -162,6 +162,7 @@ impl Onboarding {
             .child(title("Where do your bookmarks live?"))
             .child(lead("Keep bookmarking the way you do. I'll notice new ones within a couple of seconds. I only read; I never touch your browser's bookmarks.", &theme))
             .child(list)
+            .children(blocked_browsers_notice(&self.blocked, cx))
             .child(nav(self.step, if total > 0 { format!("Bring in {total}") } else { "Next".to_owned() }, cx))
     }
 

@@ -10,14 +10,14 @@ use gpui_component::{
     input::{Input, InputState, Textarea, TextareaState},
     switch::Switch,
 };
-use knoa_browser::Profile;
+use knoa_browser::{Browser, Profile};
 use knoa_core::{Screening, Workspace, WorkspaceId};
 
 use super::MainView;
 use crate::{
     state::library::{Library, lock},
     ui::{
-        components::{Tone, button, workspace_mark},
+        components::{Tone, blocked_browsers_notice, button, workspace_mark},
         theme::{SERIF, Theme},
     },
 };
@@ -31,6 +31,7 @@ pub struct WorkspaceEditor {
     color: u8,
     browsers: Vec<String>,
     profiles: Vec<Profile>,
+    blocked: Vec<Browser>,
     /// Delete takes a second click: it removes every bookmark in the workspace.
     confirm_delete: bool,
     library: Entity<Library>,
@@ -83,6 +84,7 @@ impl WorkspaceEditor {
             color: workspace.color,
             browsers: workspace.browsers,
             profiles: knoa_browser::discover_profiles(),
+            blocked: knoa_browser::blocked_browsers(),
             confirm_delete: false,
             library,
             main,
@@ -260,7 +262,7 @@ impl WorkspaceEditor {
                     ),
             );
         }
-        if self.profiles.is_empty() {
+        if self.profiles.is_empty() && self.blocked.is_empty() {
             list = list.child(hint(
                 "No Chromium-based browser found. Knoa reads Helium, Chrome, Brave, Edge, Vivaldi and Chromium.",
                 &theme,
@@ -268,6 +270,7 @@ impl WorkspaceEditor {
         }
         section("Sync bookmarks from", &theme)
             .child(list)
+            .children(blocked_browsers_notice(&self.blocked, cx))
             .child(hint(
                 "Pick none to add links by hand only (⌘N). A browser can feed several workspaces.",
                 &theme,

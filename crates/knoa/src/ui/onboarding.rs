@@ -11,7 +11,7 @@ use gpui::{
 };
 use gpui_component::input::{InputState, TextareaState};
 use knoa_ai::ProviderKind;
-use knoa_browser::Profile;
+use knoa_browser::{Browser, Profile};
 
 use crate::{
     services::ai,
@@ -61,6 +61,7 @@ pub struct Onboarding {
     library: Entity<Library>,
     step: Step,
     profiles: Vec<(Profile, usize)>,
+    blocked: Vec<Browser>,
     chosen: Vec<String>,
     key: Entity<InputState>,
     key_check: KeyCheck,
@@ -112,6 +113,7 @@ impl Onboarding {
             library,
             step: Step::Hello,
             profiles,
+            blocked: knoa_browser::blocked_browsers(),
             chosen,
             key,
             key_check: KeyCheck::Idle,
@@ -211,7 +213,7 @@ impl Onboarding {
 fn default_profiles(profiles: &[(Profile, usize)]) -> Vec<String> {
     let preferred = profiles
         .iter()
-        .find(|(p, _)| p.id.browser == knoa_browser::Browser::Helium)
+        .find(|(p, _)| p.id.browser == Browser::Helium)
         .or_else(|| profiles.iter().max_by_key(|(_, count)| *count));
     preferred
         .map(|(p, _)| vec![p.id.to_string()])

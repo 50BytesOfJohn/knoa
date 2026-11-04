@@ -8,7 +8,9 @@ mod browser;
 mod watch;
 
 pub use bookmarks::{BookmarksFile, read_bookmarks};
-pub use browser::{Browser, Profile, ProfileId, discover_profiles};
+pub use browser::{
+    Browser, FULL_DISK_ACCESS_SETTINGS, Profile, ProfileId, blocked_browsers, discover_profiles,
+};
 pub use watch::{Watcher, watch};
 
 #[derive(Debug, thiserror::Error)]

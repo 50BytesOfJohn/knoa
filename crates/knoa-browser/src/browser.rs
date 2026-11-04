@@ -110,10 +110,38 @@ pub fn discover_profiles() -> Vec<Profile> {
         .collect()
 }
 
+/// Installed browsers whose data macOS won't let Knoa read.
+///
+/// Brave opts its profile folder into macOS app data protection, so reading it fails with
+/// `EPERM` until the user gives Knoa Full Disk Access. Without this the browser would
+/// just be missing from every list.
+pub fn blocked_browsers() -> Vec<Browser> {
+    let Some(support) = dirs::data_dir() else {
+        return Vec::new();
+    };
+    Browser::ALL
+        .into_iter()
+        .filter(|browser| {
+            std::fs::read_dir(support.join(browser.user_data_dir()))
+                .is_err_and(|err| err.kind() == std::io::ErrorKind::PermissionDenied)
+        })
+        .collect()
+}
+
+/// The System Settings pane where the user grants Full Disk Access.
+pub const FULL_DISK_ACCESS_SETTINGS: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+
 fn profiles_in(browser: Browser, user_data: &Path) -> Vec<Profile> {
     let names = profile_names(user_data);
-    let Ok(entries) = std::fs::read_dir(user_data) else {
-        return Vec::new();
+    let entries = match std::fs::read_dir(user_data) {
+        Ok(entries) => entries,
+        Err(err) => {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(?user_data, "can't read {}: {err}", browser.name());
+            }
+            return Vec::new();
+        }
     };
     let mut profiles: Vec<Profile> = entries
         .filter_map(Result::ok)
