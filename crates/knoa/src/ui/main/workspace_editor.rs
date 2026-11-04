@@ -11,7 +11,7 @@ use gpui_component::{
     radio::{Radio, RadioGroup},
     switch::Switch,
 };
-use knoa_browser::{Browser, Profile};
+use knoa_browser::{Browser, Profile, ProfileId};
 use knoa_core::{Screening, Workspace, WorkspaceId};
 
 use super::MainView;
@@ -281,16 +281,14 @@ impl WorkspaceEditor {
 
     fn opens_in_section(&self, cx: &mut Context<'_, WorkspaceEditor>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let choices: Vec<Option<String>> = std::iter::once(None)
-            .chain(self.profiles.iter().map(|p| Some(p.id.to_string())))
-            .collect();
+        let (choices, labels): (Vec<_>, Vec<_>) = self.open_choices().into_iter().unzip();
         // A saved profile that's gone from this Mac shows nothing picked; opening falls
         // back to the default browser.
         let selected = choices.iter().position(|c| *c == self.opens_in);
-        let radios = std::iter::once(Radio::new("opens-in-default").label("Default browser"))
-            .chain(self.profiles.iter().enumerate().map(|(index, profile)| {
-                Radio::new(("opens-in", index)).label(profile_label(profile))
-            }));
+        let radios = labels
+            .into_iter()
+            .enumerate()
+            .map(|(index, label)| Radio::new(("opens-in", index)).label(label));
         section("Open bookmarks in", &theme).child(
             RadioGroup::vertical("opens-in")
                 .children(radios)
@@ -302,6 +300,34 @@ impl WorkspaceEditor {
                     }
                 })),
         )
+    }
+
+    /// The default browser, every readable profile, and the blocked browsers' profiles this
+    /// workspace already knows by id. Opening needs only the id, not read access, so a
+    /// browser macOS blocks (Brave) can still be picked.
+    fn open_choices(&self) -> Vec<(Option<String>, String)> {
+        let readable = self
+            .profiles
+            .iter()
+            .map(|profile| (profile.id.clone(), profile_label(profile)));
+        let known_blocked = self
+            .browsers
+            .iter()
+            .chain(&self.opens_in)
+            .filter_map(|id| ProfileId::parse(id))
+            .filter(|id| self.blocked.contains(&id.browser))
+            .map(|id| {
+                let label = format!("{} · {}", id.browser.name(), id.dir);
+                (id, label)
+            });
+        let mut choices = vec![(None, "Default browser".to_owned())];
+        for (id, label) in readable.chain(known_blocked) {
+            let id = Some(id.to_string());
+            if !choices.iter().any(|(c, _)| *c == id) {
+                choices.push((id, label));
+            }
+        }
+        choices
     }
 
     fn organizing_section(&self, cx: &mut Context<'_, WorkspaceEditor>) -> impl IntoElement {

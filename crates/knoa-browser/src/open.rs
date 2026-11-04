@@ -9,11 +9,7 @@ use crate::{Error, ProfileId};
 /// A profile that no longer exists is an error rather than a silent no-op: Chromium would
 /// create a fresh, empty profile with that name.
 pub fn open_in_profile(url: &str, profile: &ProfileId) -> Result<(), Error> {
-    let exists = profile
-        .browser
-        .user_data_path()
-        .is_some_and(|dir| dir.join(&profile.dir).is_dir());
-    if !exists {
+    if is_missing(profile) {
         return Err(Error::MissingProfile(profile.clone()));
     }
     // `-n` starts a second process even when the browser is running, so it gets our
@@ -30,5 +26,18 @@ pub fn open_in_profile(url: &str, profile: &ProfileId) -> Result<(), Error> {
         Err(Error::Open(std::io::Error::other(format!(
             "`open` exited with {status}"
         ))))
+    }
+}
+
+/// A profile counts as missing only when Knoa can see that it's gone. When macOS blocks
+/// the browser's folder (Brave), there's nothing to check, and the browser can still
+/// open the profile.
+fn is_missing(profile: &ProfileId) -> bool {
+    let Some(user_data) = profile.browser.user_data_path() else {
+        return false;
+    };
+    match std::fs::metadata(user_data.join(&profile.dir)) {
+        Ok(meta) => !meta.is_dir(),
+        Err(err) => err.kind() == std::io::ErrorKind::NotFound,
     }
 }
