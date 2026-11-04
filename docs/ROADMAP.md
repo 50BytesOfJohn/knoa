@@ -13,27 +13,37 @@ to date.
 
 ## Research
 
-- [ ] Research how people find saved links again (search, browsing, recency) and how
+- [x] Research how people find saved links again (search, browsing, recency) and how
       mymind, Raindrop.io, Capacities, Tana, Eagle and Arc handle navigation, filtering,
       typed fields and AI organizing. Write a short report in `docs/research/` with
-      recommendations for Knoa's main screen and search bar.
+      recommendations for Knoa's main screen and search bar
+      ([report](research/main-screen.md)).
 
 ## M1: App shell and design system
 
-- [ ] Theme tokens (colors, type scale, spacing, radii, animation), following system
-      light/dark mode
+Builds the approved [main screen design](design/main-screen.md).
+
+- [ ] Theme tokens (colors, type scale, spacing, radii, animation); a theme system that
+      supports several themes, with a solid light default
 - [ ] Add gpui-component and style it with the theme
       ([ADR 0004](adr/0004-hybrid-ui-components.md))
-- [ ] Main screen skeleton: search bar, library view, detail view, custom titlebar
-- [ ] Command palette and core shortcuts
+- [ ] Main screen skeleton: floating sidebar with workspace card, places and folders;
+      floating search pill with kind chips; content area; floating detail panel; custom
+      titlebar
+- [ ] Masonry card layout, virtualized ([ADR 0007](adr/0007-main-screen-rendering.md))
+- [ ] Date groups and the date rail
+- [ ] Up next strip (hideable) and Up next place
+- [ ] Optional wallpaper with glass panels from a pre-blurred copy
+- [ ] View options and appearance popovers
+- [ ] Command palette and core shortcuts, including type-anywhere search
 - [ ] Remember window size and position
 
 ## M2: Local library
 
-- [ ] `knoa-core`: domain types, kind definitions, `Query`
+- [ ] `knoa-core`: domain types (including the Up next flag), kind definitions, `Query`
 - [ ] `knoa-store`: SQLite, migrations, queries, tests
       ([ADR 0005](adr/0005-typed-bookmarks-and-folders.md))
-- [ ] Show bookmarks from the database in a virtualized list
+- [ ] Show bookmarks from the database in the masonry view
 - [ ] Manual add and remove, for development
 
 ## M3: Chromium sync

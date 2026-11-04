@@ -108,9 +108,12 @@ Keychain (`keyring` crate).
 
 ## UI
 
-- Main screen: a search bar with filter chips above the library, and a detail view for
-  the selected bookmark. The exact layout is decided after the product research step in
-  the [roadmap](ROADMAP.md).
+- Main screen: a floating sidebar (workspace, places, folders), a floating search pill
+  with kind chips, masonry cards grouped by date with a date rail, and a floating detail
+  panel. The approved layout is in the [main screen design](design/main-screen.md); the
+  research behind it is in [research](research/main-screen.md).
+- Masonry, glass panels over a wallpaper and the date rail are Knoa's own elements
+  ([ADR 0007](adr/0007-main-screen-rendering.md)).
 - Components: [gpui-component](https://github.com/longbridge/gpui-component) for input,
   virtualized lists, scrollbars and popovers, styled with Knoa's theme. Cards, search bar,
   detail view, command palette and animations are Knoa's own

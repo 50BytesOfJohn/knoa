@@ -12,3 +12,4 @@ old one.
 | [0004](0004-hybrid-ui-components.md) | gpui-component for primitives, own design on top | Accepted (planned) |
 | [0005](0005-typed-bookmarks-and-folders.md) | Typed bookmarks and one-level folders | Accepted (planned) |
 | [0006](0006-tokio-runtime-for-network.md) | A dedicated tokio runtime for network work | Accepted (planned) |
+| [0007](0007-main-screen-rendering.md) | Masonry, glass panels and the date rail in GPUI | Accepted (planned) |

@@ -17,6 +17,8 @@ language. You search and filter the library in a native macOS app.
 | [docs/VISION.md](docs/VISION.md) | The product: what Knoa is, its principles, the library model |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The technical design: crates, data flow, storage, sync, AI, search |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones toward the public alpha |
+| [docs/design/](docs/design/) | Approved screen designs |
+| [docs/research/](docs/research/) | Product research behind design decisions |
 | [docs/adr/](docs/adr/) | Architecture decision records: why each big choice was made |
 
 ## Tech

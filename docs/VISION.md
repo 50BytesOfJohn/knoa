@@ -25,9 +25,13 @@ quality are a priority from the first milestone.
 
 - **Simple by default.** Good defaults, with no setup required. Advanced filtering is
   available but out of the way.
-- **Search is the main control.** The main screen is a search bar above the library. Text
-  search and filters (kind, site, folder, tag, field values) share the same bar; filters
-  show as chips.
+- **The library is visible at once, search is one keystroke away.** The main screen opens
+  on the library, newest first, with a sidebar of places and folders and a floating
+  search bar. Typing anywhere searches. Text search and filters (kind, site, folder, tag,
+  field values) share the same bar; filters show as chips. See the
+  [main screen design](design/main-screen.md).
+- **Personal look.** Several themes, not only light and dark. An optional wallpaper with
+  translucent panels; a solid look by default.
 - **Content-aware cards.** Each kind of bookmark is presented in its own way: a video shows
   its thumbnail and duration, a movie its poster, year and cast, an article its image,
   source and summary.
@@ -46,6 +50,7 @@ quality are a priority from the first milestone.
 | **Extras** | Other useful facts | AI | `awards: Oscar Best Picture` |
 | **Tags** | Labels | AI and user | `noir`, `to-rewatch` |
 | **Folders** | Personal organization | User; AI can assign | "Client X", "Watch with kids" |
+| **Up next** | Queue of things to read or watch | User only | An essay, a film for Friday |
 
 - **Kinds** are a fixed set: Article, Video, Movie, Recipe, Product, Repository, Book,
   Image, Other. Each kind has typed fields, which makes filters like "movies with this
