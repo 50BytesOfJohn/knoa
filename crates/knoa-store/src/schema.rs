@@ -155,6 +155,10 @@ CREATE INDEX bookmarks_source ON bookmarks (source);
 ALTER TABLE folders ADD COLUMN workspace_id INTEGER NOT NULL DEFAULT 1
     REFERENCES workspaces (id) ON DELETE CASCADE;
 ",
+    r"
+-- The browser profile bookmarks open in, as `helium:Default`; NULL for the default browser.
+ALTER TABLE workspaces ADD COLUMN opens_in TEXT;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

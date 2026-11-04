@@ -350,7 +350,7 @@ impl MainView {
             .child(
                 button("open", "Open  ↵", Tone::Primary, cx)
                     .flex_1()
-                    .on_click(move |_, _, cx| cx.open_url(&url)),
+                    .on_click(cx.listener(move |this, _, _, cx| this.open_link(&url, cx))),
             )
             .child(
                 button(

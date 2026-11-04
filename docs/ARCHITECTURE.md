@@ -34,7 +34,7 @@ One process. The UI thread only renders and handles input:
 | `knoa` | App binary: views, settings, credentials; services that run sync and the organizing queue | yes |
 | `knoa-core` | Domain types (`Workspace`, `Bookmark`, `Kind`, `Field`, `Folder`, `Query`), kind definitions | no |
 | `knoa-store` | SQLite schema, migrations, queries, full-text search, the job queue | no |
-| `knoa-browser` | Chromium profile discovery, `Bookmarks` parsing, file watching | no |
+| `knoa-browser` | Chromium profile discovery, `Bookmarks` parsing, file watching, opening links in a profile | no |
 | `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails | no |
 | `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
 
@@ -42,8 +42,8 @@ One process. The UI thread only renders and handles input:
 
 See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md).
 
-- Workspaces own their bookmarks, folders, instructions, synced browser profiles and an
-  optional keep guideline ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md)). URLs are
+- Workspaces own their bookmarks, folders, instructions, synced browser profiles, the
+  profile their links open in, and an optional keep guideline ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md)). URLs are
   unique per workspace.
 - Kind definitions (kinds and their typed fields) are data in an embedded file in
   `knoa-core`.

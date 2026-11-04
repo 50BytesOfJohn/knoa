@@ -24,7 +24,7 @@ use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
 
 use crate::{
-    services::organizer::Organizer,
+    services::{links, organizer::Organizer},
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -307,12 +307,23 @@ impl MainView {
     }
 
     fn open_selected(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<'_, MainView>) {
-        if let Some(bookmark) = self
+        if let Some(url) = self
             .selected
             .and_then(|id| self.library.read(cx).bookmark(id))
+            .map(|b| b.url.clone())
         {
-            cx.open_url(&bookmark.url);
+            self.open_link(&url, cx);
         }
+    }
+
+    /// Opens a bookmark in the browser the current workspace picked.
+    fn open_link(&self, url: &str, cx: &mut Context<'_, MainView>) {
+        let opens_in = self
+            .library
+            .read(cx)
+            .workspace()
+            .and_then(|w| w.opens_in.clone());
+        links::open(url, opens_in.as_deref(), cx);
     }
 
     fn copy_link(&mut self, _: &CopyLink, _: &mut Window, cx: &mut Context<'_, MainView>) {

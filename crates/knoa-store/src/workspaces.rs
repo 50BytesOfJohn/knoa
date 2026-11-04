@@ -9,7 +9,7 @@ impl Store {
     /// All workspaces in switcher order. There is always at least one.
     pub fn workspaces(&self) -> Result<Vec<Workspace>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT w.id, w.name, w.color, w.instructions, w.screening, w.guideline,
+            "SELECT w.id, w.name, w.color, w.instructions, w.screening, w.guideline, w.opens_in,
                     (SELECT json_group_array(browser) FROM workspace_browsers WHERE workspace_id = w.id)
              FROM workspaces w ORDER BY w.position",
         )?;
@@ -20,13 +20,14 @@ impl Store {
                     name: row.get(1)?,
                     color: row.get(2)?,
                     browsers: Vec::new(),
+                    opens_in: row.get(6)?,
                     instructions: row.get(3)?,
                     screening: Screening {
                         enabled: row.get(4)?,
                         guideline: row.get(5)?,
                     },
                 },
-                row.get::<_, String>(6)?,
+                row.get::<_, String>(7)?,
             ))
         })?;
         rows.map(|row| {
@@ -56,7 +57,7 @@ impl Store {
         let tx = self.conn.transaction()?;
         tx.execute(
             "UPDATE workspaces SET name = ?2, color = ?3, instructions = ?4, screening = ?5,
-                guideline = ?6 WHERE id = ?1",
+                guideline = ?6, opens_in = ?7 WHERE id = ?1",
             params![
                 workspace.id.0,
                 workspace.name,
@@ -64,6 +65,7 @@ impl Store {
                 workspace.instructions,
                 workspace.screening.enabled,
                 workspace.screening.guideline,
+                workspace.opens_in,
             ],
         )?;
         set_browsers(&tx, workspace.id, &workspace.browsers)?;

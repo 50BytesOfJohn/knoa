@@ -95,6 +95,7 @@ Builds the approved [main screen design](design/main-screen.md).
 - [ ] Firefox and Safari support
 - [x] Workspaces: own browsers, instructions, folders and an optional keep guideline
       ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md))
+- [x] Pick the browser profile each workspace opens links in
 - [ ] Hidden workspaces
 - [ ] Re-evaluate Apple's on-device model when a stronger version ships; rejected for now
       ([research](research/apple-intelligence.md))

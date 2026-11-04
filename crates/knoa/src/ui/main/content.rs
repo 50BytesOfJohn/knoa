@@ -222,8 +222,8 @@ impl MainView {
     ) {
         self.cards_focus.focus(window, cx);
         if event.click_count() >= 2 {
-            if let Some(bookmark) = self.library.read(cx).bookmark(id) {
-                cx.open_url(&bookmark.url);
+            if let Some(url) = self.library.read(cx).bookmark(id).map(|b| b.url.clone()) {
+                self.open_link(&url, cx);
             }
             return;
         }

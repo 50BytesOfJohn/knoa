@@ -1,5 +1,5 @@
-//! Creating and editing a workspace: name and colour, the browsers it syncs, how it's
-//! organized, and an optional guideline for what it keeps.
+//! Creating and editing a workspace: name and colour, the browsers it syncs and opens
+//! links in, how it's organized, and an optional guideline for what it keeps.
 
 use gpui::{
     AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
@@ -8,6 +8,7 @@ use gpui::{
 };
 use gpui_component::{
     input::{Input, InputState, Textarea, TextareaState},
+    radio::{Radio, RadioGroup},
     switch::Switch,
 };
 use knoa_browser::{Browser, Profile};
@@ -30,6 +31,7 @@ pub struct WorkspaceEditor {
     screening: bool,
     color: u8,
     browsers: Vec<String>,
+    opens_in: Option<String>,
     profiles: Vec<Profile>,
     blocked: Vec<Browser>,
     /// Delete takes a second click: it removes every bookmark in the workspace.
@@ -61,6 +63,7 @@ impl WorkspaceEditor {
             name: String::new(),
             color: next_color,
             browsers: Vec::new(),
+            opens_in: None,
             instructions: String::new(),
             screening: Screening::default(),
         });
@@ -83,6 +86,7 @@ impl WorkspaceEditor {
             screening: workspace.screening.enabled,
             color: workspace.color,
             browsers: workspace.browsers,
+            opens_in: workspace.opens_in,
             profiles: knoa_browser::discover_profiles(),
             blocked: knoa_browser::blocked_browsers(),
             confirm_delete: false,
@@ -97,6 +101,7 @@ impl WorkspaceEditor {
             name: self.name.read(cx).value().trim().to_owned(),
             color: self.color,
             browsers: self.browsers.clone(),
+            opens_in: self.opens_in.clone(),
             instructions: self.instructions.read(cx).value().trim().to_owned(),
             screening: Screening {
                 enabled: self.screening,
@@ -193,6 +198,7 @@ impl Render for WorkspaceEditor {
             )
             .child(self.identity(cx))
             .child(self.browsers_section(cx))
+            .child(self.opens_in_section(cx))
             .child(self.organizing_section(cx))
             .child(self.screening_section(cx))
             .child(self.buttons(cx))
@@ -248,11 +254,7 @@ impl WorkspaceEditor {
                     .items_center()
                     .gap_2()
                     .text_sm()
-                    .child(div().flex_1().child(format!(
-                        "{} · {}",
-                        profile.id.browser.name(),
-                        profile.name
-                    )))
+                    .child(div().flex_1().child(profile_label(profile)))
                     .child(
                         Switch::new(("workspace-profile", index))
                             .checked(self.browsers.contains(&id))
@@ -275,6 +277,31 @@ impl WorkspaceEditor {
                 "Pick none to add links by hand only (⌘N). A browser can feed several workspaces.",
                 &theme,
             ))
+    }
+
+    fn opens_in_section(&self, cx: &mut Context<'_, WorkspaceEditor>) -> impl IntoElement {
+        let theme = Theme::get(cx).clone();
+        let choices: Vec<Option<String>> = std::iter::once(None)
+            .chain(self.profiles.iter().map(|p| Some(p.id.to_string())))
+            .collect();
+        // A saved profile that's gone from this Mac shows nothing picked; opening falls
+        // back to the default browser.
+        let selected = choices.iter().position(|c| *c == self.opens_in);
+        let radios = std::iter::once(Radio::new("opens-in-default").label("Default browser"))
+            .chain(self.profiles.iter().enumerate().map(|(index, profile)| {
+                Radio::new(("opens-in", index)).label(profile_label(profile))
+            }));
+        section("Open bookmarks in", &theme).child(
+            RadioGroup::vertical("opens-in")
+                .children(radios)
+                .selected_index(selected)
+                .on_change(cx.listener(move |this, index: &usize, _, cx| {
+                    if let Some(choice) = choices.get(*index) {
+                        this.opens_in.clone_from(choice);
+                        cx.notify();
+                    }
+                })),
+        )
     }
 
     fn organizing_section(&self, cx: &mut Context<'_, WorkspaceEditor>) -> impl IntoElement {
@@ -345,6 +372,11 @@ impl WorkspaceEditor {
                     .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             )
     }
+}
+
+/// "Helium · Work".
+fn profile_label(profile: &Profile) -> String {
+    format!("{} · {}", profile.id.browser.name(), profile.name)
 }
 
 fn section(title: &str, theme: &Theme) -> gpui::Div {

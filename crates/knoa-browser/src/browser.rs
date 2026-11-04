@@ -54,6 +54,23 @@ impl Browser {
         }
     }
 
+    /// The macOS bundle identifier, which `open -b` launches by.
+    pub(crate) fn bundle_id(self) -> &'static str {
+        match self {
+            Browser::Helium => "net.imput.helium",
+            Browser::Chrome => "com.google.Chrome",
+            Browser::Brave => "com.brave.Browser",
+            Browser::Edge => "com.microsoft.edgemac",
+            Browser::Vivaldi => "com.vivaldi.Vivaldi",
+            Browser::Chromium => "org.chromium.Chromium",
+        }
+    }
+
+    /// The full path of [`Browser::user_data_dir`].
+    pub(crate) fn user_data_path(self) -> Option<PathBuf> {
+        Some(dirs::data_dir()?.join(self.user_data_dir()))
+    }
+
     /// The browser's user data directory, under `~/Library/Application Support`.
     fn user_data_dir(self) -> &'static str {
         match self {
