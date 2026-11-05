@@ -67,31 +67,41 @@ impl Theme {
     /// Makes `id` the current theme, here and in gpui-component.
     pub fn apply(id: &str, cx: &mut App) {
         let theme = Theme::by_id(id);
-        let component = gpui_component::Theme::global_mut(cx);
-        component.mode = if theme.dark {
+        let mode = if theme.dark {
             gpui_component::ThemeMode::Dark
         } else {
             gpui_component::ThemeMode::Light
         };
-        let c = &mut component.colors;
-        c.background = theme.panel;
-        c.foreground = theme.text;
-        c.border = theme.hairline;
-        c.input = theme.hairline;
-        c.ring = theme.accent.opacity(0.5);
-        c.caret = theme.accent;
-        c.selection = theme.accent.opacity(0.25);
-        c.muted = theme.soft;
-        c.muted_foreground = theme.muted;
-        c.primary = theme.accent;
-        c.popover = theme.panel;
-        c.popover_foreground = theme.text;
-        c.scrollbar = gpui::transparent_black();
-        c.scrollbar_thumb = theme.faint.opacity(0.5);
-        component.font_size = px(14.);
-        component.radius = px(10.);
+        // `update`, not `global_mut`: it carries color edits into the semantic tokens that
+        // switches and radios read. The mode goes first, in its own edit, because a mode
+        // change reloads gpui-component's built-in theme over any colors set alongside it.
+        gpui_component::Theme::update(cx, |component| component.mode = mode);
+        gpui_component::Theme::update(cx, |component| theme.style_component(component));
         cx.set_global(theme);
         cx.refresh_windows();
+    }
+
+    fn style_component(&self, component: &mut gpui_component::Theme) {
+        let c = &mut component.colors;
+        c.background = self.panel;
+        c.foreground = self.text;
+        c.border = self.hairline;
+        c.input = self.hairline;
+        c.ring = self.accent.opacity(0.5);
+        c.caret = self.accent;
+        c.selection = self.accent.opacity(0.25);
+        c.muted = self.soft;
+        c.muted_foreground = self.muted;
+        c.primary = self.accent;
+        // A white thumb on every track, as macOS draws its switches.
+        c.switch = self.faint.opacity(0.55);
+        c.switch_thumb = gpui::white();
+        c.popover = self.panel;
+        c.popover_foreground = self.text;
+        c.scrollbar = gpui::transparent_black();
+        c.scrollbar_thumb = self.faint.opacity(0.5);
+        component.font_size = px(14.);
+        component.radius = px(10.);
     }
 }
 
