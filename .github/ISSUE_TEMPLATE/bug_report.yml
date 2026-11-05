@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in Knoa doesn't work as it should.
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Knoa did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Open ...
+        2. Click ...
+  - type: input
+    id: version
+    attributes:
+      label: Knoa version
+      description: Help › Report an Issue fills this in. Otherwise it's in Settings › General.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version

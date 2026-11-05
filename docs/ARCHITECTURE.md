@@ -157,3 +157,11 @@ macOS only. The alpha is distributed as a signed and notarized app bundle.
 app icon. Xcode's `actool` compiles the icon into `Assets.car`, which macOS 26+ shows in
 every icon appearance, and `AppIcon.icns` for older systems. The bundle is signed ad hoc
 for now.
+
+## Releases and updates
+
+The `Release` workflow bumps the version, writes `CHANGELOG.md` from commit titles, tags
+`main`, and publishes a GitHub release with a universal, Developer ID signed and notarized
+`Knoa.dmg`. Installed copies update through Sparkle, embedded in the bundle, which reads its
+signed feed from the latest release
+([ADR 0014](adr/0014-releases-and-updates.md)).

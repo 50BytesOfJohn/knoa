@@ -32,5 +32,15 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Free software under the GPL-3.0-or-later.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/50BytesOfJohn/knoa/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>aMqd3OUChCo2IFH/skBis11W7uJNa/F32QJok7EMBio=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 </dict>
 </plist>

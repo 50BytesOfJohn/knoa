@@ -1,0 +1,11 @@
+# Cargo dependencies are bumped by hand: the GPUI snapshots are pinned exactly and move
+# together (docs/adr/0001).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

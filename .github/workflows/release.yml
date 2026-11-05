@@ -1,0 +1,168 @@
+name: Release
+
+# Run from the Actions tab or `make release VERSION=x.y.z`. It bumps the version, writes the
+# changelog, tags the commit, then builds, signs, notarizes and publishes the release.
+# Publishing it ships the update: the app reads its feed from the latest release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, like 0.2.0 or 0.2.0-beta.1 (a pre-release, which no app is offered)
+        required: true
+        type: string
+      draft:
+        description: Create the release as a draft (nothing ships until it's published)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: Bump version and changelog
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: v${{ inputs.version }}
+    steps:
+      - name: Check the version
+        env:
+          VERSION: ${{ inputs.version }}
+          REF: ${{ github.ref }}
+        run: |
+          [[ $REF == refs/heads/main ]] || { echo "::error::Release from main, not $REF"; exit 1; }
+          [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::$VERSION isn't x.y.z or x.y.z-pre"; exit 1; }
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the tag is new
+        run: |
+          if git rev-parse -q --verify "refs/tags/v${{ inputs.version }}" >/dev/null; then
+            echo "::error::v${{ inputs.version }} already exists"; exit 1
+          fi
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+      - name: Bump the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          sed -i "0,/^version = \".*\"$/s//version = \"$VERSION\"/" Cargo.toml
+          cargo update --workspace
+      - name: Write the changelog
+        run: git-cliff --tag "v${{ inputs.version }}" -o CHANGELOG.md
+      - name: Commit and tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $VERSION"
+          git tag -a "v$VERSION" -m "Knoa $VERSION"
+          git push origin HEAD:main "v$VERSION"
+
+  publish:
+    name: Build, sign, notarize and publish
+    needs: prepare
+    runs-on: macos-26
+    environment: release
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Import the signing certificate
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          password=$(openssl rand -base64 24)
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          # codesign embeds the chain up to Apple's root, through the intermediate that
+          # issued the certificate. Both, so a certificate from either works.
+          for ca in DeveloperIDCA DeveloperIDG2CA; do
+            curl -fsSL -o "$RUNNER_TEMP/$ca.cer" "https://www.apple.com/certificateauthority/$ca.cer"
+            security import "$RUNNER_TEMP/$ca.cer" -k "$keychain" >/dev/null
+          done
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          # Search the new keychain first, keeping the runner's own ones after it.
+          existing=()
+          while IFS= read -r line; do existing+=("$(echo "$line" | tr -d ' "')"); done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing[@]}"
+          rm "$RUNNER_TEMP/certificate.p12"
+          identity=$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application: .*"' | head -1 | tr -d '"')
+          [[ -n $identity ]] || { echo "::error::No Developer ID Application identity in MACOS_CERTIFICATE"; exit 1; }
+          echo "KNOA_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Write the notary key
+        env:
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+        run: |
+          echo "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+          echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary.p8" >> "$GITHUB_ENV"
+
+      - name: Build, sign and notarize
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: scripts/package.sh
+
+      - name: Write the release notes
+        run: |
+          # This version's changelog section, without its heading: the release has a title.
+          git-cliff --latest --strip all | sed '1,/^$/d' > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Write the appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_NOTES: ${{ runner.temp }}/notes.md
+        run: scripts/appcast.sh
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          flags=()
+          if [[ $DRAFT == true ]]; then flags+=(--draft); fi
+          if [[ $VERSION == *-* ]]; then flags+=(--prerelease); else flags+=(--latest); fi
+          {
+            echo "**[Download Knoa $VERSION](https://github.com/${{ github.repository }}/releases/download/$TAG/Knoa.dmg)** for macOS 11 or later, Apple silicon and Intel. Already have Knoa? It updates itself."
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } > "$RUNNER_TEMP/body.md"
+          gh release create "$TAG" "${flags[@]}" --verify-tag --title "Knoa $VERSION" \
+            --notes-file "$RUNNER_TEMP/body.md" \
+            target/dist/Knoa.dmg "target/dist/Knoa-$VERSION.zip" target/dist/appcast.xml
+
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notary.p8"

@@ -11,7 +11,7 @@ use gpui::{
     div,
 };
 
-pub use main::bind_keys;
+pub use main::{OpenSettings, bind_keys};
 
 use crate::state::{
     library::Library,

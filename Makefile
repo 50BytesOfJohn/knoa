@@ -1,4 +1,4 @@
-.PHONY: run dev bundle app fmt fmt-check lint test check
+.PHONY: run dev bundle app dist changelog release fmt fmt-check lint test check
 
 run: ## Run the app (release build)
 	cargo run --release
@@ -6,11 +6,23 @@ run: ## Run the app (release build)
 dev: ## Run the app (debug build, verbose logs)
 	RUST_LOG=knoa=debug cargo run
 
-bundle: ## Build target/release/Knoa.app with its icon (needs Xcode)
+bundle: ## Build target/release/Knoa.app with its icon and Sparkle (needs Xcode)
 	scripts/bundle.sh
 
 app: bundle ## Build and open Knoa.app
 	open target/release/Knoa.app
+
+dist: ## Signed, notarized Knoa.dmg and update zip in target/dist (see scripts/package.sh)
+	scripts/package.sh
+
+changelog: ## What the next release's notes will say (needs git-cliff)
+	git-cliff --unreleased --strip all
+
+release: ## Release VERSION (like 0.2.0) through the Release workflow on GitHub
+	@test -n "$(VERSION)" || { echo "usage: make release VERSION=0.2.0"; exit 1; }
+	gh workflow run release.yml --ref main -f version=$(VERSION)
+	@sleep 5
+	gh run watch "$$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 
 fmt: ## Format Rust and TOML
 	cargo fmt --all

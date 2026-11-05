@@ -12,8 +12,14 @@ an LLM to record what it is (an article, a video, a movie, ...), its key facts, 
 summary, and to file it into your folders following instructions you write in plain
 language. You search and filter the library in a native macOS app.
 
-> **Status: foundation.** The app opens a window with its title, and nothing else yet.
+> **Status: alpha.** Sync, AI organizing, folders and search work; expect rough edges.
 > Read [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
+
+## Download
+
+[Download Knoa](https://github.com/50BytesOfJohn/knoa/releases/latest/download/Knoa.dmg)
+for macOS 11 or later, on Apple silicon or Intel. It updates itself. What changed in each
+version is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Docs
 
@@ -57,6 +63,18 @@ make lint    # clippy, pedantic, warnings are errors
 make test    # tests
 make check   # everything CI runs: fmt-check + lint + test
 ```
+
+### Releasing
+
+```sh
+make changelog              # what the next release's notes will say
+make release VERSION=0.2.0  # bump, tag, build, sign, notarize and publish on GitHub
+```
+
+The [Release workflow](.github/workflows/release.yml) does the work; signing secrets live
+in the repository's `release` environment. A version like `0.2.0-beta.1` becomes a
+pre-release, which installed copies aren't offered. See
+[ADR 0014](docs/adr/0014-releases-and-updates.md).
 
 `cargo lint` and `cargo fmt-check` are also available as cargo aliases
 ([`.cargo/config.toml`](.cargo/config.toml)). CI runs the same checks on every push and pull

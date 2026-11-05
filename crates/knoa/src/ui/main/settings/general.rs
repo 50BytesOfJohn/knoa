@@ -1,8 +1,8 @@
-//! The General page: where the library lives, running setup again, the version.
+//! The General page: where the library lives, running setup again, updates.
 
 use gpui::{Context, Div, ParentElement as _, StatefulInteractiveElement as _, Styled as _, div};
 
-use super::{SettingsView, form};
+use super::{SettingsView, form, updates};
 use crate::{
     paths::Paths,
     state::settings::SettingsFile,
@@ -36,28 +36,18 @@ pub(super) fn page(cx: &mut Context<'_, SettingsView>) -> Div {
         )),
         &theme,
     );
-    let version = form::row(
-        "Version",
-        None,
-        div()
-            .text_sm()
-            .text_color(theme.muted)
-            .child(env!("CARGO_PKG_VERSION")),
-        &theme,
-    );
-
     div()
         .flex()
         .flex_col()
         .gap_8()
         .child(form::header(
             "General",
-            "Where Knoa keeps your library, and how it started.",
+            "Where Knoa keeps your library, how it started, and how it updates.",
             &theme,
         ))
         .child(form::group("Library", vec![location], &theme))
         .child(form::group("Setup", vec![setup], &theme))
-        .child(form::group("About", vec![version], &theme))
+        .child(updates::group(cx))
 }
 
 /// `~/Library/Application Support/Knoa` rather than the full path with the user's name.

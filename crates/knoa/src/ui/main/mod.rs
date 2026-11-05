@@ -222,12 +222,7 @@ impl MainView {
         self.show_settings(page, window, cx);
     }
 
-    fn show_settings(
-        &mut self,
-        page: Page,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
+    fn show_settings(&mut self, page: Page, window: &mut Window, cx: &mut Context<'_, MainView>) {
         if let Some(Overlay::Settings(settings)) = &self.overlay {
             settings.update(cx, |settings, cx| settings.show(page, window, cx));
             return;
