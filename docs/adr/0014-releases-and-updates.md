@@ -48,9 +48,10 @@ Updaters considered:
   commit out.
 - Losing the EdDSA key means installed copies can't verify new updates. It's backed up
   in the keychain item Sparkle's own tools read.
-- The Developer ID certificate expires every five years. `make renew-certificate` makes a
-  new one (Apple's site does the one step API keys can't) and updates the release secret.
-  Signing picks the identity that expires last, so the old one can stay in the keychain.
+- The Developer ID certificate expires; `setup-release` warns 90 days ahead, and
+  `make renew-certificate` makes a new one (Apple's site does the one step API keys
+  can't) and updates the release secret. Signing picks the identity that expires last, so
+  the old one can stay in the keychain.
 - No delta updates: every update downloads the whole app. Deltas need earlier archives at
   release time; revisit when the app gets large.
 - No beta channel yet. A pre-release is a GitHub pre-release that people download by hand.
