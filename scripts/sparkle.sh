@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Downloads the pinned Sparkle release once, checks its hash, and prints the directory it's
-# unpacked in: Sparkle.framework, and the release tools in bin/.
+# unpacked in: Sparkle.framework, and the release tools in bin/. It lives outside target/
+# because the Rust cache on CI saves and prunes target/, which left a framework with files
+# missing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION=2.10.1
 SHA256=1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
-DIR=target/sparkle/$VERSION
+DIR=${XDG_CACHE_HOME:-$HOME/Library/Caches}/knoa/sparkle/$VERSION
 
 if [[ ! -d $DIR/Sparkle.framework ]]; then
     archive=$(mktemp)
