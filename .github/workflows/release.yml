@@ -103,6 +103,12 @@ jobs:
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
           security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          # codesign embeds the chain up to Apple's root. Both Developer ID intermediates,
+          # so a renewed certificate (issued by G2) works without changing this.
+          for ca in DeveloperIDCA DeveloperIDG2CA; do
+            curl -fsSL -o "$RUNNER_TEMP/$ca.cer" "https://www.apple.com/certificateauthority/$ca.cer"
+            security import "$RUNNER_TEMP/$ca.cer" -k "$keychain" >/dev/null
+          done
           security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
           # Search the new keychain first, keeping the runner's own ones after it.
           existing=()
