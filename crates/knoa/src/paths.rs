@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context as _;
+use gpui::Global;
 
 #[derive(Debug, Clone)]
 pub struct Paths {
@@ -11,6 +12,8 @@ pub struct Paths {
     /// `~/Library/Caches/Knoa`: thumbnails, safe to delete.
     pub cache: PathBuf,
 }
+
+impl Global for Paths {}
 
 impl Paths {
     pub fn new() -> anyhow::Result<Paths> {

@@ -1,11 +1,12 @@
 //! Floating panels over the main screen: settings, view options, the workspace switcher,
 //! the folder and workspace editors, and adding a link.
-//! Most sit in the middle of the window; the workspace switcher drops down from its
-//! button. Clicking outside closes them.
+//! Most sit in the middle of the window; settings is a sheet nearly as big as the window,
+//! and the workspace switcher drops down from its button. Clicking outside closes them.
 
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Styled as _, Window, deferred, div, px,
+    ParentElement as _, Pixels, Size, Styled as _, Window, deferred, div,
+    prelude::FluentBuilder as _, px, size,
 };
 use gpui_component::switch::Switch;
 
@@ -18,19 +19,27 @@ use crate::{
     ui::theme::{MARGIN, PANEL_RADIUS, Theme},
 };
 
+/// Settings leaves a band of the main screen showing on every side, so it reads as a sheet
+/// over the library rather than a new screen.
+fn sheet_size(window: &Window) -> Size<Pixels> {
+    const INSET: Pixels = px(36.);
+    let viewport = window.viewport_size();
+    size(viewport.width - INSET * 2., viewport.height - INSET * 2.)
+}
+
 impl MainView {
     pub(super) fn render_overlay(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) -> Option<AnyElement> {
         let theme = Theme::get(cx).clone();
         let overlay = self.overlay.as_ref()?;
         let anchored = matches!(overlay, Overlay::Workspaces);
+        let sheet = matches!(overlay, Overlay::Settings(_)).then(|| sheet_size(window));
         let panel: AnyElement = match overlay {
             Overlay::Settings(panel) => panel.clone().into_any_element(),
             Overlay::Folder(editor) => editor.clone().into_any_element(),
-            Overlay::Workspace(editor) => editor.clone().into_any_element(),
             Overlay::AddLink(panel) => panel.clone().into_any_element(),
             Overlay::ViewOptions => self.view_options(cx).into_any_element(),
             Overlay::Workspaces => self.workspace_switcher(cx).into_any_element(),
@@ -44,6 +53,7 @@ impl MainView {
             .border_color(theme.hairline)
             .shadow_lg()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .when_some(sheet, |s, sheet| s.w(sheet.width).h(sheet.height))
             .child(panel);
         // A drop-down keeps the window undimmed: it belongs to its button, not the window.
         let scrim_opacity = match (anchored, theme.dark) {
@@ -107,9 +117,8 @@ impl MainView {
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|this, _, _, cx| {
-                        SettingsFile::update(cx, |s| s.show_summaries = !s.show_summaries);
-                        this.layout = super::content::LayoutCache::default();
-                        cx.notify();
+                        let on = !SettingsFile::get(cx).show_summaries;
+                        this.set_show_summaries(on, cx);
                     }),
                 ),
             )

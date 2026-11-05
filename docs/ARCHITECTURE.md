@@ -138,6 +138,8 @@ Keychain in release builds and in a plain file in dev builds
   by date with a date rail, and a floating detail panel. The approved layout is in the
   [main screen design](design/main-screen.md); the research behind it is in
   [research](research/main-screen.md).
+- Settings: a sheet over the main screen with its own sidebar of app pages (General,
+  Appearance, AI) and one page per workspace.
 - Masonry, glass panels over a wallpaper and the date rail are Knoa's own elements
   ([ADR 0007](adr/0007-main-screen-rendering.md)).
 - Components: [gpui-component](https://github.com/longbridge/gpui-component) for input,

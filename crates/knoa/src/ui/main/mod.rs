@@ -11,10 +11,9 @@ mod navigation;
 mod opening;
 mod overlay;
 mod search;
-mod settings_panel;
+mod settings;
 mod sidebar;
 mod trash;
-mod workspace_editor;
 mod workspaces;
 
 use std::time::Instant;
@@ -38,8 +37,7 @@ use crate::{
 use add_link::AddLink;
 use content::LayoutCache;
 use folder_editor::FolderEditor;
-use settings_panel::SettingsPanel;
-use workspace_editor::WorkspaceEditor;
+use settings::{Page, SettingsView};
 
 actions!(
     cards,
@@ -78,6 +76,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("backspace", DeleteSelected, cards),
         KeyBinding::new("cmd-backspace", DeleteSelected, cards),
         KeyBinding::new("escape", Dismiss, cards),
+        KeyBinding::new("escape", Dismiss, Some("Settings")),
         KeyBinding::new("cmd-f", FocusSearch, None),
         KeyBinding::new("cmd-k", FocusSearch, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
@@ -87,12 +86,11 @@ pub fn bind_keys(cx: &mut App) {
 
 /// What floats over the main screen, if anything.
 pub enum Overlay {
-    Settings(Entity<SettingsPanel>),
+    Settings(Entity<SettingsView>),
     ViewOptions,
     Folder(Entity<FolderEditor>),
     /// The workspace switcher.
     Workspaces,
-    Workspace(Entity<WorkspaceEditor>),
     AddLink(Entity<AddLink>),
 }
 
@@ -213,25 +211,38 @@ impl MainView {
         self.open_overlay(Overlay::Folder(editor), cx);
     }
 
-    /// Opens the workspace editor; `None` creates a new workspace.
+    /// Opens settings on a workspace's page; `None` on the page that creates one.
     pub fn edit_workspace(
         &mut self,
         workspace: Option<WorkspaceId>,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
-        let existing = workspace.and_then(|id| {
-            self.library
-                .read(cx)
-                .workspaces()
-                .iter()
-                .find(|w| w.id == id)
-                .cloned()
-        });
+        let page = workspace.map_or(Page::NewWorkspace, Page::Workspace);
+        self.show_settings(page, window, cx);
+    }
+
+    fn show_settings(
+        &mut self,
+        page: Page,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        if let Some(Overlay::Settings(settings)) = &self.overlay {
+            settings.update(cx, |settings, cx| settings.show(page, window, cx));
+            return;
+        }
         let library = self.library.clone();
         let this = cx.entity().downgrade();
-        let editor = cx.new(|cx| WorkspaceEditor::new(existing, library, this, window, cx));
-        self.open_overlay(Overlay::Workspace(editor), cx);
+        let settings = cx.new(|cx| SettingsView::new(page, library, this, window, cx));
+        self.open_overlay(Overlay::Settings(settings), cx);
+    }
+
+    /// Summaries change card heights, so the masonry layout is redone.
+    pub fn set_show_summaries(&mut self, on: bool, cx: &mut Context<'_, MainView>) {
+        SettingsFile::update(cx, |s| s.show_summaries = on);
+        self.layout = LayoutCache::default();
+        cx.notify();
     }
 
     pub fn switch_workspace(
@@ -262,10 +273,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
-        let library = self.library.clone();
-        let this = cx.entity().downgrade();
-        let panel = cx.new(|cx| SettingsPanel::new(library, this, window, cx));
-        self.open_overlay(Overlay::Settings(panel), cx);
+        self.show_settings(Page::General, window, cx);
     }
 
     fn focus_search(

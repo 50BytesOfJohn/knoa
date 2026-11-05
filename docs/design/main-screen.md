@@ -119,8 +119,8 @@ The window background is a solid colour by default, or a wallpaper the user pick
 
 - **View options** (button in the search pill): layout (Masonry, Grid, List), card size,
   show summaries, group by date, sort, show the Up next strip.
-- **Settings** (gear in the sidebar footer): appearance (theme, wallpaper, wallpaper blur,
-  panel opacity) and a link to all settings.
+- **Settings** (gear in the sidebar footer, ⌘,): a sheet nearly the size of the window,
+  with its own sidebar. See "Decided after approval".
 - **Workspace switcher** (workspace button in the titlebar), dropping down from it.
 
 ## Keyboard
@@ -181,3 +181,10 @@ date rail in GPUI.
   places only while the workspace's guideline has set something aside.
 - Trash shows in places only while it holds something, with an Empty Trash strip above
   its cards ([ADR 0012](../adr/0012-deleting-bookmarks-through-trash.md)).
+- Settings is one sheet, 36 px in from every window edge, with its own sidebar: General,
+  Appearance and AI, then one page per workspace and "New workspace". It replaced the
+  small settings popover and the workspace editor. The switcher's pencil and "New
+  workspace" open it on that page. Pages are groups of rows (label and description on the
+  left, control on the right) and save as you go; only creating a workspace has a button.
+  Themes are a gallery of small previews of the main screen, split into light and dark,
+  that wraps as more themes are added.
