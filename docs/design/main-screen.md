@@ -44,11 +44,12 @@ The window background is a solid colour by default, or a wallpaper the user pick
 
 ### Sidebar (left, floating, ~232 px)
 
-1. Traffic lights.
-2. **Workspace card:** a coloured square with the workspace's initial, its name and
-   bookmark count. Clicking it opens the switcher: the list of workspaces, a line for
-   hidden workspaces (shown while ⌥ is held) and "New workspace". Tabs or dots were
-   rejected because they stop working past two workspaces.
+1. **Titlebar:** the traffic lights, then the **workspace button** on the same row: a
+   small coloured square with the workspace's initial, its name and a chevron. It stays
+   small because switching workspaces is rare; the bookmark count lives on Everything.
+   Clicking it drops down the switcher: the list of workspaces, a line for hidden
+   workspaces (shown while ⌥ is held) and "New workspace". Tabs or dots were rejected
+   because they stop working past two workspaces.
 3. **Places:** Everything, Up next, Unsorted, Not organized (with a count badge while any
    bookmark is waiting for the AI).
 4. **Folders:** each with its own colour and icon. ⌘1–9 jump to the first nine.
@@ -120,7 +121,7 @@ The window background is a solid colour by default, or a wallpaper the user pick
   show summaries, group by date, sort, show the Up next strip.
 - **Settings** (gear in the sidebar footer): appearance (theme, wallpaper, wallpaper blur,
   panel opacity) and a link to all settings.
-- **Workspace switcher** (workspace card).
+- **Workspace switcher** (workspace button in the titlebar), dropping down from it.
 
 ## Keyboard
 

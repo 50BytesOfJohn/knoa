@@ -462,7 +462,7 @@ impl MainView {
             } else {
                 (
                     "Nothing here yet",
-                    "Add a link with ⌘N, or pick a browser for this workspace from the workspace card."
+                    "Add a link with ⌘N, or pick a browser for this workspace from the workspace menu."
                         .to_owned(),
                 )
             }

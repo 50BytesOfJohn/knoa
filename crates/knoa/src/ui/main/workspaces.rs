@@ -1,4 +1,5 @@
-//! The workspace switcher, opened from the workspace card.
+//! The workspace switcher, opened from the workspace button in the sidebar's
+//! titlebar.
 
 use gpui::{
     Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,

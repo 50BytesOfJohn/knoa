@@ -133,9 +133,9 @@ Keychain in release builds and in a plain file in dev builds
 
 ## UI
 
-- Main screen: a floating sidebar (workspace card with the switcher, places, folders), a floating search pill
-  with kind chips, masonry cards grouped by date with a date rail, and a floating detail
-  panel. The approved layout is in the [main screen design](design/main-screen.md); the
+- Main screen: a floating sidebar (workspace button beside the traffic lights, places,
+  folders), a floating search pill with kind chips, masonry cards grouped by date with a
+  date rail, and a floating detail panel. The approved layout is in the [main screen design](design/main-screen.md); the
   research behind it is in [research](research/main-screen.md).
 - Masonry, glass panels over a wallpaper and the date rail are Knoa's own elements
   ([ADR 0007](adr/0007-main-screen-rendering.md)).

@@ -1,6 +1,7 @@
 //! Floating panels over the main screen: settings, view options, the workspace switcher,
 //! the folder and workspace editors, and adding a link.
-//! Clicking outside closes them.
+//! Most sit in the middle of the window; the workspace switcher drops down from its
+//! button. Clicking outside closes them.
 
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
@@ -8,10 +9,13 @@ use gpui::{
 };
 use gpui_component::switch::Switch;
 
-use super::{MainView, Overlay};
+use super::{
+    MainView, Overlay,
+    sidebar::{TITLEBAR_HEIGHT, WORKSPACE_BUTTON_LEFT},
+};
 use crate::{
     state::settings::SettingsFile,
-    ui::theme::{PANEL_RADIUS, Theme},
+    ui::theme::{MARGIN, PANEL_RADIUS, Theme},
 };
 
 impl MainView {
@@ -21,7 +25,9 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> Option<AnyElement> {
         let theme = Theme::get(cx).clone();
-        let panel: AnyElement = match self.overlay.as_ref()? {
+        let overlay = self.overlay.as_ref()?;
+        let anchored = matches!(overlay, Overlay::Workspaces);
+        let panel: AnyElement = match overlay {
             Overlay::Settings(panel) => panel.clone().into_any_element(),
             Overlay::Folder(editor) => editor.clone().into_any_element(),
             Overlay::Workspace(editor) => editor.clone().into_any_element(),
@@ -29,30 +35,43 @@ impl MainView {
             Overlay::ViewOptions => self.view_options(cx).into_any_element(),
             Overlay::Workspaces => self.workspace_switcher(cx).into_any_element(),
         };
+        let panel = div()
+            .id("overlay-panel")
+            .occlude()
+            .rounded(PANEL_RADIUS)
+            .bg(theme.panel)
+            .border_1()
+            .border_color(theme.hairline)
+            .shadow_lg()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(panel);
+        // A drop-down keeps the window undimmed: it belongs to its button, not the window.
+        let scrim_opacity = match (anchored, theme.dark) {
+            (true, _) => 0.,
+            (false, true) => 0.35,
+            (false, false) => 0.12,
+        };
         let scrim = div()
             .id("scrim")
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(if theme.dark { 0.35 } else { 0.12 }))
+            .bg(gpui::black().opacity(scrim_opacity))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
-            )
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
-                    .id("overlay-panel")
-                    .occlude()
-                    .rounded(PANEL_RADIUS)
-                    .bg(theme.panel)
-                    .border_1()
-                    .border_color(theme.hairline)
-                    .shadow_lg()
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(panel),
             );
+        let scrim = if anchored {
+            // Shifted left by the panel's and the row's padding, so the marks in the list
+            // line up under the one on the button.
+            scrim.child(
+                panel
+                    .absolute()
+                    .top(MARGIN + TITLEBAR_HEIGHT)
+                    .left(MARGIN + WORKSPACE_BUTTON_LEFT - px(16.)),
+            )
+        } else {
+            scrim.flex().items_center().justify_center().child(panel)
+        };
         Some(deferred(scrim).with_priority(1).into_any_element())
     }
 

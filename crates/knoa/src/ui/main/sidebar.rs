@@ -1,9 +1,9 @@
-//! The floating sidebar: workspace card, places, folders and the footer with the AI
-//! indicator and settings.
+//! The floating sidebar: the titlebar with the workspace button, places, folders and the
+//! footer with the AI indicator and settings.
 
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 use knoa_core::Place;
@@ -18,8 +18,11 @@ use crate::{
     },
 };
 
-/// Room for the traffic lights above the workspace card.
-const TITLEBAR_HEIGHT: f32 = 40.;
+/// The sidebar's top row, shared with the traffic lights. Its middle lines up with theirs.
+pub(super) const TITLEBAR_HEIGHT: Pixels = px(42.);
+/// Where the workspace button starts in the sidebar: 10 px past the zoom button. Moves with
+/// `traffic_light_position` in `app.rs`.
+pub(super) const WORKSPACE_BUTTON_LEFT: Pixels = px(84.);
 
 impl MainView {
     pub(super) fn render_sidebar(
@@ -96,9 +99,17 @@ impl MainView {
             .border_1()
             .border_color(theme.hairline)
             .shadow_sm()
-            .child(div().h(px(TITLEBAR_HEIGHT)).flex_none())
-            .child(self.workspace_card(&name, color, counts.everything, cx))
-            .child(div().mt_3().child(list))
+            .child(
+                div()
+                    .h(TITLEBAR_HEIGHT)
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .pl(WORKSPACE_BUTTON_LEFT)
+                    .pr_2()
+                    .child(self.workspace_button(&name, color, cx)),
+            )
+            .child(div().mt_2().child(list))
             .child(
                 div()
                     .id("folders")
@@ -150,48 +161,38 @@ impl MainView {
         list
     }
 
-    fn workspace_card(
+    fn workspace_button(
         &self,
         name: &str,
         color: u8,
-        count: usize,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
+        let open = matches!(self.overlay, Some(Overlay::Workspaces));
         div()
-            .id("workspace-card")
-            .mx_2()
-            .p_2()
+            .id("workspace-button")
+            .min_w_0()
+            .h(px(26.))
+            .pl_1()
+            .pr_1p5()
             .flex()
             .items_center()
-            .gap_2p5()
-            .rounded(px(12.))
-            .bg(theme.soft)
+            .gap_1p5()
+            .rounded(px(8.))
             .cursor_pointer()
+            .when(open, |s| s.bg(theme.hover))
             .hover(|s| s.bg(theme.hover))
             .on_click(cx.listener(|this, _, _, cx| this.open_overlay(Overlay::Workspaces, cx)))
-            .child(workspace_mark(name, color, px(32.), cx))
+            .child(workspace_mark(name, color, px(18.), cx))
             .child(
                 div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
                     .min_w_0()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .truncate()
-                            .child(name.to_owned()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(theme.muted)
-                            .child(format!("{count} bookmarks")),
-                    ),
+                    .text_sm()
+                    .font_weight(FontWeight::MEDIUM)
+                    .truncate()
+                    .child(name.to_owned()),
             )
-            .child(icon("chevrons-up-down", px(14.), theme.faint))
+            .child(icon("chevron-down", px(12.), theme.faint))
     }
 
     #[allow(clippy::too_many_arguments)]
