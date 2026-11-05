@@ -4,6 +4,8 @@
 # Apple, and stores them with the Sparkle key as secrets of the repository's `release`
 # environment, which only `main` can use. It also saves a local notarytool profile, `knoa`,
 # for `make dist`. Run it again when the certificate or a key changes. No sudo needed.
+#
+#   --certificate-only   update just the certificate, after `make renew-certificate`
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -38,14 +40,13 @@ check_tools() {
     xcrun notarytool --version >/dev/null 2>&1 || fail "notarytool is missing; install Xcode."
 }
 
-# Sets CERT_SHA1 and IDENTITY to the newest Developer ID Application identity.
+# Sets CERT_SHA1 and IDENTITY to the Developer ID Application identity that expires last.
 find_identity() {
     local line
-    line=$(security find-identity -v -p codesigning | grep '"Developer ID Application' | tail -1) ||
-        fail "No Developer ID Application certificate in your keychain.
-   Create one in Xcode › Settings › Accounts › Manage Certificates › + › Developer ID
-   Application, then run this again."
-    CERT_SHA1=$(awk '{ print $2 }' <<<"$line")
+    CERT_SHA1=$(scripts/identity.sh 2>/dev/null) ||
+        fail "No Developer ID Application certificate in your keychain. Create one with
+   make renew-certificate, then run this again."
+    line=$(security find-identity -v -p codesigning | grep "$CERT_SHA1")
     IDENTITY=${line#*\"}
     IDENTITY=${IDENTITY%\"}
 }
@@ -53,7 +54,7 @@ find_identity() {
 # Exports every identity (macOS has no way to export one from the command line), then
 # keeps only the Developer ID certificate and its key, in a .p12 that CI can import.
 export_certificate() {
-    bold "1/4  Developer ID certificate"
+    bold "1/$STEPS  Developer ID certificate"
     find_identity
     note "Found $IDENTITY"
     note "macOS asks for your login password so this script can export it. Click Allow."
@@ -106,9 +107,8 @@ warn_if_expiring() {
     local until
     until=$(openssl x509 -in "$WORK/cert.pem" -noout -enddate | sed 's/notAfter=//')
     if ! openssl x509 -in "$WORK/cert.pem" -noout -checkend $((90 * 24 * 3600)) >/dev/null; then
-        note "⚠ It expires on $until. Releases can't be signed after that: create a new one in"
-        note "  Xcode › Settings › Accounts › Manage Certificates and run this script again."
-        note "  Apps already shipped keep working."
+        note "⚠ It expires on $until. Releases can't be signed after that; renew it with"
+        note "  make renew-certificate. Apps already shipped keep working."
     else
         note "Valid until $until."
     fi
@@ -163,26 +163,47 @@ find_sparkle_key() {
 
 store_secrets() {
     bold "4/4  GitHub secrets"
-    local repo
-    repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-    gh api -X PUT "repos/$repo/environments/release" --silent --input - <<'JSON'
-{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
-JSON
-    gh api "repos/$repo/environments/release/deployment-branch-policies" -q '.branch_policies[].name' |
-        grep -qx main ||
-        gh api -X POST "repos/$repo/environments/release/deployment-branch-policies" --silent \
-            -f name=main -f type=branch
-    secret() { gh secret set "$1" --env release --repo "$repo" >/dev/null; }
+    environment
     base64 -i "$WORK/knoa.p12" | secret MACOS_CERTIFICATE
     printf %s "$P12_PASSWORD" | secret MACOS_CERTIFICATE_PASSWORD
     secret NOTARY_KEY <"$NOTARY_KEY"
     printf %s "$NOTARY_KEY_ID" | secret NOTARY_KEY_ID
     printf %s "$NOTARY_ISSUER_ID" | secret NOTARY_ISSUER_ID
     printf %s "$SPARKLE_KEY" | secret SPARKLE_PRIVATE_KEY
-    note "Stored 6 secrets in the \"release\" environment of $repo (deploys from main only)."
+    note "Stored 6 secrets in the \"release\" environment of $REPO (deploys from main only)."
 }
 
+store_certificate() {
+    bold "2/2  GitHub secrets"
+    environment
+    base64 -i "$WORK/knoa.p12" | secret MACOS_CERTIFICATE
+    printf %s "$P12_PASSWORD" | secret MACOS_CERTIFICATE_PASSWORD
+    note "Updated the certificate in the \"release\" environment of $REPO."
+}
+
+# The `release` environment, which only `main` can deploy from.
+environment() {
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+    gh api -X PUT "repos/$REPO/environments/release" --silent --input - <<'JSON'
+{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+JSON
+    gh api "repos/$REPO/environments/release/deployment-branch-policies" -q '.branch_policies[].name' |
+        grep -qx main ||
+        gh api -X POST "repos/$REPO/environments/release/deployment-branch-policies" --silent \
+            -f name=main -f type=branch
+}
+
+secret() { gh secret set "$1" --env release --repo "$REPO" >/dev/null; }
+
 check_tools
+if [[ ${1:-} == --certificate-only ]]; then
+    STEPS=2
+    export_certificate
+    store_certificate
+    bold "Done. The next release is signed with the new certificate."
+    exit
+fi
+STEPS=4
 export_certificate
 find_notary_key
 find_sparkle_key

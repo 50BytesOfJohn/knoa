@@ -1,4 +1,4 @@
-.PHONY: run dev bundle app dist changelog release setup-releasefmt fmt-check lint test check
+.PHONY: run dev bundle app dist changelog release setup-release renew-certificate fmt fmt-check lint test check
 
 run: ## Run the app (release build)
 	cargo run --release
@@ -13,11 +13,14 @@ app: bundle ## Build and open Knoa.app
 	open target/release/Knoa.app
 
 dist: ## Signed, notarized Knoa.dmg and update zip in target/dist, on this Mac
-	KNOA_SIGN_IDENTITY="$${KNOA_SIGN_IDENTITY:-Developer ID Application}" \
+	KNOA_SIGN_IDENTITY="$${KNOA_SIGN_IDENTITY:-$$(scripts/identity.sh)}" \
 		KNOA_NOTARY_PROFILE="$${KNOA_NOTARY_PROFILE:-knoa}" scripts/package.sh
 
 setup-release: ## Once: store the signing certificate and keys for the Release workflow
 	scripts/setup-release.sh
+
+renew-certificate: ## New Developer ID certificate, in the keychain and the Release workflow
+	scripts/renew-certificate.sh
 
 changelog: ## What the next release's notes will say (needs git-cliff)
 	git-cliff --unreleased --strip all

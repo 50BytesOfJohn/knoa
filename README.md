@@ -68,14 +68,15 @@ make check   # everything CI runs: fmt-check + lint + test
 
 ```sh
 make setup-release          # once: export the signing certificate and keys to GitHub
+make renew-certificate      # before the Developer ID certificate expires
 make changelog              # what the next release's notes will say
 make release VERSION=0.2.0  # bump, tag, build, sign, notarize and publish on GitHub
 ```
 
 The [Release workflow](.github/workflows/release.yml) does the work; signing secrets live
 in the repository's `release` environment, put there by
-[`scripts/setup-release.sh`](scripts/setup-release.sh). Run it again when the Developer ID
-certificate is renewed. A version like `0.2.0-beta.1` becomes a
+[`scripts/setup-release.sh`](scripts/setup-release.sh). `make renew-certificate` replaces the
+Developer ID certificate in both places; `setup-release` warns 90 days before it expires. A version like `0.2.0-beta.1` becomes a
 pre-release, which installed copies aren't offered. See
 [ADR 0014](docs/adr/0014-releases-and-updates.md).
 
