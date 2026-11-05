@@ -10,7 +10,8 @@ impl Store {
     pub fn folders(&self, workspace: WorkspaceId) -> Result<Vec<Folder>> {
         let mut stmt = self.conn.prepare_cached(
             "SELECT f.id, f.name, f.description, f.auto_assign, f.color,
-                    (SELECT count(*) FROM bookmark_folders bf WHERE bf.folder_id = f.id)
+                    (SELECT count(*) FROM bookmark_folders bf JOIN bookmarks b ON b.id = bf.bookmark_id
+                     WHERE bf.folder_id = f.id AND b.deleted_at IS NULL)
              FROM folders f WHERE f.workspace_id = ?1 ORDER BY f.position",
         )?;
         let rows = stmt.query_map([workspace.0], |row| {

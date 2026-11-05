@@ -22,7 +22,7 @@ impl Store {
         let tx = self.conn.transaction()?;
         let ids: Vec<i64> = {
             let mut stmt = tx.prepare(
-                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND status IN ('new', 'failed')",
+                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND status IN ('new', 'failed') AND deleted_at IS NULL",
             )?;
             stmt.query_map([workspace.0], |row| row.get(0))?
                 .collect::<rusqlite::Result<_>>()?
@@ -130,7 +130,7 @@ impl Store {
     }
 
     /// Stores the AI's answer and takes the bookmark off the queue. A bookmark the user kept
-    /// is never set aside.
+    /// is never set aside. A bookmark deleted for good while it was organized is skipped.
     pub fn finish_organized(
         &mut self,
         id: BookmarkId,
@@ -138,7 +138,7 @@ impl Store {
         now: i64,
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute(
+        let updated = tx.execute(
             "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
                 status = 'organized', organized_at = ?7, error = NULL,
                 set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END WHERE id = ?1",
@@ -153,6 +153,9 @@ impl Store {
                 enrichment.set_aside,
             ],
         )?;
+        if updated == 0 {
+            return Ok(());
+        }
         Store::replace_ai_tags(&tx, id, &enrichment.tags)?;
         Store::add_ai_folders(&tx, id, &enrichment.folders)?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;

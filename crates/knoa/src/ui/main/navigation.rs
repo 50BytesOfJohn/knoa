@@ -1,6 +1,7 @@
 //! Moving the selection through the masonry grid with the arrow keys.
 
 use gpui::{Context, Window, point, px};
+use knoa_core::BookmarkId;
 
 use super::{
     MainView, MoveDown, MoveLeft, MoveRight, MoveUp, masonry::Placed, search::SEARCH_AREA_HEIGHT,
@@ -76,6 +77,21 @@ impl MainView {
         }
         self.reveal(&placed, window);
         cx.notify();
+    }
+
+    /// The card after `id` in reading order, or the one before it at the end.
+    pub(super) fn neighbour_of(&self, id: BookmarkId) -> Option<BookmarkId> {
+        let cards = &self.layout.layout.cards;
+        let results = &self.layout.results;
+        let at = cards
+            .iter()
+            .position(|c| results.get(c.index).is_some_and(|b| b.id == id))?;
+        let next = if at + 1 < cards.len() {
+            at + 1
+        } else {
+            at.checked_sub(1)?
+        };
+        results.get(cards[next].index).map(|b| b.id)
     }
 
     /// Scrolls just enough to bring the card fully into view.

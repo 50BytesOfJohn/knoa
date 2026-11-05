@@ -11,6 +11,7 @@ mod read;
 mod schema;
 mod search;
 mod tags;
+mod trash;
 mod workspaces;
 
 use std::path::Path;

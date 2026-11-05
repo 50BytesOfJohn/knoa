@@ -9,6 +9,9 @@ use crate::{Fields, FolderLink, Kind, WorkspaceId};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BookmarkId(pub i64);
 
+/// How long a bookmark stays in Trash before it is deleted for good.
+pub const TRASH_SECONDS: i64 = 30 * 24 * 60 * 60;
+
 /// Where a bookmark is in the organizing pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Status {
@@ -120,6 +123,8 @@ pub struct Bookmark {
     /// Why the AI set this bookmark aside as not fitting the workspace's guideline. Set
     /// aside bookmarks only show in their own place until the user keeps them.
     pub set_aside: Option<String>,
+    /// When the user moved it to Trash, in Unix seconds.
+    pub deleted_at: Option<i64>,
     /// The model that organized this bookmark, for the detail panel's "why".
     pub model: Option<String>,
 }

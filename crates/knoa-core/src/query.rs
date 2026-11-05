@@ -17,6 +17,9 @@ pub enum Place {
     /// Bookmarks the AI found don't fit the workspace's guideline. Every other place
     /// leaves them out.
     SetAside,
+    /// Bookmarks the user deleted, until they are restored or deleted for good. Every other
+    /// place leaves them out.
+    Trash,
     Folder(FolderId),
 }
 

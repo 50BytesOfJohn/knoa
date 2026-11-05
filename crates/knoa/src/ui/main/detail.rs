@@ -41,11 +41,18 @@ impl MainView {
                     .flex()
                     .flex_col()
                     .gap_4()
+                    .children(self.detail_trash(&bookmark, cx))
                     .children(self.detail_set_aside(&bookmark, cx))
                     .child(self.detail_about(&bookmark, cx))
                     .children(fields(&bookmark, &theme))
                     .children(self.detail_tags(&bookmark, cx))
-                    .child(self.detail_folders(&bookmark, cx))
+                    // A bookmark in Trash is out of every folder's view, so it can't be filed.
+                    .children(
+                        bookmark
+                            .deleted_at
+                            .is_none()
+                            .then(|| self.detail_folders(&bookmark, cx)),
+                    )
                     .children(origin(&bookmark, &theme)),
             );
         div()
@@ -63,7 +70,11 @@ impl MainView {
             .border_color(theme.hairline)
             .shadow_lg()
             .child(body)
-            .child(self.detail_actions(&bookmark, cx))
+            .child(if bookmark.deleted_at.is_some() {
+                self.trash_actions(bookmark.id, cx)
+            } else {
+                self.detail_actions(&bookmark, cx)
+            })
             .into_any_element()
     }
 
@@ -149,7 +160,7 @@ impl MainView {
                     .child(div().flex_1().min_w_0().child(summary.clone())),
             );
         }
-        if organized {
+        if organized || bookmark.deleted_at.is_some() {
             return about;
         }
         let (message, action) = match bookmark.status {
@@ -365,6 +376,20 @@ impl MainView {
                 button("copy", "Copy link", Tone::Ghost, cx).on_click(move |_, _, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(copy_url.clone()));
                 }),
+            )
+            .child(
+                div()
+                    .id("delete")
+                    .size(px(32.))
+                    .flex_none()
+                    .rounded_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.soft))
+                    .child(icon("trash", px(15.), theme.muted))
+                    .on_click(cx.listener(move |this, _, _, cx| this.move_to_trash(id, cx))),
             )
     }
 }

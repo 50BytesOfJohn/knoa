@@ -12,6 +12,7 @@ mod overlay;
 mod search;
 mod settings_panel;
 mod sidebar;
+mod trash;
 mod workspace_editor;
 mod workspaces;
 
@@ -48,6 +49,7 @@ actions!(
         ToggleDetail,
         ToggleUpNext,
         CopyLink,
+        DeleteSelected,
         Dismiss
     ]
 );
@@ -66,6 +68,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("space", ToggleDetail, cards),
         KeyBinding::new("l", ToggleUpNext, cards),
         KeyBinding::new("cmd-c", CopyLink, cards),
+        KeyBinding::new("backspace", DeleteSelected, cards),
+        KeyBinding::new("cmd-backspace", DeleteSelected, cards),
         KeyBinding::new("escape", Dismiss, cards),
         KeyBinding::new("cmd-f", FocusSearch, None),
         KeyBinding::new("cmd-k", FocusSearch, None),
@@ -94,6 +98,8 @@ pub struct MainView {
     selected: Option<BookmarkId>,
     detail_open: bool,
     overlay: Option<Overlay>,
+    /// Empty Trash was clicked once; the next click deletes for good.
+    confirm_empty_trash: bool,
     layout: LayoutCache,
     _subscriptions: Vec<Subscription>,
 }
@@ -133,6 +139,7 @@ impl MainView {
             selected: None,
             detail_open: false,
             overlay: None,
+            confirm_empty_trash: false,
             layout: LayoutCache::default(),
             _subscriptions: subscriptions,
         }
@@ -156,6 +163,7 @@ impl MainView {
     }
 
     pub fn set_place(&mut self, place: Place, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.confirm_empty_trash = false;
         self.library
             .update(cx, |library, cx| library.set_place(place, cx));
         self.scroll

@@ -77,6 +77,9 @@ cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
   Bookmarks are keyed on workspace and URL, so re-imports are idempotent. The browser folder path is stored and passed to the AI as a
   hint.
 - A bookmark deleted in the browser is marked, not deleted.
+- A bookmark deleted in Knoa goes to Trash and stays deleted while the browser keeps
+  it; bookmarking it again in the same profile brings it back
+  ([ADR 0012](adr/0012-deleting-bookmarks-through-trash.md)).
 - Links added by hand go straight into the organizing queue and are always kept.
 - The first import stores metadata only. AI processing of those bookmarks starts when the
   user triggers it. Later bookmarks are processed automatically.

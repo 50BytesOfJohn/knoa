@@ -84,6 +84,8 @@ quality are a priority from the first milestone.
   bookmarks is a separate action that shows the count and estimated cost first.
 - Deleting a bookmark in the browser does not delete it from Knoa; Knoa marks it as removed
   from the browser.
+- Deleting a bookmark in Knoa does not delete it from the browser. It waits in Trash for
+  30 days, and sync doesn't bring it back unless it is bookmarked again.
 
 ## After the alpha
 

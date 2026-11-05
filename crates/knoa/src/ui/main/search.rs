@@ -36,6 +36,7 @@ impl MainView {
             Place::Unsorted => Some("Unsorted".to_owned()),
             Place::NotOrganized => Some("Not organized".to_owned()),
             Place::SetAside => Some("Set aside".to_owned()),
+            Place::Trash => Some("Trash".to_owned()),
             Place::Folder(id) => library
                 .folders()
                 .iter()

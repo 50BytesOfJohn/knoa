@@ -110,7 +110,8 @@ The window background is a solid colour by default, or a wallpaper the user pick
 - Image, kind and site, title (large serif), AI summary marked with ✦, typed fields in a
   two-column grid, folders the AI added marked with ✦ and an Undo.
 - For unprocessed bookmarks: "Only the title and link so far" and an Organize button.
-- Actions at the bottom: **Open** (↵), Up next toggle, Copy link.
+- Actions at the bottom: **Open** (↵), Up next toggle, Copy link, Delete.
+- In Trash: how long until it is deleted for good, with **Restore** and Delete now.
 - A close button; closing gives the cards the full width.
 
 ### Popovers
@@ -131,6 +132,7 @@ The window background is a solid colour by default, or a wallpaper the user pick
 | Space | Show or hide the detail panel |
 | L | Add to or remove from Up next |
 | ⌘C | Copy link |
+| ⌫ | Move to Trash |
 | ⌘1–9 | Go to folder |
 | ⌘K | Command palette |
 | ⌘, | Settings |
@@ -176,3 +178,5 @@ date rail in GPUI.
 - Workspaces shipped without hidden workspaces. The switcher lists them with the
   browsers each syncs; the pencil opens the workspace editor. "Set aside" shows in
   places only while the workspace's guideline has set something aside.
+- Trash shows in places only while it holds something, with an Empty Trash strip above
+  its cards ([ADR 0012](../adr/0012-deleting-bookmarks-through-trash.md)).

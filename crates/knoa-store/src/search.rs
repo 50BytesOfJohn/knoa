@@ -34,13 +34,16 @@ impl Filter {
             conditions.push("b.workspace_id = ?".into());
             filter.params.push(Value::Integer(workspace.0));
         }
-        if query.place == Place::SetAside {
-            conditions.push("b.set_aside IS NOT NULL".into());
-        } else {
-            conditions.push("b.set_aside IS NULL".into());
-        }
+        conditions.push(
+            match query.place {
+                Place::Trash => "b.deleted_at IS NOT NULL",
+                Place::SetAside => "b.deleted_at IS NULL AND b.set_aside IS NOT NULL",
+                _ => "b.deleted_at IS NULL AND b.set_aside IS NULL",
+            }
+            .into(),
+        );
         match query.place {
-            Place::Everything | Place::SetAside => {}
+            Place::Everything | Place::SetAside | Place::Trash => {}
             Place::UpNext => conditions.push("b.up_next = 1".into()),
             Place::Unsorted => conditions.push(
                 "NOT EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id)".into(),

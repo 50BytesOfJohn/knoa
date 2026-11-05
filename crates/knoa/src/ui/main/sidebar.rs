@@ -135,11 +135,13 @@ impl MainView {
                 counts.not_organized,
             ),
             (Place::SetAside, "Set aside", "archive", counts.set_aside),
+            (Place::Trash, "Trash", "trash", counts.trash),
         ];
         let mut list = div().flex().flex_col().gap_0p5().px_2();
         for (place, label, icon_name, count) in places {
-            // Set aside only shows while the guideline has set something aside.
-            if place == Place::SetAside && count == 0 && current != place {
+            // Set aside and Trash only show while they hold something.
+            let hideable = matches!(place, Place::SetAside | Place::Trash);
+            if hideable && count == 0 && current != place {
                 continue;
             }
             list = list.child(self.place_row(place, current, label, icon_name, count, None, cx));

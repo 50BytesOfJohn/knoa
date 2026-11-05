@@ -18,6 +18,7 @@ pub struct Counts {
     pub unsorted: usize,
     pub not_organized: usize,
     pub set_aside: usize,
+    pub trash: usize,
     /// Queued or being organized right now: the AI activity indicator.
     pub organizing: usize,
 }
@@ -26,7 +27,7 @@ const COLUMNS: &str = "b.id, b.url, b.title, b.site, b.added_at, b.kind, b.summa
     b.up_next, b.image_path, b.image_width, b.image_height, b.browser_folder, b.removed_from_browser, b.model,
     (SELECT json_group_array(json_array(tag, origin)) FROM bookmark_tags WHERE bookmark_id = b.id),
     (SELECT json_group_array(json_array(folder_id, origin, probability)) FROM bookmark_folders WHERE bookmark_id = b.id),
-    b.workspace_id, b.set_aside";
+    b.workspace_id, b.set_aside, b.deleted_at";
 
 impl Store {
     /// Bookmarks matching `query`, best match first when there is text, newest first otherwise.
@@ -101,6 +102,7 @@ impl Store {
             unsorted: place(Place::Unsorted)?,
             not_organized: place(Place::NotOrganized)?,
             set_aside: place(Place::SetAside)?,
+            trash: place(Place::Trash)?,
             organizing,
         })
     }
@@ -145,6 +147,7 @@ struct RawBookmark {
     tags: String,
     folders: String,
     set_aside: Option<String>,
+    deleted_at: Option<i64>,
 }
 
 impl RawBookmark {
@@ -173,6 +176,7 @@ impl RawBookmark {
             tags: row.get(17)?,
             folders: row.get(18)?,
             set_aside: row.get(20)?,
+            deleted_at: row.get(21)?,
         })
     }
 
@@ -212,6 +216,7 @@ impl RawBookmark {
             browser_folder: self.browser_folder,
             removed_from_browser: self.removed_from_browser,
             set_aside: self.set_aside,
+            deleted_at: self.deleted_at,
             model: self.model,
         })
     }

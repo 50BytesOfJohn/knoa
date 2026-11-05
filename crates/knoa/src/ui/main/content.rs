@@ -14,6 +14,7 @@ use super::{
     groups::{self, Group},
     masonry::{Layout, Spec},
     search::SEARCH_AREA_HEIGHT,
+    trash::TRASH_BAR_HEIGHT,
 };
 use crate::{
     state::settings::SettingsFile,
@@ -33,7 +34,7 @@ const MIN_COLUMN_WIDTH: f32 = 190.;
 /// The layout for the current results, recomputed only when its inputs change.
 #[derive(Default)]
 pub struct LayoutCache {
-    key: Option<(usize, u32, usize, bool, bool, bool)>,
+    key: Option<(usize, u32, usize, bool, bool, u32)>,
     pub groups: Vec<Group>,
     pub layout: Layout,
     pub results: Arc<Vec<Bookmark>>,
@@ -51,6 +52,17 @@ pub fn content_span(window: &Window, show_detail: bool) -> (f32, f32) {
     (left, right.max(left + 200.))
 }
 
+/// Room above the cards for the strip the place shows, if any.
+fn strip_height(up_next: bool, trash_bar: bool) -> f32 {
+    if up_next {
+        UP_NEXT_HEIGHT + GAP
+    } else if trash_bar {
+        TRASH_BAR_HEIGHT + GAP
+    } else {
+        0.
+    }
+}
+
 impl MainView {
     pub(super) fn render_content(
         &mut self,
@@ -63,7 +75,9 @@ impl MainView {
         let rail_width = 36.;
         let width = right - left - rail_width - 8.;
         let up_next = self.up_next_items(cx);
-        self.update_layout(width, show_detail, !up_next.is_empty(), cx);
+        let trash_bar = self.shows_trash_bar(cx);
+        let top = strip_height(!up_next.is_empty(), trash_bar);
+        self.update_layout(width, show_detail, top, cx);
 
         let viewport_height = f32::from(window.viewport_size().height);
         let scroll_top = -f32::from(self.scroll.offset().y);
@@ -76,6 +90,8 @@ impl MainView {
             .h(px(self.layout.layout.height + f32::from(MARGIN)));
         if !up_next.is_empty() {
             canvas = canvas.child(self.up_next_strip(&up_next, width, cx));
+        } else if trash_bar {
+            canvas = canvas.child(self.trash_bar(width, cx));
         }
         for (group, y) in self.layout.groups.iter().zip(&self.layout.layout.headers) {
             canvas = canvas.child(
@@ -147,6 +163,7 @@ impl MainView {
                     .on_action(cx.listener(Self::toggle_detail))
                     .on_action(cx.listener(Self::toggle_up_next))
                     .on_action(cx.listener(Self::copy_link))
+                    .on_action(cx.listener(Self::delete_selected))
                     .on_action(cx.listener(Self::dismiss))
                     .child(
                         div()
@@ -162,7 +179,7 @@ impl MainView {
         &mut self,
         width: f32,
         show_detail: bool,
-        has_up_next: bool,
+        top: f32,
         cx: &mut Context<'_, MainView>,
     ) {
         let library = self.library.read(cx);
@@ -180,7 +197,7 @@ impl MainView {
             columns,
             show_summaries,
             by_date,
-            has_up_next,
+            top.to_bits(),
         );
         if self.layout.key == Some(key) {
             return;
@@ -196,11 +213,7 @@ impl MainView {
             columns,
             gap: GAP,
             header_height: HEADER_HEIGHT,
-            top: if has_up_next {
-                UP_NEXT_HEIGHT + GAP
-            } else {
-                0.
-            },
+            top,
         };
         let layout = Layout::masonry(&groups, &spec, |index, column_width| {
             cards::height(&results[index], column_width, show_summaries)
@@ -228,6 +241,11 @@ impl MainView {
             return;
         }
         self.select(id, cx);
+    }
+
+    fn shows_trash_bar(&self, cx: &Context<'_, MainView>) -> bool {
+        let library = self.library.read(cx);
+        library.place() == Place::Trash && !library.results().is_empty()
     }
 
     fn up_next_items(&self, cx: &Context<'_, MainView>) -> Vec<Bookmark> {
@@ -401,6 +419,11 @@ impl MainView {
             (
                 "Nothing matches",
                 "Try fewer words, or filters like kind:movie, site:github.com or #tag.".to_owned(),
+            )
+        } else if library.place() == Place::Trash {
+            (
+                "Trash is empty",
+                "Bookmarks you delete wait here for 30 days.".to_owned(),
             )
         } else if library.place() == Place::Everything {
             let synced = library.workspace().is_some_and(|w| !w.browsers.is_empty());

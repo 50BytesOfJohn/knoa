@@ -159,6 +159,20 @@ ALTER TABLE folders ADD COLUMN workspace_id INTEGER NOT NULL DEFAULT 1
 -- The browser profile bookmarks open in, as `helium:Default`; NULL for the default browser.
 ALTER TABLE workspaces ADD COLUMN opens_in TEXT;
 ",
+    r"
+-- When the user moved the bookmark to Trash; NULL while it is in the library.
+ALTER TABLE bookmarks ADD COLUMN deleted_at INTEGER;
+
+-- Bookmarks deleted for good while their browser still had them, so sync doesn't bring
+-- them back. A row goes away once the browser drops the bookmark too.
+CREATE TABLE deleted_urls (
+    workspace_id INTEGER NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    url          TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    browser_guid TEXT,
+    PRIMARY KEY (workspace_id, url)
+);
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

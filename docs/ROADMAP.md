@@ -45,7 +45,9 @@ Builds the approved [main screen design](design/main-screen.md).
 - [x] `knoa-store`: SQLite, migrations, queries, tests
       ([ADR 0005](adr/0005-typed-bookmarks-and-folders.md))
 - [x] Show bookmarks from the database in the masonry view
-- [x] Manual add by URL (⌘N); remove is still to do
+- [x] Manual add by URL (⌘N)
+- [x] Delete to Trash, restore, empty Trash
+      ([ADR 0012](adr/0012-deleting-bookmarks-through-trash.md))
 
 ## M3: Chromium sync
 
