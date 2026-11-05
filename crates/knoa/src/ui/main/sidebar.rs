@@ -1,11 +1,12 @@
-//! The floating sidebar: the titlebar with the workspace button, places, folders and the
-//! footer with the AI indicator and settings.
+//! The floating sidebar: the titlebar with the workspace and add-link buttons, places,
+//! folders and the footer with the wordmark, the AI indicator and settings.
 
 use gpui::{
     AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
     Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
+use gpui_component::tooltip::Tooltip;
 use knoa_core::Place;
 
 use super::{MainView, NewLink, OpenSettings, Overlay};
@@ -18,11 +19,28 @@ use crate::{
     },
 };
 
-/// The sidebar's top row, shared with the traffic lights. Its middle lines up with theirs.
-pub(super) const TITLEBAR_HEIGHT: Pixels = px(42.);
-/// Where the workspace button starts in the sidebar: 10 px past the zoom button. Moves with
-/// `traffic_light_position` in `app.rs`.
-pub(super) const WORKSPACE_BUTTON_LEFT: Pixels = px(84.);
+/// The sidebar's top row, shared with the traffic lights. With the sidebar's 1 px border its
+/// middle lines up with theirs, which `traffic_light_position` in `app.rs` places.
+pub(super) const TITLEBAR_HEIGHT: Pixels = px(40.);
+const TITLEBAR_PADDING: Pixels = px(8.);
+const TITLEBAR_GAP: Pixels = px(4.);
+const TITLEBAR_BUTTON: Pixels = px(26.);
+const WORKSPACE_BUTTON_WIDTH: Pixels = px(40.);
+const WORKSPACE_MARK: Pixels = px(20.);
+
+/// The workspace switcher's left edge in the window. It sits under the workspace button,
+/// shifted left by the menu's and its rows' padding so the marks in the list line up under
+/// the button's.
+pub(super) fn workspace_menu_left() -> Pixels {
+    let border = px(1.);
+    let button_left = MARGIN + SIDEBAR_WIDTH
+        - border
+        - TITLEBAR_PADDING
+        - TITLEBAR_BUTTON
+        - TITLEBAR_GAP
+        - WORKSPACE_BUTTON_WIDTH;
+    button_left - px(16.)
+}
 
 impl MainView {
     pub(super) fn render_sidebar(
@@ -105,9 +123,11 @@ impl MainView {
                     .flex_none()
                     .flex()
                     .items_center()
-                    .pl(WORKSPACE_BUTTON_LEFT)
-                    .pr_2()
-                    .child(self.workspace_button(&name, color, cx)),
+                    .justify_end()
+                    .gap(TITLEBAR_GAP)
+                    .pr(TITLEBAR_PADDING)
+                    .child(self.workspace_button(&name, color, cx))
+                    .child(self.add_link_button(cx)),
             )
             .child(div().mt_2().child(list))
             .child(
@@ -161,6 +181,8 @@ impl MainView {
         list
     }
 
+    /// Only the workspace's mark: most people keep one workspace, so its name would say
+    /// little. The name shows on hover and in the switcher.
     fn workspace_button(
         &self,
         name: &str,
@@ -169,30 +191,47 @@ impl MainView {
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
         let open = matches!(self.overlay, Some(Overlay::Workspaces));
+        let tooltip = SharedString::from(name.to_owned());
+        let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
         div()
             .id("workspace-button")
-            .min_w_0()
-            .h(px(26.))
+            .w(WORKSPACE_BUTTON_WIDTH)
+            .h(TITLEBAR_BUTTON)
             .pl_1()
-            .pr_1p5()
             .flex()
             .items_center()
-            .gap_1p5()
+            .gap(px(3.))
             .rounded(px(8.))
             .cursor_pointer()
             .when(open, |s| s.bg(theme.hover))
             .hover(|s| s.bg(theme.hover))
+            .tooltip(move |window, cx| {
+                Tooltip::new(tooltip.clone())
+                    .bg(bg)
+                    .text_color(fg)
+                    .border_color(border)
+                    .build(window, cx)
+            })
             .on_click(cx.listener(|this, _, _, cx| this.open_overlay(Overlay::Workspaces, cx)))
-            .child(workspace_mark(name, color, px(18.), cx))
-            .child(
-                div()
-                    .min_w_0()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .truncate()
-                    .child(name.to_owned()),
-            )
-            .child(icon("chevron-down", px(12.), theme.faint))
+            .child(workspace_mark(name, color, WORKSPACE_MARK, cx))
+            .child(icon("chevron-down", px(10.), theme.faint))
+    }
+
+    fn add_link_button(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
+        let theme = Theme::get(cx);
+        div()
+            .id("add-link")
+            .size(TITLEBAR_BUTTON)
+            .rounded(px(8.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .hover(|s| s.bg(theme.hover))
+            .child(icon("plus", px(16.), theme.muted))
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.new_link(&NewLink, window, cx);
+            }))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -248,11 +287,12 @@ impl MainView {
     fn footer(&self, organizing: usize, cx: &mut Context<'_, MainView>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let status = self.organizer.read(cx).status().clone();
-        let (ai_label, ai_color) = match &status {
-            AiStatus::Off => ("AI off".to_owned(), theme.faint),
-            AiStatus::Ready if organizing > 0 => (format!("✦ {organizing}"), theme.ai),
-            AiStatus::Ready => ("✦".to_owned(), theme.ai),
-            AiStatus::NeedsAttention(_) => ("✦ needs attention".to_owned(), theme.danger),
+        // Idle and ready says nothing worth a mark next to the wordmark.
+        let ai = match &status {
+            AiStatus::Off => Some(("AI off".to_owned(), theme.faint)),
+            AiStatus::Ready if organizing > 0 => Some((format!("✦ {organizing}"), theme.ai)),
+            AiStatus::Ready => None,
+            AiStatus::NeedsAttention(_) => Some(("✦ needs attention".to_owned(), theme.danger)),
         };
         div()
             .flex_none()
@@ -264,23 +304,10 @@ impl MainView {
             .border_t_1()
             .border_color(theme.hairline)
             .child(wordmark(px(20.), theme.text))
-            .child(div().text_xs().text_color(ai_color).child(ai_label))
+            .when_some(ai, |s, (label, color)| {
+                s.child(div().text_xs().text_color(color).child(label))
+            })
             .child(div().flex_1())
-            .child(
-                div()
-                    .id("add-link")
-                    .size(px(28.))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover))
-                    .child(icon("plus", px(16.), theme.muted))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.new_link(&NewLink, window, cx);
-                    })),
-            )
             .child(
                 div()
                     .id("settings")

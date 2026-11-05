@@ -44,18 +44,18 @@ The window background is a solid colour by default, or a wallpaper the user pick
 
 ### Sidebar (left, floating, ~232 px)
 
-1. **Titlebar:** the traffic lights, then the **workspace button** on the same row: a
-   small coloured square with the workspace's initial, its name and a chevron. It stays
-   small because switching workspaces is rare; the bookmark count lives on Everything.
-   Clicking it drops down the switcher: the list of workspaces, a line for hidden
-   workspaces (shown while ⌥ is held) and "New workspace". Tabs or dots were rejected
-   because they stop working past two workspaces.
-3. **Places:** Everything, Up next, Unsorted, Not organized (with a count badge while any
+1. **Titlebar:** the traffic lights on the left; on the right the **workspace button**
+   (the workspace's coloured mark and a chevron, its name on hover) and **add link**.
+   The workspace stays small because most people keep one; the bookmark count lives on
+   Everything. Clicking it drops down the switcher: the list of workspaces, a line for
+   hidden workspaces (shown while ⌥ is held) and "New workspace". Tabs or dots were
+   rejected because they stop working past two workspaces.
+2. **Places:** Everything, Up next, Unsorted, Not organized (with a count badge while any
    bookmark is waiting for the AI).
-4. **Folders:** each with its own colour and icon. ⌘1–9 jump to the first nine.
+3. **Folders:** each with its own colour and icon. ⌘1–9 jump to the first nine.
    "New folder" at the end.
-5. **Footer:** the Knoa logo and name, the AI activity indicator (✦ and the number of
-   bookmarks being organized) and the settings button.
+4. **Footer:** the Knoa wordmark, the AI activity indicator (✦ and the number of
+   bookmarks being organized; nothing while the AI is idle) and the settings button.
 
 ### Search pill (top centre, floating)
 

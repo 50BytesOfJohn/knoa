@@ -11,7 +11,7 @@ use gpui_component::switch::Switch;
 
 use super::{
     MainView, Overlay,
-    sidebar::{TITLEBAR_HEIGHT, WORKSPACE_BUTTON_LEFT},
+    sidebar::{TITLEBAR_HEIGHT, workspace_menu_left},
 };
 use crate::{
     state::settings::SettingsFile,
@@ -61,13 +61,11 @@ impl MainView {
                 cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
             );
         let scrim = if anchored {
-            // Shifted left by the panel's and the row's padding, so the marks in the list
-            // line up under the one on the button.
             scrim.child(
                 panel
                     .absolute()
                     .top(MARGIN + TITLEBAR_HEIGHT)
-                    .left(MARGIN + WORKSPACE_BUTTON_LEFT - px(16.)),
+                    .left(workspace_menu_left()),
             )
         } else {
             scrim.flex().items_center().justify_center().child(panel)
