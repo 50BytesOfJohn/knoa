@@ -1,5 +1,6 @@
 name: Bug report
 description: Something in Knoa doesn't work as it should.
+labels: [bug]
 body:
   - type: textarea
     id: what

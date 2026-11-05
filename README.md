@@ -5,6 +5,10 @@
   </picture>
 </h1>
 
+[![CI](https://github.com/50BytesOfJohn/knoa/actions/workflows/ci.yml/badge.svg)](https://github.com/50BytesOfJohn/knoa/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/50BytesOfJohn/knoa/badge)](https://scorecard.dev/viewer/?uri=github.com/50BytesOfJohn/knoa)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+
 An intelligent bookmark library for the desktop.
 
 Bookmark in your browser as usual. Knoa imports those bookmarks, fetches each page and uses
@@ -97,7 +101,10 @@ The workspace is set up for more crates (`crates/*`); the planned crates are in
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md); commits are signed off
-under the DCO (`git commit -s`).
+under the DCO (`git commit -s`). Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md). Questions and ideas go to
+[Discussions](https://github.com/50BytesOfJohn/knoa/discussions); report security issues
+privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

@@ -15,6 +15,8 @@ on:
         type: boolean
         default: false
 
+permissions: {}
+
 concurrency:
   group: release
   cancel-in-progress: false
@@ -38,7 +40,7 @@ jobs:
         run: |
           [[ $REF == refs/heads/main ]] || { echo "::error::Release from main, not $REF"; exit 1; }
           [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::$VERSION isn't x.y.z or x.y.z-pre"; exit 1; }
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Check the tag is new
@@ -47,7 +49,7 @@ jobs:
             echo "::error::v${{ inputs.version }} already exists"; exit 1
           fi
       - run: rustup show active-toolchain || rustup toolchain install
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: git-cliff
       - name: Bump the version
@@ -80,18 +82,18 @@ jobs:
       TAG: ${{ needs.prepare.outputs.tag }}
       VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
       - run: rustup show active-toolchain || rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: release
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@c509219cf42fba86913069efd0ade2458c59337b # v2.90.1
         with:
           tool: git-cliff
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
       - name: Import the signing certificate
         env:
