@@ -4,6 +4,7 @@ pub mod components;
 mod main;
 mod onboarding;
 pub mod theme;
+pub mod wordmark;
 
 use gpui::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render, Styled as _, Window,

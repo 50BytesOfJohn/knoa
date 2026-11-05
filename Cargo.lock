@@ -3439,6 +3439,7 @@ dependencies = [
  "knoa-core",
  "knoa-fetch",
  "knoa-store",
+ "lyon_tessellation",
  "serde",
  "serde_json",
  "tokio",

@@ -1,10 +1,16 @@
-.PHONY: run dev fmt fmt-check lint test check
+.PHONY: run dev bundle app fmt fmt-check lint test check
 
 run: ## Run the app (release build)
 	cargo run --release
 
 dev: ## Run the app (debug build, verbose logs)
 	RUST_LOG=knoa=debug cargo run
+
+bundle: ## Build target/release/Knoa.app with its icon (needs Xcode)
+	scripts/bundle.sh
+
+app: bundle ## Build and open Knoa.app
+	open target/release/Knoa.app
 
 fmt: ## Format Rust and TOML
 	cargo fmt --all

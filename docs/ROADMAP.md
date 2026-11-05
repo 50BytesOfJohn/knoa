@@ -38,6 +38,8 @@ Builds the approved [main screen design](design/main-screen.md).
 - [x] Core shortcuts, including type-anywhere search
 - [ ] Command palette
 - [x] Remember window size and position
+- [x] Handwritten wordmark that writes itself in onboarding, and the "K." app icon
+      ([design](design/wordmark.html))
 
 ## M2: Local library
 

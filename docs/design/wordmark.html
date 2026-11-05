@@ -90,10 +90,21 @@
   .hero { background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: grid; place-items: center; padding: 24px; text-align: center; gap: 4px; }
   .hero svg { width: 80%; overflow: visible; }
   .hero p { margin: 0; color: var(--muted); font-size: 13px; }
-  .icons { display: flex; gap: 20px; align-items: end; flex-wrap: wrap; }
-  .icon { width: 128px; height: 128px; border-radius: 28px; display: grid; place-items: center; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.10); }
-  .icon svg { width: 72%; height: 72%; overflow: visible; }
-  .icon.s { width: 64px; height: 64px; border-radius: 14px; } .icon.xs { width: 32px; height: 32px; border-radius: 7px; }
+  .appicon { display: block; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.14)) drop-shadow(0 6px 10px rgba(0,0,0,.12)); }
+  .icon-stage { display: flex; align-items: center; gap: 20px; padding: 20px; cursor: pointer; }
+  .icon-stage > .appicon { width: 190px; height: 190px; flex: none; }
+  .sizes { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+  .sizes figure { margin: 0; display: grid; justify-items: center; gap: 4px; }
+  .sizes figcaption { font-size: 10.5px; color: var(--muted); }
+  .wall { border-radius: 14px; overflow: hidden; position: relative; padding: 28px 24px 110px;
+    background: radial-gradient(120% 90% at 20% 10%, #f6c38f 0%, transparent 55%), radial-gradient(90% 80% at 90% 30%, #8fa6e8 0%, transparent 60%), linear-gradient(160deg, #e48a6a, #5d5fa8 70%, #2d3561); }
+  .modes { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; }
+  .modes button { background: none; border: 0; padding: 6px; border-radius: 14px; cursor: pointer; display: grid; justify-items: center; gap: 6px; color: #fff; font: inherit; font-size: 12px; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .modes button[aria-pressed="true"] { background: rgba(255,255,255,.18); }
+  .modes .appicon { width: 128px; height: 128px; }
+  .dock { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px 10px; border-radius: 22px;
+    background: rgba(255,255,255,.22); border: 1px solid rgba(255,255,255,.35); backdrop-filter: blur(20px) saturate(1.4); }
+  .dock .appicon { width: 64px; height: 64px; }
   .note { color: var(--muted); font-size: 12.5px; max-width: 80ch; }
   select { font: inherit; font-size: 12px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 6px 12px; border-radius: 8px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -121,7 +132,11 @@
 </div>
 
 <main>
-  <h2>Variants</h2>
+  <h2>Full stop, explored</h2>
+  <p class="note" style="margin-top:-6px">Same word, different dots. What shape the accent takes, how it lands, and how tightly it sits after the a.</p>
+  <div class="grid" id="stopGrid"></div>
+
+  <h2>All directions</h2>
   <div class="grid" id="grid"></div>
 
   <h2>In context</h2>
@@ -141,9 +156,16 @@
     </div>
   </div>
 
-  <h2>Monogram for the app icon</h2>
-  <div class="icons" id="icons"></div>
-  <p class="note">The K from the cursive wordmark on its own, with the ribbon tucked behind it. Shown at 128, 64 and 32 px to check it still reads small.</p>
+  <h2>App icon</h2>
+  <p class="note" style="margin-top:-6px">The Tight wordmark shrunk to its first letter and its dot: "K." Each icon is drawn on the macOS 1024 grid (an 824 px rounded tile with room for the shadow) and shown from 128 down to 16 px. Click the big icon to replay it. Download PNG gives you a 1024 px file for Icon Composer.</p>
+  <div class="grid" id="iconGrid"></div>
+
+  <h2>Icon appearances</h2>
+  <p class="note" style="margin-top:-6px">Since macOS 26, people can show icons as Default, Dark, Clear or Tinted, so the mark has to survive all four. Click one to put it in the Dock.</p>
+  <div class="wall">
+    <div class="modes" id="modes"></div>
+    <div class="dock" id="dock"></div>
+  </div>
 </main>
 
 <div class="toast" id="toast">SVG copied</div>
@@ -272,6 +294,63 @@ const VARIANTS = [
   },
 ];
 
+// The a's tail cut short, so the dot sits tight against the word.
+const TIGHT_REST = CURSIVE.rest.replace("C254 124 264 116 272 108", "C251 123 257 121 261 117");
+const cursiveTight = () => ink(CURSIVE.k) + ink(TIGHT_REST);
+const dot = (cx, cy, r, pop = "bounce") => `<circle class="acc-f" data-pop="${pop}" cx="${cx}" cy="${cy}" r="${r}"/>`;
+
+const STOP_VARIANTS = [
+  {
+    id: "stop-1", name: "Classic dot", tag: "current",
+    idea: "The one you picked: a round dot that drops and settles, a pen-width away from the tail.",
+    vb: CURSIVE.vb, svg: () => cursive() + dot(284, 117, 5),
+  },
+  {
+    id: "stop-tight", name: "Tight", tag: "chosen",
+    idea: "The a's tail ends early, so the dot tucks right in. Reads more like one mark at small sizes.",
+    vb: CURSIVE.vb, svg: () => cursiveTight() + dot(272, 118, 5),
+  },
+  {
+    id: "stop-big", name: "Bold dot", tag: "size",
+    idea: "A larger dot sitting on the baseline. More of a logo, less of a punctuation mark.",
+    vb: CURSIVE.vb, svg: () => cursive() + dot(286, 114.5, 7),
+  },
+  {
+    id: "stop-ripple", name: "Landing", tag: "motion",
+    idea: "When the dot lands, a faint ring spreads out from it, like a drop of ink. Says 'saved'.",
+    vb: CURSIVE.vb,
+    svg: () => cursive() + dot(284, 117, 5) + `<circle class="acc-s" data-pop="ripple" style="stroke-width:1.4" cx="284" cy="117" r="5"/>`,
+  },
+  {
+    id: "stop-tap", name: "Pen tap", tag: "motion",
+    idea: "No drop-in: the pen taps the page and leaves a slightly oval mark, the way a real full stop is made.",
+    vb: CURSIVE.vb,
+    svg: () => cursive() + `<path class="acc-s" data-draw style="stroke-width:calc(var(--w) * 2)" d="M283.2 116 L284.6 118.4"/>`,
+  },
+  {
+    id: "stop-ribbon", name: "Ribbon stop", tag: "bookmark",
+    idea: "The full stop is a tiny bookmark ribbon. Only noticed on a second look, which is the charm.",
+    vb: CURSIVE.vb, svg: () => cursive() + ribbon(280, 106, 8, 15),
+  },
+  {
+    id: "stop-spark", name: "Spark stop", tag: "AI",
+    idea: "The full stop is a tiny four-point spark: the AI hint, in the same place and at the same size as the dot.",
+    vb: CURSIVE.vb, svg: () => cursive() + sparkle(285, 114, 7.5),
+  },
+  {
+    id: "stop-diamond", name: "Diamond", tag: "shape",
+    idea: "A small rotated square. Crisper and more 'designed' next to the soft handwriting.",
+    vb: CURSIVE.vb,
+    svg: () => cursive() + `<path class="acc-f" data-pop="bounce" d="M284 111 L290 117 L284 123 L278 117 Z"/>`,
+  },
+  {
+    id: "stop-signature", name: "Signature stop", tag: "pairing",
+    idea: "The slanted signature letters with the same dot, minus the swash. A bit more personality, same restraint.",
+    vb: "18 10 296 144",
+    svg: () => `<g transform="skewX(-12) translate(26 0)">${ink(SIGNATURE.k)}${ink(SIGNATURE.rest.replace(/ C258 126 272 122.*$/, " C256 125 262 123 266 118"))}</g>` + dot(279, 120, 5),
+  },
+];
+
 // ---------- Drawing ----------
 const state = { speed: 1 };
 const PEN_SPEED = 0.32; // viewBox units per ms at speed 1
@@ -297,6 +376,7 @@ function play(svg) {
       const frames = {
         spark: [{ opacity: 0, scale: 0, rotate: "-90deg" }, { opacity: 1, scale: 1.25, rotate: "10deg", offset: .7 }, { opacity: 1, scale: 1, rotate: "0deg" }],
         drop: [{ scale: "1 0" }, { scale: "1 1.08", offset: .75 }, { scale: "1 1" }],
+        ripple: [{ opacity: 0, scale: 1 }, { opacity: .9, scale: 1, offset: .05 }, { opacity: 0, scale: 3.4 }],
         bounce: [{ opacity: 0, translate: "0 -18px" }, { opacity: 1, translate: "0 0", offset: .55 }, { translate: "0 -4px", offset: .75 }, { translate: "0 0" }],
       }[kind];
       const dur = 520 / state.speed;
@@ -321,7 +401,7 @@ function exportSvg(svg) {
     out.removeAttribute("style"); out.removeAttribute("class");
     for (const k of ["data-draw", "data-pop", "data-sync", "data-fast"]) out.removeAttribute(k);
     if (el.tagName === "g") return;
-    for (const p of ["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "opacity"]) {
+    for (const p of ["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "opacity", "stroke-opacity", "fill-opacity", "stop-color", "filter"]) {
       const val = cs.getPropertyValue(p);
       if (val && val !== "none" || p === "fill") out.setAttribute(p, val === "rgba(0, 0, 0, 0)" ? "none" : val);
     }
@@ -336,9 +416,11 @@ function toast(msg) {
 }
 
 // ---------- Build page ----------
-const grid = document.getElementById("grid");
 const allSvgs = [];
-for (const v of VARIANTS) {
+function addCards(gridId, variants) {
+  for (const v of variants) addCard(document.getElementById(gridId), v);
+}
+function addCard(grid, v) {
   const card = document.createElement("article");
   card.className = "card";
   card.innerHTML = `<div class="stage" title="Click to replay"></div>
@@ -355,13 +437,16 @@ for (const v of VARIANTS) {
   grid.append(card);
   allSvgs.push(svg);
 }
+addCards("stopGrid", STOP_VARIANTS);
+addCards("grid", VARIANTS);
 
 // In-context mocks
 const pick = document.getElementById("ctxPick");
-VARIANTS.forEach((v) => pick.add(new Option(v.name, v.id)));
-pick.value = "stop";
+const CONTEXT_VARIANTS = [...STOP_VARIANTS, ...VARIANTS];
+CONTEXT_VARIANTS.forEach((v) => pick.add(new Option(v.name, v.id)));
+pick.value = "stop-tight";
 function renderContext() {
-  const v = VARIANTS.find((x) => x.id === pick.value);
+  const v = CONTEXT_VARIANTS.find((x) => x.id === pick.value);
   const side = makeSvg(v), hero = makeSvg(v);
   side.style.setProperty("--w", "9");
   document.getElementById("ctxSidebar").replaceChildren(side);
@@ -371,20 +456,158 @@ function renderContext() {
 pick.onchange = renderContext;
 document.getElementById("ctxHeroWrap").onclick = () => play(document.querySelector("#ctxHero svg"));
 
-// Monogram icons
-const MONO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="34 14 92 120">
-  ${ribbon(108, 14, 14, 46)}
-  <path class="ink" data-draw style="stroke-width:10" d="${CURSIVE.k}"/>
-  <path class="ink" data-draw style="stroke-width:10" d="M100 32 C86 50 72 66 57 76 C70 80 80 100 90 115 C95 122 101 121 106 114"/>
-</svg>`;
-const icons = document.getElementById("icons");
-for (const size of ["", "s", "xs"]) {
-  const d = document.createElement("div");
-  d.className = `icon ${size}`;
-  d.style.background = "var(--card)";
-  d.innerHTML = MONO;
-  icons.append(d);
+// ---------- App icon ----------
+// "K." taken from the Tight wordmark: the K's leg ends in a short curl, the dot sits on the baseline.
+const K_LEG = "M100 32 C86 50 72 66 57 76 C70 80 80 100 90 115 C95 122 101 121 105 116";
+const TILE = `x="100" y="100" width="824" height="824" rx="186"`;
+
+// c: { tile: [top, bottom] colours or null, k, dot, scale, cx, cy, dx, dy, rotate, weight, word, under, over, glass }
+function iconSvg(c, id) {
+  const S = c.scale ?? 4.7, w = c.weight ?? 1.8;
+  const stroke = `style="fill:none;stroke:${c.k};stroke-width:calc(var(--w) * ${w});stroke-linecap:round;stroke-linejoin:round"`;
+  const glyph = c.word
+    ? `<path data-draw ${stroke} d="${CURSIVE.k}"/><path data-draw ${stroke} d="${TIGHT_REST}"/><circle data-pop="bounce" style="fill:${c.dot}" cx="272" cy="118" r="5.5"/>`
+    : `<path data-draw ${stroke} d="${CURSIVE.k}"/><path data-draw ${stroke} d="${K_LEG}"/><circle data-pop="bounce" style="fill:${c.dot}" cx="${117 + ((c.dotR ?? 6) - 6) * 0.6}" cy="${118.5 - ((c.dotR ?? 6) - 6) * 0.5}" r="${c.dotR ?? 6}"/>`;
+  const tile = c.glass
+    ? `<rect ${TILE} style="fill:rgba(255,255,255,.2);stroke:rgba(255,255,255,.55);stroke-width:3"/>`
+    : `<rect ${TILE} fill="url(#t-${id})"/><rect x="101.5" y="101.5" width="821" height="821" rx="184.5" style="fill:none;stroke:#fff;stroke-opacity:.35;stroke-width:3"/>`;
+  const grad = c.tile
+    ? `<linearGradient id="t-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${c.tile[0]}"/><stop offset="1" style="stop-color:${c.tile[1]}"/></linearGradient>`
+    : "";
+  return `<svg class="appicon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Knoa icon">
+    <defs>${grad}<clipPath id="c-${id}"><rect ${TILE}/></clipPath></defs>
+    ${tile}
+    <g clip-path="url(#c-${id})">${c.under ?? ""}
+      <g transform="translate(${512 + (c.dx ?? 0)} ${512 + (c.dy ?? 0)}) rotate(${c.rotate ?? 0}) scale(${S}) translate(${-(c.cx ?? 85)} ${-(c.cy ?? 77)})">${c.over ?? ""}${glyph}</g>
+    </g></svg>`;
 }
+
+const PAPER = ["#fdfbf7", "#ebe4d6"];
+const ICONS = [
+  {
+    id: "paper", name: "Paper", tag: "recommended",
+    idea: "Cream tile, ink K, accent dot. The wordmark's own colours, so the icon and the sidebar read as one thing.",
+    c: { tile: PAPER, k: "var(--ink)", dot: "var(--accent)" },
+  },
+  {
+    id: "night", name: "Ink", tag: "dark",
+    idea: "The negative: cream letter on warm black. Also what the Dark appearance should look like.",
+    c: { tile: ["#2d2b28", "#191816"], k: "#f3eee4", dot: "var(--accent)" },
+  },
+  {
+    id: "accent", name: "Accent tile", tag: "bold",
+    idea: "The accent colour floods the tile and the dot turns ink. Loudest in the Dock; the dot is still the accent idea, inverted.",
+    c: { tile: ["var(--accent)", "color-mix(in srgb, var(--accent) 80%, #000)"], k: "#fffaf3", dot: "#1f1d1a" },
+  },
+  {
+    id: "ruled", name: "Ruled paper", tag: "library",
+    idea: "The K sits on a notebook baseline with a red margin line. A hint of the catalogue card without the clutter.",
+    c: {
+      tile: PAPER, k: "var(--ink)", dot: "var(--accent)",
+      over: `<path style="fill:none;stroke:var(--rule);stroke-width:.7" d="M-200 122.5 H400 M-200 82 H400"/><path style="fill:none;stroke:var(--margin);stroke-width:.7" d="M38 -200 V400"/>`,
+    },
+  },
+  {
+    id: "card", name: "Index card", tag: "library",
+    idea: "A small white card, slightly askew, with K. written on it. A physical object, like the older macOS icons, but kept simple.",
+    c: {
+      tile: ["var(--accent)", "color-mix(in srgb, var(--accent) 80%, #000)"], k: "#1f1d1a", dot: "var(--accent)", scale: 3.6, rotate: -6, dy: 8,
+      over: `<rect x="22" y="14" width="126" height="128" rx="5" style="fill:#fffdf8;filter:drop-shadow(0 1.5px 2px rgba(0,0,0,.25))"/><path style="fill:none;stroke:#cfdcec;stroke-width:.8" d="M22 122.5 H148"/>`,
+    },
+  },
+  {
+    id: "word", name: "Full wordmark", tag: "for comparison",
+    idea: "The whole Tight wordmark on the tile. Lovely at 128 px and gone by 32 px, which is why the icon uses K. alone.",
+    c: { tile: PAPER, k: "var(--ink)", dot: "var(--accent)", word: true, scale: 2.95, cx: 162, weight: 2.2 },
+  },
+];
+
+let iconSeq = 0;
+const iconEl = (c) => {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = iconSvg(c, `i${iconSeq++}`);
+  return wrap.firstElementChild;
+};
+
+// Rasterise the exported SVG to a 1024 px PNG.
+function downloadPng(svg, name) {
+  const img = new Image();
+  img.onload = () => {
+    const cv = Object.assign(document.createElement("canvas"), { width: 1024, height: 1024 });
+    cv.getContext("2d").drawImage(img, 0, 0, 1024, 1024);
+    cv.toBlob((b) => Object.assign(document.createElement("a"), { href: URL.createObjectURL(b), download: `knoa-icon-${name}.png` }).click());
+  };
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(exportSvg(svg));
+}
+
+const iconGrid = document.getElementById("iconGrid");
+for (const v of ICONS) {
+  const card = document.createElement("article");
+  card.className = "card";
+  const stage = document.createElement("div");
+  stage.className = "icon-stage";
+  stage.title = "Click to replay";
+  const big = iconEl(v.c);
+  const sizes = document.createElement("div");
+  sizes.className = "sizes";
+  for (const px of [128, 64, 32, 16]) {
+    const f = document.createElement("figure");
+    // Small sizes get a heavier stroke and a bigger dot, so neither thins out to nothing.
+    const el = iconEl(px <= 32 ? { ...v.c, weight: (v.c.weight ?? 1.8) * (px <= 16 ? 1.7 : 1.35), dotR: px <= 16 ? 12 : 8.5 } : v.c);
+    el.style.width = el.style.height = `${px}px`;
+    f.append(el);
+    f.insertAdjacentHTML("beforeend", `<figcaption>${px}</figcaption>`);
+    sizes.append(f);
+  }
+  stage.append(big, sizes);
+  stage.onclick = () => play(big);
+  card.append(stage);
+  card.insertAdjacentHTML("beforeend", `<div class="meta"><b>${v.name}<small>${v.tag}</small></b><p>${v.idea}</p>
+    <div class="actions"><button class="btn" data-a="copy">Copy SVG</button><button class="btn" data-a="png">Download PNG</button></div></div>`);
+  card.querySelector('[data-a="copy"]').onclick = async () => {
+    try { await navigator.clipboard.writeText(exportSvg(big)); toast(`${v.name} icon SVG copied`); }
+    catch { toast("Clipboard blocked by the browser"); }
+  };
+  card.querySelector('[data-a="png"]').onclick = () => downloadPng(big, v.id);
+  iconGrid.append(card);
+  allSvgs.push(big);
+}
+
+// The Paper icon in each macOS appearance.
+const MODES = [
+  { name: "Default", c: ICONS[0].c },
+  { name: "Dark", c: ICONS[1].c },
+  { name: "Clear", c: { glass: true, k: "rgba(255,255,255,.95)", dot: "rgba(255,255,255,.7)" } },
+  { name: "Tinted", c: { tile: ["#3b3a3d", "#232225"], k: "#f4c27a", dot: "color-mix(in srgb, #f4c27a 70%, #fff)" } },
+];
+const DOCK_TILES = [["#7fb2f0", "#3d7be0"], ["#f6f6f6", "#d9d9de"], ["#8ee08a", "#34b35a"], ["#ffd36b", "#f29b2c"], ["#c9a2f2", "#8a5cd6"]];
+const plainTile = (t) => {
+  const id = `d${iconSeq++}`;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<svg class="appicon" viewBox="0 0 1024 1024"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t[0]}"/><stop offset="1" stop-color="${t[1]}"/></linearGradient></defs><rect ${TILE} fill="url(#${id})"/></svg>`;
+  return wrap.firstElementChild;
+};
+const modes = document.getElementById("modes"), dock = document.getElementById("dock");
+const dockSlot = document.createElement("span");
+dockSlot.style.display = "contents";
+function showInDock(mode) {
+  const el = iconEl(mode.c);
+  dockSlot.replaceChildren(el);
+  play(el);
+  modes.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === mode.name));
+}
+for (const m of MODES) {
+  const b = document.createElement("button");
+  b.dataset.mode = m.name;
+  b.append(iconEl(m.c));
+  b.insertAdjacentHTML("beforeend", m.name);
+  b.onclick = () => showInDock(m);
+  modes.append(b);
+}
+DOCK_TILES.slice(0, 3).forEach((t) => dock.append(plainTile(t)));
+dock.append(dockSlot);
+DOCK_TILES.slice(3).forEach((t) => dock.append(plainTile(t)));
+showInDock(MODES[0]);
 
 // ---------- Toolbar ----------
 const INKS = ["#1f1d1a", "#24396b", "#5b3a29", "#2f4a3a"];
@@ -418,7 +641,7 @@ document.getElementById("theme").onclick = (e) => {
 };
 document.getElementById("weight").oninput = (e) => document.documentElement.style.setProperty("--w", e.target.value);
 document.getElementById("speed").oninput = (e) => (state.speed = +e.target.value);
-const replayAll = () => { allSvgs.forEach(play); renderContext(); icons.querySelectorAll("svg").forEach(play); };
+const replayAll = () => { allSvgs.forEach(play); renderContext(); };
 document.getElementById("replay").onclick = replayAll;
 
 // Start the cards as they scroll into view, so each one is seen being written.
@@ -427,7 +650,6 @@ const io = new IntersectionObserver((entries) => entries.forEach((en) => {
 }), { threshold: .5 });
 document.querySelectorAll(".stage").forEach((s) => io.observe(s));
 renderContext();
-icons.querySelectorAll("svg").forEach(play);
 </script>
 </body>
 </html>

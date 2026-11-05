@@ -17,6 +17,7 @@ gpui-component.workspace = true
 gpui-kit-assets.workspace = true
 gpui_platform.workspace = true
 jiff.workspace = true
+lyon_tessellation.workspace = true
 knoa-ai.workspace = true
 knoa-browser.workspace = true
 knoa-core.workspace = true

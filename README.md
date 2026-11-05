@@ -1,4 +1,9 @@
-# Knoa
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/wordmark-dark.svg">
+    <img src="assets/brand/wordmark.svg" alt="Knoa" height="72">
+  </picture>
+</h1>
 
 An intelligent bookmark library for the desktop.
 
@@ -39,6 +44,7 @@ and Xcode Command Line Tools (`xcode-select --install`). Optional:
 ```sh
 make dev     # debug build, verbose logs (RUST_LOG=knoa=debug)
 make run     # optimized build
+make app     # build and open Knoa.app, with its icon (needs Xcode 26 or later)
 ```
 
 The first build compiles GPUI and takes a few minutes; later builds are incremental.

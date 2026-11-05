@@ -1,9 +1,9 @@
 //! The onboarding steps' content.
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, Context, Div, FontWeight, InteractiveElement as _,
-    IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::FluentBuilder as _, pulsating_between, px,
+    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::{Input, Textarea};
 use knoa_ai::ProviderKind;
@@ -14,6 +14,7 @@ use crate::{
     ui::{
         components::{Tone, blocked_browsers_notice, button, icon, workspace_mark},
         theme::{SERIF, Theme},
+        wordmark::written_wordmark,
     },
 };
 
@@ -50,13 +51,7 @@ impl Onboarding {
             .text_center()
             .gap_4()
             .pt_6()
-            .child(
-                div()
-                    .text_size(px(44.))
-                    .text_color(theme.ai)
-                    .child("✦")
-                    .with_animation("sparkle", Animation::new(std::time::Duration::from_millis(1800)).repeat().with_easing(pulsating_between(0.45, 1.)), gpui::Styled::opacity),
-            )
+            .child(written_wordmark("hello-wordmark", px(84.), theme.text))
             .child(title("Hi, I'm Knoa."))
             .child(lead(
                 "You keep bookmarking things like a squirrel stocking up for winter. I find them again. \

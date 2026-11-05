@@ -14,6 +14,7 @@ use crate::{
     ui::{
         components::{icon, workspace_mark},
         theme::{MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
+        wordmark::wordmark,
     },
 };
 
@@ -261,13 +262,7 @@ impl MainView {
             .gap_2()
             .border_t_1()
             .border_color(theme.hairline)
-            .child(
-                div()
-                    .font_family(crate::ui::theme::SERIF)
-                    .text_base()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Knoa"),
-            )
+            .child(wordmark(px(20.), theme.text))
             .child(div().text_xs().text_color(ai_color).child(ai_label))
             .child(div().flex_1())
             .child(

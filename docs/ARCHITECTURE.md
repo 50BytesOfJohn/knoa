@@ -148,3 +148,9 @@ Keychain in release builds and in a plain file in dev builds
 ## Distribution
 
 macOS only. The alpha is distributed as a signed and notarized app bundle.
+
+`scripts/bundle.sh` (`make bundle`) builds `Knoa.app` from the release binary and
+`crates/knoa/bundle/`: the `Info.plist` and `AppIcon.icon`, the Icon Composer source of the
+app icon. Xcode's `actool` compiles the icon into `Assets.car`, which macOS 26+ shows in
+every icon appearance, and `AppIcon.icns` for older systems. The bundle is signed ad hoc
+for now.
