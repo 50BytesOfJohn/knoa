@@ -1,6 +1,6 @@
 //! Reading bookmarks back, and small edits to a single bookmark.
 
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use knoa_core::{
     Bookmark, BookmarkId, FolderId, FolderLink, Image, Kind, Origin, Place, Query, Status,
@@ -114,6 +114,17 @@ impl Store {
             rusqlite::params![id.0, up_next],
         )?;
         Ok(())
+    }
+
+    /// Every thumbnail a bookmark points to, in Trash or not. Several bookmarks can share one.
+    pub fn image_paths(&self) -> Result<HashSet<PathBuf>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT image_path FROM bookmarks WHERE image_path IS NOT NULL")?;
+        let paths = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        Ok(paths
+            .map(|path| path.map(PathBuf::from))
+            .collect::<rusqlite::Result<_>>()?)
     }
 
     /// Keeps a bookmark the AI set aside. The guideline never sets it aside again.

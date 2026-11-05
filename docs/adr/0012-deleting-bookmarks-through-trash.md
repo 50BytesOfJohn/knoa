@@ -38,4 +38,6 @@ Everything leaves it out. That hides things the user may still want to find.
 - Deleting by accident is undone from Trash for 30 days.
 - A URL bookmarked twice in one profile, or in two profiles feeding one workspace, can't
   tell "bookmarked again" from "still there", so it stays deleted until added by hand.
-- Thumbnails of deleted bookmarks stay in the cache directory.
+- Thumbnails are named by image URL and shared between bookmarks, so they aren't deleted
+  with a bookmark. At launch, Knoa deletes cached thumbnails no bookmark points to, which
+  also covers deleted workspaces and replaced images.

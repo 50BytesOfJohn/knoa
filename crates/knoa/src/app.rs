@@ -10,7 +10,9 @@ use gpui::{
 
 use crate::{
     paths::Paths,
-    services::{ai, credentials::Credentials, network::Network, organizer::Organizer, sync},
+    services::{
+        ai, credentials::Credentials, housekeeping, network::Network, organizer::Organizer, sync,
+    },
     state::{
         library::Library,
         settings::{self, SettingsFile},
@@ -35,6 +37,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
         .with_context(|| format!("opening {}", paths.database().display()))?;
     settings::adopt_legacy(&mut store, cx).context("moving settings into the workspace")?;
     let library = cx.new(|cx| Library::new(Arc::new(Mutex::new(store)), cx));
+    housekeeping::run(&library, paths.thumbnails(), cx);
     sync::init(&library, cx);
     Organizer::init(
         library.clone(),

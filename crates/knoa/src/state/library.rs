@@ -65,8 +65,6 @@ impl Library {
             refresh_pending: false,
         };
         library.refresh(cx);
-        let now = jiff::Timestamp::now().as_second();
-        library.change(cx, move |store| store.purge_expired_trash(now).map(drop));
         library
     }
 
