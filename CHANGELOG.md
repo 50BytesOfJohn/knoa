@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.1.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.1) - 2026-11-05
+
+### Changed
+
+- Lay out the DMG as a drag-to-Applications window ([#3](https://github.com/50BytesOfJohn/knoa/pull/3))
 ## [0.1.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.0) - 2026-11-05
 
 ### Added
