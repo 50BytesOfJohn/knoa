@@ -3424,7 +3424,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
 name = "knoa"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
@@ -3452,7 +3452,7 @@ dependencies = [
 
 [[package]]
 name = "knoa-ai"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "knoa-core",
  "reqwest",
@@ -3466,7 +3466,7 @@ dependencies = [
 
 [[package]]
 name = "knoa-browser"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dirs 6.0.0",
  "knoa-core",
@@ -3480,7 +3480,7 @@ dependencies = [
 
 [[package]]
 name = "knoa-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3489,7 +3489,7 @@ dependencies = [
 
 [[package]]
 name = "knoa-fetch"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "imagesize 0.15.0",
  "knoa-core",
@@ -3506,7 +3506,7 @@ dependencies = [
 
 [[package]]
 name = "knoa-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "knoa-core",
  "rusqlite",
