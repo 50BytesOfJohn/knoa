@@ -18,3 +18,4 @@ old one.
 | [0010](0010-bookmark-sync-by-file-watch.md) | Bookmark sync by file watch, with a slow rescan | Accepted |
 | [0011](0011-workspaces-fed-by-browsers.md) | Workspaces are fed by browsers, with an optional guideline | Accepted |
 | [0012](0012-deleting-bookmarks-through-trash.md) | Deleting bookmarks goes through Trash; no archive | Accepted |
+| [0013](0013-kind-before-fields.md) | Pick the kind first, then extract its fields | Accepted |

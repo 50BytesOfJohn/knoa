@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    Classifier, Error, LanguageModel, Question, StructuredReply, StructuredRequest,
+    Choice, Classifier, Error, LanguageModel, Question, StructuredReply, StructuredRequest,
     openrouter::OpenRouter,
 };
 
@@ -45,7 +45,7 @@ pub struct ProviderConfig {
     pub kind: ProviderKind,
     /// Chat models in fallback order.
     pub chat_models: Vec<String>,
-    /// The yes/no classifier for folders. Without one, the chat model picks folders.
+    /// The classifier for kinds and folders. Without one, the chat model picks them.
     pub classifier_model: Option<String>,
 }
 
@@ -107,6 +107,12 @@ impl Classifier for Provider {
     async fn classify(&self, state: &Value, questions: &[Question]) -> Result<Vec<f32>, Error> {
         match self {
             Provider::OpenRouter(p) => p.classify(state, questions).await,
+        }
+    }
+
+    async fn choose(&self, state: &Value, choice: &Choice) -> Result<Vec<f32>, Error> {
+        match self {
+            Provider::OpenRouter(p) => p.choose(state, choice).await,
         }
     }
 }

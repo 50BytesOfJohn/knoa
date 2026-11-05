@@ -1,6 +1,6 @@
 # 0009: Provider-neutral AI behind two traits
 
-- Status: Accepted
+- Status: Accepted, amended by [0013](0013-kind-before-fields.md)
 - Date: 2026-11-04
 - Amends: [0003](0003-openrouter-thin-client.md) ("OpenRouter is the only provider")
 

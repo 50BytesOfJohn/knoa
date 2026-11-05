@@ -1,9 +1,11 @@
-//! The provider-neutral organizing pipeline: one structured chat call for kind, summary,
-//! fields, extras, tags and, when the workspace has a guideline, whether the bookmark fits;
-//! then folders from the classifier (or from the same call when the provider has none).
+//! The provider-neutral organizing pipeline: the kind first, then one structured chat call
+//! for that kind's fields, summary, extras, tags and, when the workspace has a guideline,
+//! whether the bookmark fits; then folders. The classifier picks the kind and folders; a
+//! provider without one asks the chat model.
 
 mod answer;
 mod folders;
+mod kind;
 mod prompt;
 mod schema;
 
@@ -20,7 +22,7 @@ pub struct BookmarkInput<'a> {
     pub browser_folder: Option<&'a str>,
     /// The fetch's evidence JSON, if the page was fetched.
     pub evidence: Option<&'a str>,
-    /// Kind and fields read from the page itself. They win over the model's.
+    /// Kind and fields read from the page itself. They win over the models'.
     pub page_kind: Option<Kind>,
     pub page_fields: &'a Fields,
 }
@@ -47,11 +49,13 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     classifier: Option<&C>,
     input: &OrganizeInput<'_>,
 ) -> Result<Enrichment, Error> {
+    let kind = kind::pick(model, classifier, input).await?;
     let folders_in_answer = classifier.is_none();
     let request = StructuredRequest {
-        messages: prompt::messages(input, folders_in_answer),
+        messages: prompt::messages(input, kind, folders_in_answer),
         schema_name: "bookmark",
         schema: schema::answer_schema(
+            kind,
             folders_in_answer.then_some(input.folders),
             input.guideline.is_some(),
         ),
@@ -59,7 +63,7 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     };
     let reply = model.generate(&request).await?;
     let folder_ids: Vec<FolderId> = input.folders.iter().map(|f| f.id).collect();
-    let mut answer = answer::parse(reply.json, input.bookmark.page_kind, &folder_ids)?;
+    let mut answer = answer::parse(reply.json, kind, &folder_ids)?;
     for (name, value) in input.bookmark.page_fields {
         answer.fields.insert(name.clone(), value.clone());
     }

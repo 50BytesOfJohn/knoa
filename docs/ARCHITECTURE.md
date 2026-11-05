@@ -94,22 +94,25 @@ network requests), so quitting the app loses no work.
    - site-specific extractors for popular sites (YouTube, Vimeo, IMDb, GitHub, ...);
    - structured data on the page: schema.org JSON-LD, Open Graph, oEmbed;
    - LLM extraction from the page text when the above is not enough.
-3. **Organize** with one structured chat call (`json_schema`, `strict: true`, generic
-   name/value fields). Output: kind, summary, fields, extras, tags, and whether it fits
-   when the workspace has a guideline. Input: the workspace's instructions and guideline,
-   the extracted evidence and about 4k characters of page text. A bookmark that doesn't
-   fit is stored as set aside, with the reason, and gets no folders. Values read
-   from the page override the model's.
-4. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
+3. **Kind**: the page's own kind when it declared one, else one choice question to the
+   classifier (OpenRouter Decisions), else a small chat call
+   ([ADR 0013](adr/0013-kind-before-fields.md)).
+4. **Organize** with one structured chat call for that kind (`json_schema`,
+   `strict: true`, the kind's fields as a typed object). Output: summary, fields, extras,
+   tags, and whether it fits when the workspace has a guideline. Input: the workspace's
+   instructions and guideline, the extracted evidence and about 4k characters of page
+   text. A bookmark that doesn't fit is stored as set aside, with the reason, and gets no
+   folders. Values read from the page override the model's.
+5. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
    bookmark's workspace
    (OpenRouter Decisions, with a sentinel question). A provider without a classifier
    picks folders in the chat call instead.
-5. **Store** the result with the model name. Without AI, steps 3 and 4 are skipped and the
+6. **Store** the result with the model name. Without AI, steps 3 to 5 are skipped and the
    page's own metadata is stored.
 
-Models and request shape follow the [enrichment research](research/llm-enrichment.md):
+Models follow the [enrichment research](research/llm-enrichment.md):
 `openai/gpt-6-luna` with `anthropic/claude-haiku-5.5` as fallback, and
-`perplexity/pplx-decider-v1.2` for folders.
+`perplexity/pplx-decider-v1.2` for kinds and folders.
 
 Folder "find bookmarks" and re-scan run folder matching over bookmarks that are already
 processed. They only add.

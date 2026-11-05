@@ -61,11 +61,26 @@ pub struct Question {
     pub no: String,
 }
 
+/// A question about some state with exactly one answer from a fixed set of options.
+#[derive(Debug, Clone)]
+pub struct Choice {
+    pub instructions: String,
+    /// Each option's key and when it is the answer.
+    pub options: Vec<(String, String)>,
+}
+
 pub trait Classifier: Send + Sync {
     /// The probability of "yes" for each question, in order.
     fn classify(
         &self,
         state: &Value,
         questions: &[Question],
+    ) -> impl Future<Output = Result<Vec<f32>, Error>> + Send;
+
+    /// The probability of each option, in order.
+    fn choose(
+        &self,
+        state: &Value,
+        choice: &Choice,
     ) -> impl Future<Output = Result<Vec<f32>, Error>> + Send;
 }
