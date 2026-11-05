@@ -24,6 +24,16 @@ jobs:
       - uses: uncenter/setup-taplo@v2
       - run: taplo fmt --check
 
+  scripts:
+    name: Scripts & workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck scripts/*.sh
+      - uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
   check:
     name: Clippy & tests (macOS)
     runs-on: macos-latest

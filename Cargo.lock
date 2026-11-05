@@ -3440,11 +3440,14 @@ dependencies = [
  "knoa-fetch",
  "knoa-store",
  "lyon_tessellation",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

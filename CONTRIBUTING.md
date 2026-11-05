@@ -15,6 +15,10 @@ bug reports, ideas, docs, code.
 2. `make dev` runs the app; `make fmt` formats.
 3. `make check` must pass. It's exactly what CI runs.
 4. Keep pull requests focused, and update docs when behavior or design changes.
+5. Title commits and pull requests as a plain sentence that starts with a verb: "Add Arc
+   import", "Fix search for quoted words". Titles become the changelog; "Add", "Fix" and
+   "Remove" get their own sections. Put `[skip changelog]` in the message of a change
+   users won't notice.
 
 ## License of contributions
 

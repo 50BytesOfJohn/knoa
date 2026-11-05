@@ -1,6 +1,7 @@
 //! Knoa: an intelligent, AI-organized bookmark library for the desktop.
 
 mod app;
+mod menus;
 mod paths;
 mod services;
 mod state;

@@ -4,14 +4,14 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Context as _;
 use gpui::{
-    App, AppContext as _, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds,
-    WindowOptions, actions, point, px, size,
+    App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, px, size,
 };
 
 use crate::{
     paths::Paths,
     services::{
         ai, credentials::Credentials, housekeeping, network::Network, organizer::Organizer, sync,
+        updates::Updates,
     },
     state::{
         library::Library,
@@ -22,8 +22,6 @@ use crate::{
 
 pub const APP_NAME: &str = "Knoa";
 const APP_ID: &str = "dev.knoa.Knoa";
-
-actions!(knoa, [Quit]);
 
 pub fn init(cx: &mut App) -> anyhow::Result<()> {
     gpui_component::init(cx);
@@ -47,12 +45,9 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     ai::connect(cx);
     cx.set_global(paths);
 
-    cx.on_action(|_: &Quit, cx| cx.quit());
-    cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
+    Updates::init(cx);
+    crate::menus::init(cx);
     crate::ui::bind_keys(cx);
-    cx.set_menus(vec![
-        Menu::new(APP_NAME).items([MenuItem::action(format!("Quit {APP_NAME}"), Quit)]),
-    ]);
 
     // A single-window app: closing it should end the process.
     cx.on_window_closed(|cx, _window_id| {

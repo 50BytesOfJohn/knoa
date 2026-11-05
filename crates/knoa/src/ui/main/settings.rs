@@ -6,6 +6,7 @@ mod appearance;
 mod form;
 mod general;
 mod nav;
+mod updates;
 mod workspace;
 
 use gpui::{

@@ -40,6 +40,10 @@ futures = "0.3"
 imagesize = "0.15"
 jiff = "0.2"
 notify = "8"
+# Objective-C messaging for the AppKit and Sparkle calls GPUI doesn't wrap. Same majors
+# as GPUI's own, so no second copy is built.
+objc2 = "0.6"
+objc2-foundation = "0.3"
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "json",
