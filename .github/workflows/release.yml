@@ -91,6 +91,7 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: git-cliff
+      - uses: astral-sh/setup-uv@v10
 
       - name: Import the signing certificate
         env:
