@@ -173,6 +173,23 @@ CREATE TABLE deleted_urls (
     PRIMARY KEY (workspace_id, url)
 );
 ",
+    r"
+-- AI usage as daily totals per model, not a log of calls: a few rows a day, whatever the
+-- library's size. `day` is the local date, `YYYY-MM-DD`.
+CREATE TABLE ai_usage (
+    day           TEXT NOT NULL,
+    provider      TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    requests      INTEGER NOT NULL DEFAULT 0,
+    input_tokens  INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost          REAL NOT NULL DEFAULT 0,
+    -- Requests the provider reported no token counts or no cost for.
+    unmetered     INTEGER NOT NULL DEFAULT 0,
+    unpriced      INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, provider, model)
+);
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

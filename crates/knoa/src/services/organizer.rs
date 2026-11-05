@@ -15,7 +15,7 @@ use knoa_store::Job;
 use tokio::runtime::Handle;
 
 use crate::{
-    services::network::Network,
+    services::{network::Network, usage},
     state::library::{Library, SharedStore, lock},
 };
 
@@ -194,6 +194,10 @@ async fn next_wait(store: &SharedStore, cx: &AsyncApp) -> Duration {
 async fn process(job: Job, work: Arc<Work>) -> Outcome {
     let id = job.bookmark.id;
     let outcome = organize_one(&job, &work).await;
+    // After every outcome: a job that failed may still have paid for answers.
+    if let Some(provider) = &work.provider {
+        usage::save(provider, work.store.clone(), &work.background).await;
+    }
     let store = work.store.clone();
     let saved = work
         .background

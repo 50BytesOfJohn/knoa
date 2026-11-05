@@ -3,7 +3,7 @@
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use super::OpenRouter;
+use super::{OpenRouter, ReportedUsage};
 use crate::{Choice, Classifier, Error, Question};
 
 /// Decision models cap the questions per request (64 for some); stay under the lowest.
@@ -14,6 +14,7 @@ const CHOICE_KEY: &str = "choice";
 #[derive(Deserialize)]
 struct Decisions {
     answers: Map<String, Value>,
+    usage: Option<ReportedUsage>,
 }
 
 impl Classifier for OpenRouter {
@@ -24,6 +25,7 @@ impl Classifier for OpenRouter {
             let decisions: Decisions = self
                 .post("/api/alpha/decisions", &yes_no_body(model, state, chunk))
                 .await?;
+            self.record_usage(model, decisions.usage);
             for question in chunk {
                 let p = decisions
                     .answers
@@ -44,6 +46,7 @@ impl Classifier for OpenRouter {
         let decisions: Decisions = self
             .post("/api/alpha/decisions", &choice_body(model, state, choice))
             .await?;
+        self.record_usage(model, decisions.usage);
         let probabilities = decisions
             .answers
             .get(CHOICE_KEY)

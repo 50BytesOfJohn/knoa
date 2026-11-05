@@ -3,13 +3,14 @@
 use serde::Deserialize;
 use serde_json::json;
 
-use super::OpenRouter;
+use super::{OpenRouter, ReportedUsage};
 use crate::{Error, LanguageModel, StructuredReply, StructuredRequest};
 
 #[derive(Deserialize)]
 struct Completion {
     model: String,
     choices: Vec<Choice>,
+    usage: Option<ReportedUsage>,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +66,7 @@ impl OpenRouter {
             "provider": { "require_parameters": true },
         });
         let completion: Completion = self.post("/api/v1/chat/completions", &body).await?;
+        self.record_usage(model, completion.usage);
         let choice = completion
             .choices
             .into_iter()

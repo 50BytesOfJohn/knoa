@@ -114,6 +114,11 @@ Models follow the [enrichment research](research/llm-enrichment.md):
 `openai/gpt-6-luna` with `anthropic/claude-haiku-5.5` as fallback, and
 `perplexity/pplx-decider-v1.2` for kinds and folders.
 
+Each answered AI request's tokens and cost, as far as the provider reports them, are
+added to daily totals per model in the database. Requests reported without tokens or a
+cost are counted, so the AI settings page can say when a total is incomplete. There is no
+per-request log; the provider's own dashboard has that.
+
 Folder "find bookmarks" and re-scan run folder matching over bookmarks that are already
 processed. They only add.
 
