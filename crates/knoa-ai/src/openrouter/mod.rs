@@ -5,10 +5,11 @@ mod decisions;
 
 use std::time::Duration;
 
+use knoa_core::Usage;
 use reqwest::{Client, Response, StatusCode, header};
 use serde::{Deserialize, de::DeserializeOwned};
 
-use crate::Error;
+use crate::{Error, usage::Meter};
 
 const BASE_URL: &str = "https://openrouter.ai";
 
@@ -17,6 +18,7 @@ pub struct OpenRouter {
     api_key: String,
     chat_models: Vec<String>,
     classifier_model: Option<String>,
+    pub(crate) meter: Meter,
 }
 
 impl OpenRouter {
@@ -48,6 +50,7 @@ impl OpenRouter {
             api_key,
             chat_models,
             classifier_model,
+            meter: Meter::default(),
         })
     }
 
@@ -80,6 +83,29 @@ impl OpenRouter {
             .await?;
         read_json(response).await
     }
+
+    /// Recorded under the model asked for: answers name dated snapshots
+    /// (`…-20260917`), which would split one model's usage across many rows.
+    fn record_usage(&self, model: &str, usage: Option<ReportedUsage>) {
+        let usage = usage.unwrap_or_default();
+        self.meter.record(Usage {
+            model: model.to_owned(),
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+            cost: usage.cost,
+        });
+    }
+}
+
+/// The `usage` block of both endpoints. Chat calls them prompt and completion tokens.
+#[derive(Deserialize, Default)]
+struct ReportedUsage {
+    #[serde(alias = "prompt_tokens")]
+    input_tokens: Option<u64>,
+    #[serde(alias = "completion_tokens")]
+    output_tokens: Option<u64>,
+    /// In credits, which are US dollars.
+    cost: Option<f64>,
 }
 
 #[derive(Deserialize)]

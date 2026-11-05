@@ -1,6 +1,6 @@
 //! Long-running work behind the UI: browser sync, the organizing queue, AI connection,
-//! credentials, the network runtime, opening links, cleaning up at launch and software
-//! updates.
+//! credentials, the network runtime, opening links, cleaning up at launch, software
+//! updates and AI usage.
 
 pub mod ai;
 pub mod credentials;
@@ -10,3 +10,4 @@ pub mod network;
 pub mod organizer;
 pub mod sync;
 pub mod updates;
+pub mod usage;

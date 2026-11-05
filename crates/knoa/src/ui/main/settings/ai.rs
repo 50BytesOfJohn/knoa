@@ -1,5 +1,7 @@
-//! The AI page: connecting OpenRouter, the models in use, and organizing the bookmarks
-//! that came in before AI was on.
+//! The AI page: connecting OpenRouter, the models in use, organizing the bookmarks that
+//! came in before AI was on, and what AI has cost.
+
+mod usage;
 
 use gpui::{
     AnyElement, AppContext as _, Context, Div, Entity, IntoElement, ParentElement as _, Render,
@@ -13,8 +15,12 @@ use crate::{
     services::{
         ai,
         organizer::{AiStatus, Organizer},
+        usage::{self as usage_service, UsageReport},
     },
-    state::{library::Library, settings::SettingsFile},
+    state::{
+        library::{Library, LibraryChanged},
+        settings::SettingsFile,
+    },
     ui::{
         components::{Tone, button},
         theme::Theme,
@@ -30,6 +36,9 @@ pub struct AiPage {
     /// The result of the last key check, and whether it failed.
     message: Option<(String, bool)>,
     checking: Option<Task<()>>,
+    /// `None` until the first load, so the page doesn't flash "no requests".
+    usage: Option<UsageReport>,
+    loading_usage: Option<Task<()>>,
 }
 
 impl AiPage {
@@ -46,12 +55,35 @@ impl AiPage {
         cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify())
             .detach();
         cx.observe(&library, |_, _, cx| cx.notify()).detach();
-        AiPage {
+        // The library refreshes after every organized bookmark, which is when usage grows.
+        cx.subscribe(&library, |this, _, _: &LibraryChanged, cx| {
+            this.load_usage(cx);
+        })
+        .detach();
+        let mut page = AiPage {
             library,
             key,
             message: None,
             checking: None,
-        }
+            usage: None,
+            loading_usage: None,
+        };
+        page.load_usage(cx);
+        page
+    }
+
+    fn load_usage(&mut self, cx: &mut Context<'_, AiPage>) {
+        let load = usage_service::load(self.library.read(cx).store(), cx);
+        self.loading_usage = Some(cx.spawn(async move |this, cx| {
+            let report = load.await;
+            let _ = this.update(cx, |this, cx| match report {
+                Ok(report) => {
+                    this.usage = Some(report);
+                    cx.notify();
+                }
+                Err(err) => tracing::error!("can't load AI usage: {err}"),
+            });
+        }));
     }
 
     fn connect(&mut self, cx: &mut Context<'_, AiPage>) {
@@ -106,6 +138,13 @@ impl Render for AiPage {
                 .child(self.provider_group(&status, &theme, cx))
                 .child(self.backlog_group(&theme, cx)),
         };
+        // Usage from before a disconnect still counts, so it stays visible while AI is off.
+        let connected = SettingsFile::get(cx).ai.as_ref().map(|c| c.kind);
+        if let Some(report) = &self.usage
+            && (connected.is_some() || !report.is_empty())
+        {
+            page = page.children(usage::groups(report, connected, &theme, cx));
+        }
         page
     }
 }

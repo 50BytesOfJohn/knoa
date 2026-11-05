@@ -1,8 +1,10 @@
 //! Choosing an AI provider from settings.
 //!
 //! Adding a provider means a new `ProviderKind`, a module implementing `LanguageModel`
-//! (and `Classifier` if it has one), and a match arm in each `Provider` method.
+//! (and `Classifier` if it has one) that records each answered request's usage in a
+//! `Meter`, and a match arm in each `Provider` method.
 
+use knoa_core::Usage;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,6 +23,20 @@ impl ProviderKind {
     pub fn name(self) -> &'static str {
         match self {
             ProviderKind::OpenRouter => "OpenRouter",
+        }
+    }
+
+    /// The stable id, as in the settings file and stored usage.
+    pub fn id(self) -> &'static str {
+        match self {
+            ProviderKind::OpenRouter => "openrouter",
+        }
+    }
+
+    /// Where the user sees the provider's own record of spending.
+    pub fn activity_url(self) -> &'static str {
+        match self {
+            ProviderKind::OpenRouter => "https://openrouter.ai/activity",
         }
     }
 
@@ -91,6 +107,20 @@ impl Provider {
     pub fn classifier(&self) -> Option<&Self> {
         match self {
             Provider::OpenRouter(p) => p.has_classifier().then_some(self),
+        }
+    }
+
+    pub fn kind(&self) -> ProviderKind {
+        match self {
+            Provider::OpenRouter(_) => ProviderKind::OpenRouter,
+        }
+    }
+
+    /// What the requests made since the last call used. Requests that failed outright
+    /// aren't billed, so they aren't here.
+    pub fn take_usage(&self) -> Vec<Usage> {
+        match self {
+            Provider::OpenRouter(p) => p.meter.take(),
         }
     }
 }
