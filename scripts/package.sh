@@ -7,6 +7,8 @@
 #   Notary credentials, one of:
 #     KNOA_NOTARY_PROFILE                                a `notarytool store-credentials` profile
 #     NOTARY_KEY_PATH, NOTARY_KEY_ID, NOTARY_ISSUER_ID   an App Store Connect API key
+#
+# Needs uv (https://docs.astral.sh/uv), which runs dmgbuild to lay out the DMG window.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,13 +28,9 @@ rm -rf "$DIST"
 mkdir -p "$DIST"
 
 # The DMG opens to the app beside a link to Applications, the usual drag-to-install window.
+# scripts/dmg.py lays it out.
 make_dmg() {
-    local staging
-    staging=$(mktemp -d)
-    ditto "$APP" "$staging/Knoa.app"
-    ln -s /Applications "$staging/Applications"
-    hdiutil create -quiet -volname Knoa -srcfolder "$staging" -format UDZO -ov "$DIST/Knoa.dmg"
-    rm -rf "$staging"
+    uvx --from dmgbuild==1.6.7 dmgbuild -s scripts/dmg.py -D app="$APP" Knoa "$DIST/Knoa.dmg"
     codesign --sign "$KNOA_SIGN_IDENTITY" --timestamp "$DIST/Knoa.dmg"
 }
 
