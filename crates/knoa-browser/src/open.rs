@@ -4,22 +4,51 @@ use std::process::Command;
 
 use crate::{Error, ProfileId};
 
+/// Whether opening a link brings the browser to the front.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Activation {
+    Foreground,
+    /// The browser opens the link but Knoa stays in front, like a background tab.
+    Background,
+}
+
+impl Activation {
+    fn flags(self) -> &'static [&'static str] {
+        match self {
+            Activation::Foreground => &[],
+            Activation::Background => &["-g"],
+        }
+    }
+}
+
+/// Opens `url` in the default browser.
+pub fn open_in_default(url: &str, activation: Activation) -> Result<(), Error> {
+    run(Command::new("open").args(activation.flags()).arg(url))
+}
+
 /// Opens `url` in the given profile, starting the browser if it isn't running.
 ///
 /// A profile that no longer exists is an error rather than a silent no-op: Chromium would
 /// create a fresh, empty profile with that name.
-pub fn open_in_profile(url: &str, profile: &ProfileId) -> Result<(), Error> {
+pub fn open_in_profile(
+    url: &str,
+    profile: &ProfileId,
+    activation: Activation,
+) -> Result<(), Error> {
     if is_missing(profile) {
         return Err(Error::MissingProfile(profile.clone()));
     }
     // `-n` starts a second process even when the browser is running, so it gets our
     // arguments; Chromium then hands them to the running instance and exits.
-    let status = Command::new("open")
+    run(Command::new("open")
+        .args(activation.flags())
         .args(["-n", "-b", profile.browser.bundle_id(), "--args"])
         .arg(format!("--profile-directory={}", profile.dir))
-        .arg(url)
-        .status()
-        .map_err(Error::Open)?;
+        .arg(url))
+}
+
+fn run(command: &mut Command) -> Result<(), Error> {
+    let status = command.status().map_err(Error::Open)?;
     if status.success() {
         Ok(())
     } else {

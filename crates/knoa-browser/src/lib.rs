@@ -13,7 +13,7 @@ pub use bookmarks::{BookmarksFile, read_bookmarks};
 pub use browser::{
     Browser, FULL_DISK_ACCESS_SETTINGS, Profile, ProfileId, blocked_browsers, discover_profiles,
 };
-pub use open::open_in_profile;
+pub use open::{Activation, open_in_default, open_in_profile};
 pub use watch::{Watcher, watch};
 
 #[derive(Debug, thiserror::Error)]

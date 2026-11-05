@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knoa Wordmark</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --card: #fbfaf6;
+    --line: #e4dfd3;
+    --text: #2a2723;
+    --muted: #7d766a;
+    --ink: #1f1d1a;
+    --accent: #e0573c;
+    --rule: #b9cde3;
+    --margin: #e6a3a3;
+    --w: 5;
+  }
+  [data-theme="light"] { --bg: #f5f5f7; --card: #ffffff; --line: #e3e3e8; --text: #1d1d1f; --muted: #6e6e73; --rule: #cfdcec; }
+  [data-theme="dark"] { --bg: #18181a; --card: #222225; --line: #333337; --text: #ececee; --muted: #9a9aa0; --rule: #34465c; --margin: #6e3a3a; }
+  [data-theme="dark"] .ink-swatch[data-ink="#1f1d1a"] { outline-color: #555; }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    transition: background .2s, color .2s;
+  }
+  header { padding: 40px 32px 8px; max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+  h2 { font-size: 15px; margin: 40px 0 12px; }
+  .lede { color: var(--muted); margin: 0; max-width: 70ch; }
+  main { max-width: 1280px; margin: 0 auto; padding: 0 32px 64px; }
+
+  .toolbar {
+    position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
+    padding: 12px 32px; margin: 16px auto 8px; max-width: 1280px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .group { display: flex; gap: 8px; align-items: center; }
+  .group > span { color: var(--muted); font-size: 12px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; background: transparent; color: var(--text); padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+  .swatch { width: 20px; height: 20px; border-radius: 50%; border: 0; cursor: pointer; outline: 2px solid transparent; outline-offset: 2px; }
+  .swatch[aria-pressed="true"] { outline-color: var(--text); }
+  input[type=range] { width: 90px; accent-color: var(--text); }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 7px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .btn:hover { border-color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .stage { aspect-ratio: 16 / 9; display: grid; place-items: center; padding: 12px; cursor: pointer; }
+  .stage svg { width: 100%; height: 100%; overflow: visible; }
+  .meta { padding: 12px 16px 14px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+  .meta b { font-size: 13px; }
+  .meta b small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+  .meta p { margin: 0; color: var(--muted); font-size: 12.5px; grid-column: 1; }
+  .meta .actions { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: start; }
+
+  /* Shared drawing styles: every variant uses these classes so the toolbar restyles all at once. */
+  .ink { fill: none; stroke: var(--ink); stroke-width: var(--w); stroke-linecap: round; stroke-linejoin: round; }
+  .nib { fill: none; stroke: var(--ink); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .acc-s { fill: none; stroke: var(--accent); stroke-width: var(--w); stroke-linecap: round; stroke-linejoin: round; }
+  .acc-f { fill: var(--accent); }
+  .marker { stroke: var(--accent); stroke-width: calc(var(--w) * 2); }
+  .pencil { stroke: color-mix(in srgb, var(--ink) 78%, transparent); stroke-width: calc(var(--w) * .55); }
+  .hl { fill: none; stroke: var(--accent); stroke-width: 24; stroke-linecap: round; opacity: .28; }
+  [data-theme="dark"] .hl { opacity: .38; }
+  .rule { fill: none; stroke: var(--rule); stroke-width: 1; }
+  .margin { fill: none; stroke: var(--margin); stroke-width: 1; }
+  .paper { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+  .fold { fill: var(--line); }
+
+  /* In-context mocks */
+  .context { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .context { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
+  .window { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: grid; grid-template-columns: 200px 1fr; min-height: 300px; }
+  .sidebar { border-right: 1px solid var(--line); padding: 12px; background: color-mix(in srgb, var(--bg) 60%, var(--card)); }
+  .lights { display: flex; gap: 7px; margin-bottom: 14px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+  .sidebar .mark { height: 30px; margin: 0 0 14px 2px; }
+  .sidebar .mark svg { height: 100%; width: auto; overflow: visible; }
+  .sidebar .item { height: 22px; border-radius: 5px; margin: 6px 0; background: var(--line); opacity: .6; }
+  .sidebar .item:nth-child(odd) { width: 70%; } .sidebar .item:nth-child(even) { width: 85%; }
+  .content { padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; align-content: start; }
+  .content i { aspect-ratio: 4/3; border-radius: 8px; background: var(--line); opacity: .5; }
+  .hero { background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: grid; place-items: center; padding: 24px; text-align: center; gap: 4px; }
+  .hero svg { width: 80%; overflow: visible; }
+  .hero p { margin: 0; color: var(--muted); font-size: 13px; }
+  .icons { display: flex; gap: 20px; align-items: end; flex-wrap: wrap; }
+  .icon { width: 128px; height: 128px; border-radius: 28px; display: grid; place-items: center; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.10); }
+  .icon svg { width: 72%; height: 72%; overflow: visible; }
+  .icon.s { width: 64px; height: 64px; border-radius: 14px; } .icon.xs { width: 32px; height: 32px; border-radius: 7px; }
+  .note { color: var(--muted); font-size: 12.5px; max-width: 80ch; }
+  select { font: inherit; font-size: 12px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 6px 12px; border-radius: 8px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.on { opacity: 1; }
+</style>
+</head>
+<body data-theme="paper">
+
+<header>
+  <h1>Knoa: handwritten wordmark</h1>
+  <p class="lede">Each variant is drawn from single centre-line strokes, so it can be written on stroke by stroke, the way a pen would. Click a card to replay it. The toolbar restyles every card, so you can compare ink, accent and weight side by side.</p>
+</header>
+
+<div class="toolbar">
+  <div class="group"><span>Theme</span>
+    <div class="seg" id="theme">
+      <button data-v="paper" aria-pressed="true">Paper</button><button data-v="light">Light</button><button data-v="dark">Dark</button>
+    </div>
+  </div>
+  <div class="group" id="inks"><span>Ink</span></div>
+  <div class="group" id="accents"><span>Accent</span></div>
+  <div class="group"><span>Weight</span><input type="range" id="weight" min="2.5" max="9" step=".5" value="5"></div>
+  <div class="group"><span>Speed</span><input type="range" id="speed" min=".4" max="2.5" step=".1" value="1"></div>
+  <button class="btn" id="replay">Replay all</button>
+</div>
+
+<main>
+  <h2>Variants</h2>
+  <div class="grid" id="grid"></div>
+
+  <h2>In context</h2>
+  <div class="group" style="margin-bottom:12px"><span>Variant</span><select id="ctxPick"></select></div>
+  <div class="context">
+    <div class="window">
+      <div class="sidebar">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <div class="mark" id="ctxSidebar"></div>
+        <div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div><div class="item"></div>
+      </div>
+      <div class="content"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="hero" id="ctxHeroWrap">
+      <div id="ctxHero" style="width:100%"></div>
+      <p>First launch: the name writes itself while the library imports.</p>
+    </div>
+  </div>
+
+  <h2>Monogram for the app icon</h2>
+  <div class="icons" id="icons"></div>
+  <p class="note">The K from the cursive wordmark on its own, with the ribbon tucked behind it. Shown at 128, 64 and 32 px to check it still reads small.</p>
+</main>
+
+<div class="toast" id="toast">SVG copied</div>
+
+<script>
+// ---------- Letterforms ----------
+// Every path is a centre line for a pen to follow. Strokes are drawn in document order.
+
+// Cursive, upright. Baseline y≈120, x-height y≈82, cap y≈32.
+const CURSIVE = {
+  vb: "28 12 266 136",
+  k: "M64 32 C62 62 57 95 52 122",
+  rest: "M100 32 C86 50 72 66 57 76 C70 80 80 100 90 115 C95 122 101 121 106 114 C110 100 113 90 116 82 C116 96 114 108 112 120 C116 96 126 82 136 82 C146 82 146 96 144 108 C143 116 148 120 156 116 C164 112 172 92 188 82 C174 80 168 98 170 110 C172 122 188 124 196 112 C203 100 200 82 188 82 C196 86 214 86 236 82 C220 80 212 96 214 108 C216 122 234 122 242 102 C244 94 246 86 246 82 C244 98 242 114 248 119 C254 124 264 116 272 108",
+};
+
+// Signature: slanted, looped K, and the a's tail swings back under the word.
+const SIGNATURE = {
+  k: "M38 52 C42 30 70 20 74 32 C72 64 64 98 56 126",
+  rest: "M110 26 C94 46 78 64 62 76 C76 72 84 88 92 106 C98 120 104 124 112 116 C116 102 118 92 120 84 C120 98 118 110 116 120 C120 98 130 84 140 84 C150 84 150 98 148 110 C147 118 152 122 160 118 C168 114 176 94 192 84 C178 82 172 100 174 112 C176 124 192 126 200 114 C207 102 204 84 192 84 C200 88 218 88 240 84 C224 82 216 98 218 110 C220 124 238 124 246 104 C248 96 250 88 250 84 C248 100 246 116 252 121 C258 126 272 122 284 108 C294 96 298 128 266 138 C226 148 120 146 48 136",
+};
+
+// Print: separate, upright letters, like a careful note in a notebook.
+const PRINT = [
+  "M70 34 C69 64 68 94 67 122",
+  "M104 36 C92 52 82 64 69 80",
+  "M80 72 C90 90 100 106 112 121",
+  "M128 84 C128 96 128 108 127 121 M128 96 C132 86 140 82 147 83 C156 85 157 94 157 104 C157 110 157 116 158 121",
+  "M196 86 C182 78 170 90 172 106 C174 122 194 126 202 110 C208 96 202 82 188 82",
+  "M252 92 C246 82 230 80 222 92 C214 104 220 122 234 122 C246 122 252 108 252 96 M253 82 C253 96 252 110 255 122",
+];
+
+const ink = (d, cls = "ink") => `<path class="${cls}" data-draw d="${d}"/>`;
+const cursive = () => ink(CURSIVE.k) + ink(CURSIVE.rest);
+const sparkle = (x, y, r) =>
+  `<path class="acc-f" data-pop="spark" transform="translate(${x} ${y}) scale(${r / 10})" d="M0 -10 C1.2 -2.6 2.6 -1.2 10 0 C2.6 1.2 1.2 2.6 0 10 C-1.2 2.6 -2.6 1.2 -10 0 C-2.6 -1.2 -1.2 -2.6 0 -10Z"/>`;
+const ribbon = (x, y, w, h) =>
+  `<path class="acc-f" data-pop="drop" d="M${x} ${y} H${x + w} V${y + h} L${x + w / 2} ${y + h - w * 0.55} L${x} ${y + h} Z"/>`;
+
+// A broad nib: thin copies of the same stroke offset along the nib angle, drawn in sync.
+const nib = (d) => {
+  let out = "";
+  for (let i = 0; i < 6; i++) {
+    const o = (i - 2.5) * 0.95;
+    out += `<path class="nib" ${i ? "data-draw data-sync" : "data-draw"} transform="translate(${o} ${-o})" d="${d}"/>`;
+  }
+  return out;
+};
+
+// ---------- Variants ----------
+const VARIANTS = [
+  {
+    id: "ink", name: "Ink", tag: "base",
+    idea: "The plain cursive. One lift after the K, then n-o-a in a single stroke. Everything else builds on this.",
+    vb: CURSIVE.vb, svg: cursive,
+  },
+  {
+    id: "ribbon", name: "Ribbon", tag: "bookmark",
+    idea: "The underline is a page edge; a bookmark ribbon slips down from it once the word is written.",
+    vb: "28 12 266 160",
+    svg: () => cursive() + ink("M50 136 C110 132 190 131 276 134") + ribbon(236, 134, 13, 30),
+  },
+  {
+    id: "spark", name: "Spark", tag: "AI",
+    idea: "A small four-point spark lands after the a: the nod to Knoa organising things for you. Quiet enough to keep.",
+    vb: CURSIVE.vb,
+    svg: () => cursive() + sparkle(282, 76, 9) + sparkle(268, 58, 4.5),
+  },
+  {
+    id: "highlight", name: "Highlight", tag: "library",
+    idea: "A marker swipe goes down first, then the ink. Like highlighting the line in a book you want to come back to.",
+    vb: CURSIVE.vb,
+    svg: () => `<path class="hl" data-draw d="M100 104 C150 99 220 99 276 101"/>` + cursive(),
+  },
+  {
+    id: "found", name: "Found", tag: "search",
+    idea: "The o grows a short handle and becomes a lens: finding things is the point of the app. Accent glint inside.",
+    vb: CURSIVE.vb,
+    svg: () => cursive() + ink("M199 117 L208 130") + `<path class="acc-s" data-draw style="stroke-width:2.4" d="M177 101 C177 95 180 91 185 90"/>`,
+  },
+  {
+    id: "signature", name: "Signature", tag: "personal",
+    idea: "Slanted and fast, with a looped K and a tail that swings back under the name. Feels like a personal library.",
+    vb: "18 10 296 144",
+    svg: () => `<g transform="skewX(-12) translate(26 0)">${ink(SIGNATURE.k)}${ink(SIGNATURE.rest)}</g>`,
+  },
+  {
+    id: "signature-ribbon", name: "Signature + ribbon", tag: "bookmark",
+    idea: "The signature swash ends where a ribbon hangs off it. The most expressive of the set.",
+    vb: "18 10 296 166",
+    svg: () => `<g transform="skewX(-12) translate(26 0)">${ink(SIGNATURE.k)}${ink(SIGNATURE.rest)}</g>` + ribbon(84, 140, 12, 28),
+  },
+  {
+    id: "nib", name: "Broad nib", tag: "calligraphy",
+    idea: "The same signature drawn with a slanted nib, so thick and thin come from the pen angle, not from a font.",
+    vb: "18 10 296 144",
+    svg: () => `<g transform="skewX(-12) translate(26 0)">${nib(SIGNATURE.k)}${nib(SIGNATURE.rest)}</g>`,
+  },
+  {
+    id: "card", name: "Catalogue card", tag: "library",
+    idea: "Printed letters on a ruled index card with a dog-ear: the old library card catalogue Knoa replaces.",
+    vb: "20 8 290 152",
+    svg: () =>
+      `<path class="paper" d="M30 18 H282 L298 34 V150 H30 Z"/><path class="fold" d="M282 18 V34 H298 Z"/>` +
+      [58, 90, 122].map((y) => `<path class="rule" data-draw data-fast d="M30 ${y} H298"/>`).join("") +
+      `<path class="margin" data-draw data-fast d="M52 18 V150"/>` +
+      PRINT.map((d) => ink(d)).join(""),
+  },
+  {
+    id: "pencil", name: "Pencil", tag: "sketch",
+    idea: "Thin graphite with a little grain and wobble, as if jotted in a margin. Honest and unpolished, good for an alpha.",
+    vb: CURSIVE.vb,
+    svg: () => `<filter id="grain" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="1.6"/></filter>` +
+      `<g filter="url(#grain)">${ink(CURSIVE.k, "ink pencil")}${ink(CURSIVE.rest, "ink pencil")}</g>`,
+  },
+  {
+    id: "marker", name: "Marker", tag: "playful",
+    idea: "A fat felt-tip in the accent colour. Loud and friendly; works as a splash on the website more than in the app.",
+    vb: CURSIVE.vb,
+    svg: () => ink(CURSIVE.k, "ink marker") + ink(CURSIVE.rest, "ink marker"),
+  },
+  {
+    id: "stop", name: "Full stop", tag: "minimal",
+    idea: "Knoa, full stop. One accent dot drops in after the a. Calm and confident, and it scales down well.",
+    vb: CURSIVE.vb,
+    svg: () => cursive() + `<circle class="acc-f" data-pop="bounce" cx="284" cy="117" r="5"/>`,
+  },
+];
+
+// ---------- Drawing ----------
+const state = { speed: 1 };
+const PEN_SPEED = 0.32; // viewBox units per ms at speed 1
+const PEN_LIFT = 140; // ms between strokes
+
+function play(svg) {
+  svg.getAnimations({ subtree: true }).forEach((a) => a.cancel());
+  let t = 120, lastStart = 0, lastDur = 0;
+  for (const el of svg.querySelectorAll("[data-draw],[data-pop]")) {
+    if (el.hasAttribute("data-draw")) {
+      const len = el.getTotalLength();
+      const fast = el.hasAttribute("data-fast") ? 4 : 1;
+      const dur = len / (PEN_SPEED * state.speed * fast);
+      const start = el.hasAttribute("data-sync") ? lastStart : t;
+      el.style.strokeDasharray = `${len} ${len}`;
+      el.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+        { duration: el.hasAttribute("data-sync") ? lastDur : dur, delay: start, fill: "both", easing: "cubic-bezier(.35,.05,.55,.95)" });
+      if (!el.hasAttribute("data-sync")) { lastStart = start; lastDur = dur; t = start + dur + (fast > 1 ? 30 : PEN_LIFT); }
+    } else {
+      const kind = el.dataset.pop;
+      el.style.transformBox = "fill-box";
+      el.style.transformOrigin = kind === "drop" ? "50% 0" : "50% 50%";
+      const frames = {
+        spark: [{ opacity: 0, scale: 0, rotate: "-90deg" }, { opacity: 1, scale: 1.25, rotate: "10deg", offset: .7 }, { opacity: 1, scale: 1, rotate: "0deg" }],
+        drop: [{ scale: "1 0" }, { scale: "1 1.08", offset: .75 }, { scale: "1 1" }],
+        bounce: [{ opacity: 0, translate: "0 -18px" }, { opacity: 1, translate: "0 0", offset: .55 }, { translate: "0 -4px", offset: .75 }, { translate: "0 0" }],
+      }[kind];
+      const dur = 520 / state.speed;
+      el.animate(frames, { duration: dur, delay: t, fill: "both", easing: "cubic-bezier(.3,.7,.4,1)" });
+      t += dur * 0.6;
+    }
+  }
+}
+
+function makeSvg(v) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${v.vb}" role="img" aria-label="Knoa">${v.svg()}</svg>`;
+  return wrap.firstChild;
+}
+
+// Inline the current colours so the copied SVG stands alone.
+function exportSvg(svg) {
+  const clone = svg.cloneNode(true);
+  const src = svg.querySelectorAll("*"), dst = clone.querySelectorAll("*");
+  src.forEach((el, i) => {
+    const cs = getComputedStyle(el), out = dst[i];
+    out.removeAttribute("style"); out.removeAttribute("class");
+    for (const k of ["data-draw", "data-pop", "data-sync", "data-fast"]) out.removeAttribute(k);
+    if (el.tagName === "g") return;
+    for (const p of ["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "opacity"]) {
+      const val = cs.getPropertyValue(p);
+      if (val && val !== "none" || p === "fill") out.setAttribute(p, val === "rgba(0, 0, 0, 0)" ? "none" : val);
+    }
+  });
+  return clone.outerHTML;
+}
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  setTimeout(() => t.classList.remove("on"), 1300);
+}
+
+// ---------- Build page ----------
+const grid = document.getElementById("grid");
+const allSvgs = [];
+for (const v of VARIANTS) {
+  const card = document.createElement("article");
+  card.className = "card";
+  card.innerHTML = `<div class="stage" title="Click to replay"></div>
+    <div class="meta"><b>${v.name}<small>${v.tag}</small></b><p>${v.idea}</p>
+    <div class="actions"><button class="btn" data-a="play">Replay</button><button class="btn" data-a="copy">Copy SVG</button></div></div>`;
+  const svg = makeSvg(v);
+  card.querySelector(".stage").append(svg);
+  card.querySelector(".stage").onclick = () => play(svg);
+  card.querySelector('[data-a="play"]').onclick = () => play(svg);
+  card.querySelector('[data-a="copy"]').onclick = async () => {
+    try { await navigator.clipboard.writeText(exportSvg(svg)); toast(`${v.name} SVG copied`); }
+    catch { toast("Clipboard blocked by the browser"); }
+  };
+  grid.append(card);
+  allSvgs.push(svg);
+}
+
+// In-context mocks
+const pick = document.getElementById("ctxPick");
+VARIANTS.forEach((v) => pick.add(new Option(v.name, v.id)));
+pick.value = "stop";
+function renderContext() {
+  const v = VARIANTS.find((x) => x.id === pick.value);
+  const side = makeSvg(v), hero = makeSvg(v);
+  side.style.setProperty("--w", "9");
+  document.getElementById("ctxSidebar").replaceChildren(side);
+  document.getElementById("ctxHero").replaceChildren(hero);
+  play(side); play(hero);
+}
+pick.onchange = renderContext;
+document.getElementById("ctxHeroWrap").onclick = () => play(document.querySelector("#ctxHero svg"));
+
+// Monogram icons
+const MONO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="34 14 92 120">
+  ${ribbon(108, 14, 14, 46)}
+  <path class="ink" data-draw style="stroke-width:10" d="${CURSIVE.k}"/>
+  <path class="ink" data-draw style="stroke-width:10" d="M100 32 C86 50 72 66 57 76 C70 80 80 100 90 115 C95 122 101 121 106 114"/>
+</svg>`;
+const icons = document.getElementById("icons");
+for (const size of ["", "s", "xs"]) {
+  const d = document.createElement("div");
+  d.className = `icon ${size}`;
+  d.style.background = "var(--card)";
+  d.innerHTML = MONO;
+  icons.append(d);
+}
+
+// ---------- Toolbar ----------
+const INKS = ["#1f1d1a", "#24396b", "#5b3a29", "#2f4a3a"];
+const ACCENTS = ["#e0573c", "#e8a33d", "#3f7de0", "#8a5cd6", "#2fa37a"];
+function swatches(id, list, varName) {
+  const g = document.getElementById(id);
+  list.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.className = "swatch" + (id === "inks" ? " ink-swatch" : "");
+    b.style.background = c; b.dataset.ink = c; b.title = c;
+    b.setAttribute("aria-pressed", i === 0);
+    b.onclick = () => {
+      g.querySelectorAll(".swatch").forEach((s) => s.setAttribute("aria-pressed", s === b));
+      document.documentElement.style.setProperty(varName, c);
+    };
+    g.append(b);
+  });
+}
+swatches("inks", INKS, "--ink");
+swatches("accents", ACCENTS, "--accent");
+
+document.getElementById("theme").onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.body.dataset.theme = b.dataset.v;
+  e.currentTarget.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  // Dark ink on a dark page is invisible; flip to a light ink unless one was picked.
+  const darkInk = INKS[0];
+  const cur = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
+  if (b.dataset.v === "dark" && (cur === "" || cur === darkInk)) document.documentElement.style.setProperty("--ink", "#f1ede4");
+  if (b.dataset.v !== "dark" && cur === "#f1ede4") document.documentElement.style.setProperty("--ink", darkInk);
+};
+document.getElementById("weight").oninput = (e) => document.documentElement.style.setProperty("--w", e.target.value);
+document.getElementById("speed").oninput = (e) => (state.speed = +e.target.value);
+const replayAll = () => { allSvgs.forEach(play); renderContext(); icons.querySelectorAll("svg").forEach(play); };
+document.getElementById("replay").onclick = replayAll;
+
+// Start the cards as they scroll into view, so each one is seen being written.
+const io = new IntersectionObserver((entries) => entries.forEach((en) => {
+  if (en.isIntersecting) { play(en.target.querySelector("svg")); io.unobserve(en.target); }
+}), { threshold: .5 });
+document.querySelectorAll(".stage").forEach((s) => io.observe(s));
+renderContext();
+icons.querySelectorAll("svg").forEach(play);
+</script>
+</body>
+</html>

@@ -7,12 +7,13 @@ use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
+use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId, Place};
 
 use super::{
     MainView, cards,
     groups::{self, Group},
-    masonry::{Layout, Spec},
+    masonry::{Layout, Placed, Spec},
     search::SEARCH_AREA_HEIGHT,
     trash::TRASH_BAR_HEIGHT,
 };
@@ -117,22 +118,7 @@ impl MainView {
             let Some(bookmark) = results.get(placed.index) else {
                 continue;
             };
-            let id = bookmark.id;
-            let card = cards::render(bookmark, placed.width, show_summaries, cx);
-            canvas = canvas.child(
-                div()
-                    .absolute()
-                    .top(px(placed.y))
-                    .left(px(placed.x))
-                    .w(px(placed.width))
-                    .child(
-                        cards::interactive(placed.index, card, placed.height, &theme).on_click(
-                            cx.listener(move |this, event: &ClickEvent, window, cx| {
-                                this.click_card(id, event, window, cx);
-                            }),
-                        ),
-                    ),
-            );
+            canvas = canvas.child(self.placed_card(bookmark, placed, show_summaries, &theme, cx));
         }
 
         let body: AnyElement = if results.is_empty() {
@@ -160,6 +146,7 @@ impl MainView {
                     .on_action(cx.listener(Self::move_up))
                     .on_action(cx.listener(Self::move_down))
                     .on_action(cx.listener(Self::open_selected))
+                    .on_action(cx.listener(Self::open_selected_in_background))
                     .on_action(cx.listener(Self::toggle_detail))
                     .on_action(cx.listener(Self::toggle_up_next))
                     .on_action(cx.listener(Self::copy_link))
@@ -226,6 +213,42 @@ impl MainView {
         };
     }
 
+    fn placed_card(
+        &self,
+        bookmark: &Bookmark,
+        placed: &Placed,
+        show_summaries: bool,
+        theme: &Theme,
+        cx: &mut Context<'_, MainView>,
+    ) -> impl IntoElement {
+        let id = bookmark.id;
+        let card = cards::render(bookmark, placed.width, show_summaries, cx);
+        let on_click = move |this: &mut MainView,
+                             event: &ClickEvent,
+                             window: &mut Window,
+                             cx: &mut Context<'_, MainView>| {
+            this.click_card(id, event, window, cx);
+        };
+        div()
+            .absolute()
+            .top(px(placed.y))
+            .left(px(placed.x))
+            .w(px(placed.width))
+            .child(
+                cards::interactive(placed.index, card, placed.height, theme)
+                    .on_click(cx.listener(on_click))
+                    .on_aux_click(cx.listener(on_click))
+                    .child(
+                        cards::open_button(placed.index, theme).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.open_bookmark(id, Activation::Foreground, cx);
+                            },
+                        )),
+                    ),
+            )
+    }
+
     fn click_card(
         &mut self,
         id: BookmarkId,
@@ -234,13 +257,13 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) {
         self.cards_focus.focus(window, cx);
-        if event.click_count() >= 2 {
-            if let Some(url) = self.library.read(cx).bookmark(id).map(|b| b.url.clone()) {
-                self.open_link(&url, cx);
-            }
-            return;
+        if let Some(activation) = new_tab_activation(event) {
+            self.open_bookmark(id, activation, cx);
+        } else if event.standard_click() && event.click_count() >= 2 {
+            self.open_bookmark(id, Activation::Foreground, cx);
+        } else if event.standard_click() {
+            self.select(id, cx);
         }
-        self.select(id, cx);
     }
 
     fn shows_trash_bar(&self, cx: &Context<'_, MainView>) -> bool {
@@ -292,6 +315,9 @@ impl MainView {
                     .child(site_mark(&bookmark.site, px(20.), cx))
                     .child(div().text_xs().line_clamp(2).child(bookmark.title.clone()))
                     .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                        this.click_card(id, event, window, cx);
+                    }))
+                    .on_aux_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                         this.click_card(id, event, window, cx);
                     })),
             );
@@ -463,4 +489,19 @@ impl MainView {
             )
             .child(div().text_sm().max_w(px(360.)).text_center().child(body))
     }
+}
+
+/// Clicks that open a link in a new tab in a browser open the bookmark straight away:
+/// Cmd-click and middle-click leave Knoa in front, and adding Shift brings the browser up.
+fn new_tab_activation(event: &ClickEvent) -> Option<Activation> {
+    let modifiers = event.modifiers();
+    let new_tab_click = event.is_middle_click() || (event.standard_click() && modifiers.platform);
+    if !new_tab_click {
+        return None;
+    }
+    Some(if modifiers.shift {
+        Activation::Foreground
+    } else {
+        Activation::Background
+    })
 }

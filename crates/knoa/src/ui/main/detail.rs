@@ -5,6 +5,7 @@ use gpui::{
     ParentElement as _, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window,
     div, img, prelude::FluentBuilder as _, px,
 };
+use knoa_browser::Activation;
 use knoa_core::{Bookmark, Origin, Status};
 
 use super::MainView;
@@ -361,7 +362,9 @@ impl MainView {
             .child(
                 button("open", "Open  ↵", Tone::Primary, cx)
                     .flex_1()
-                    .on_click(cx.listener(move |this, _, _, cx| this.open_link(&url, cx))),
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.open_link(&url, Activation::Foreground, cx);
+                    })),
             )
             .child(
                 button(

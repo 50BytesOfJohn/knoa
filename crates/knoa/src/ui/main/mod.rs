@@ -8,6 +8,7 @@ mod folder_editor;
 mod groups;
 mod masonry;
 mod navigation;
+mod opening;
 mod overlay;
 mod search;
 mod settings_panel;
@@ -15,6 +16,8 @@ mod sidebar;
 mod trash;
 mod workspace_editor;
 mod workspaces;
+
+use std::time::Instant;
 
 use gpui::{
     App, AppContext as _, ClipboardItem, Context, Entity, FocusHandle, Focusable as _,
@@ -25,7 +28,7 @@ use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
 
 use crate::{
-    services::{links, organizer::Organizer},
+    services::organizer::Organizer,
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -46,6 +49,7 @@ actions!(
         MoveUp,
         MoveDown,
         OpenSelected,
+        OpenSelectedInBackground,
         ToggleDetail,
         ToggleUpNext,
         CopyLink,
@@ -65,6 +69,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("up", MoveUp, cards),
         KeyBinding::new("down", MoveDown, cards),
         KeyBinding::new("enter", OpenSelected, cards),
+        KeyBinding::new("cmd-o", OpenSelected, cards),
+        KeyBinding::new("cmd-down", OpenSelected, cards),
+        KeyBinding::new("cmd-enter", OpenSelectedInBackground, cards),
         KeyBinding::new("space", ToggleDetail, cards),
         KeyBinding::new("l", ToggleUpNext, cards),
         KeyBinding::new("cmd-c", CopyLink, cards),
@@ -101,6 +108,8 @@ pub struct MainView {
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
     layout: LayoutCache,
+    /// Until when Knoa takes focus back from a browser it opened a link in behind itself.
+    keep_focus_until: Option<Instant>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -127,6 +136,7 @@ impl MainView {
                 this.on_library_changed(cx);
             }),
             cx.observe(&organizer, |_, _, cx| cx.notify()),
+            cx.observe_window_activation(window, Self::keep_focus),
         ];
         let cards_focus = cx.focus_handle();
         cards_focus.focus(window, cx);
@@ -141,6 +151,7 @@ impl MainView {
             overlay: None,
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
+            keep_focus_until: None,
             _subscriptions: subscriptions,
         }
     }
@@ -312,26 +323,6 @@ impl MainView {
     fn toggle_detail(&mut self, _: &ToggleDetail, _: &mut Window, cx: &mut Context<'_, MainView>) {
         self.detail_open = !self.detail_open && self.selected.is_some();
         cx.notify();
-    }
-
-    fn open_selected(&mut self, _: &OpenSelected, _: &mut Window, cx: &mut Context<'_, MainView>) {
-        if let Some(url) = self
-            .selected
-            .and_then(|id| self.library.read(cx).bookmark(id))
-            .map(|b| b.url.clone())
-        {
-            self.open_link(&url, cx);
-        }
-    }
-
-    /// Opens a bookmark in the browser the current workspace picked.
-    fn open_link(&self, url: &str, cx: &mut Context<'_, MainView>) {
-        let opens_in = self
-            .library
-            .read(cx)
-            .workspace()
-            .and_then(|w| w.opens_in.clone());
-        links::open(url, opens_in.as_deref(), cx);
     }
 
     fn copy_link(&mut self, _: &CopyLink, _: &mut Window, cx: &mut Context<'_, MainView>) {

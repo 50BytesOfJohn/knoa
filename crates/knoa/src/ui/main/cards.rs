@@ -3,8 +3,10 @@
 
 use gpui::{
     AnyElement, App, Div, FontWeight, Hsla, InteractiveElement as _, IntoElement, ObjectFit,
-    ParentElement as _, Styled as _, StyledImage as _, div, img, px,
+    ParentElement as _, StatefulInteractiveElement as _, Styled as _, StyledImage as _, div, img,
+    px,
 };
+use gpui_component::tooltip::Tooltip;
 use knoa_core::{Bookmark, Kind, Status};
 
 use crate::ui::{
@@ -313,6 +315,8 @@ fn cover(bookmark: &Bookmark, path: std::path::PathBuf, height: f32, theme: &The
     cover.into_any_element()
 }
 
+const GROUP: &str = "card";
+
 /// Wraps a card so it can be clicked, with the 2 px hover lift.
 /// The card fills its layout slot, so a text-height estimate that's a little off shows as
 /// padding instead of a gap in the grid.
@@ -320,6 +324,8 @@ pub fn interactive(id: usize, card: Div, height: f32, theme: &Theme) -> gpui::St
     let shadow = theme.card_hover_shadow;
     div()
         .id(("card", id))
+        .group(GROUP)
+        .relative()
         .h(px(height))
         .rounded(CARD_RADIUS)
         .cursor_pointer()
@@ -333,4 +339,32 @@ pub fn interactive(id: usize, card: Div, height: f32, theme: &Theme) -> gpui::St
             }])
         })
         .child(card)
+}
+
+/// The button a card shows on hover, so opening takes one click; attach `on_click` and
+/// add it to [`interactive`].
+pub fn open_button(id: usize, theme: &Theme) -> gpui::Stateful<Div> {
+    let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
+    div()
+        .id(("open-card", id))
+        .absolute()
+        .top_2()
+        .right_2()
+        .size(px(28.))
+        .rounded_full()
+        .bg(gpui::black().opacity(0.55))
+        .hover(|s| s.bg(gpui::black().opacity(0.8)))
+        .flex()
+        .items_center()
+        .justify_center()
+        .invisible()
+        .group_hover(GROUP, gpui::Styled::visible)
+        .tooltip(move |window, cx| {
+            Tooltip::new("Open link")
+                .bg(bg)
+                .text_color(fg)
+                .border_color(border)
+                .build(window, cx)
+        })
+        .child(icon("arrow-up-right", px(15.), gpui::white()))
 }
