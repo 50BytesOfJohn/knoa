@@ -35,7 +35,7 @@
 │  ▢ Watch…   │   Yesterday                          date rail ─  │             │
 │  ▢ Reading  │                                                  │             │
 │ + New folder│                                                  │ [Open ↵] ▮ ⧉│
-│ Knoa  ✦1  ⚙ │                                                  └─────────────┘
+│ Knoa●  1  ⚙ │                                                  └─────────────┘
 └─────────────┘
 ```
 
@@ -54,8 +54,9 @@ The window background is a solid colour by default, or a wallpaper the user pick
    bookmark is waiting for the AI).
 3. **Folders:** each with its own colour and icon. ⌘1–9 jump to the first nine.
    "New folder" at the end.
-4. **Footer:** the Knoa wordmark, the AI activity indicator (✦ and the number of
-   bookmarks being organized; nothing while the AI is idle) and the settings button.
+4. **Footer:** the Knoa wordmark with the AI mascot as its full stop, the number of
+   bookmarks being organized (nothing while the AI is idle) and the settings button. The
+   mascot's face shows what the AI is doing: idle, organizing, worried, or asleep when off.
 
 ### Search pill (top centre, floating)
 
@@ -109,17 +110,17 @@ The window background is a solid colour by default, or a wallpaper the user pick
 ### Detail panel (right, floating, ~340 px)
 
 - The image is never cropped: full-bleed when it fits under 300 px, otherwise whole and
-  inset on a soft backdrop. Then site and kind, title (large serif), AI summary with a trailing ✦, typed fields in
+  inset on a soft backdrop. Then site and kind, title (large serif), AI summary ending in the AI's dot, typed fields in
   a two-column grid, then tags and folders.
 - One notice at most, above the fields: in Trash, set aside, or not organized yet ("Only
   the title and link so far" and an Organize button).
-- Tags and folders are chips. AI-made ones carry ✦; hovering turns a chip's leading mark
+- Tags and folders are chips. AI-made ones carry the AI's dot; hovering turns a chip's leading mark
   into an ×, and a click removes it, which is also the one-click undo. The AI's folder
   confidence shows only when it is below 80%.
 - Only the folders the bookmark is in show, plus a + that offers the rest. A bookmark in
   no folder offers every folder straight away.
 - A quiet footer says where it came from (browser folder), when it was saved and which
-  model organized it, which also explains the ✦.
+  model organized it, which also explains the dots.
 - Actions at the bottom: **Open** (↵), then icons for Up next, Copy link (a check confirms
   the copy) and Delete, each with its shortcut in a tooltip.
 - In Trash: how long until it is deleted for good, with **Restore** and Delete now.
@@ -158,7 +159,9 @@ The window background is a solid colour by default, or a wallpaper the user pick
   opacity. Without one, the same panels are solid. Both must look finished.
 - Text on the wallpaper itself (group labels) sits on a small glass chip so it stays
   readable on any image.
-- AI-made values use one accent (✦), separate from the theme's accent.
+- AI-made values carry the AI's dot in the brand red, separate from the theme's accent.
+  Red means only the brand and the AI: danger is wine and always has an icon, and folder
+  colors have no reds or oranges.
 
 ## Up next
 

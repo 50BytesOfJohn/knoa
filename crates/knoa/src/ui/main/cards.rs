@@ -11,6 +11,7 @@ use knoa_core::{Bookmark, Kind, Status};
 
 use crate::ui::{
     components::{chip, icon, kind_icon, site_mark},
+    mascot::ai_mark,
     theme::{CARD_RADIUS, Theme},
 };
 
@@ -150,16 +151,14 @@ fn meta(bookmark: &Bookmark, theme: &Theme, cx: &App) -> Div {
             .child(div().flex_1().min_w_0().truncate().child(facts));
     }
     if bookmark.status.is_waiting() {
-        row = row
-            .child(div().flex_1())
-            .child(icon("sparkles", px(12.), theme.ai));
+        row = row.child(div().flex_1()).child(ai_mark(px(12.), theme.ai));
     }
     row
 }
 
 fn pending(bookmark: &Bookmark, width: f32, theme: &Theme, cx: &App) -> Div {
     let (label, color, bg) = match bookmark.status {
-        Status::Queued | Status::Organizing => ("✦ Organizing…", theme.ai, theme.ai_soft),
+        Status::Queued | Status::Organizing => ("Organizing…", theme.ai_text, theme.ai_soft),
         Status::Failed => ("Couldn't organize", theme.danger, theme.soft),
         _ => ("Not organized yet", theme.muted, theme.soft),
     };

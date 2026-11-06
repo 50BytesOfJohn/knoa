@@ -12,7 +12,8 @@ use super::{KeyCheck, Onboarding, Step};
 use crate::{
     services::organizer::Organizer,
     ui::{
-        components::{Tone, blocked_browsers_notice, button, icon, workspace_mark},
+        components::{Tone, blocked_browsers_notice, button, icon, problem, workspace_mark},
+        mascot::{Mood, mascot},
         theme::{SERIF, Theme},
         wordmark::written_wordmark,
     },
@@ -161,14 +162,36 @@ impl Onboarding {
             .child(nav(self.step, if total > 0 { format!("Bring in {total}") } else { "Next".to_owned() }, cx))
     }
 
+    /// How the key check went, if one ran.
+    fn key_message(&self, theme: &Theme) -> Option<Div> {
+        let note = || {
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_sm()
+                .text_color(theme.muted)
+        };
+        match &self.key_check {
+            KeyCheck::Idle => None,
+            KeyCheck::Checking(_) => Some(note().child("Knocking on OpenRouter's door…")),
+            KeyCheck::Failed(message) => Some(problem(message.clone(), theme)),
+            KeyCheck::Passed => Some(
+                note()
+                    .child(mascot(
+                        "key-works",
+                        px(28.),
+                        Mood::Happy,
+                        theme.ai,
+                        theme.panel,
+                    ))
+                    .child("That key works."),
+            ),
+        }
+    }
+
     fn ai(&mut self, cx: &mut Context<'_, Onboarding>) -> Div {
         let theme = Theme::get(cx).clone();
-        let (message, error) = match &self.key_check {
-            KeyCheck::Idle => (None, false),
-            KeyCheck::Checking(_) => (Some("Knocking on OpenRouter's door…".to_owned()), false),
-            KeyCheck::Failed(message) => (Some(message.clone()), true),
-            KeyCheck::Passed => (Some("That key works. ✦".to_owned()), false),
-        };
         div()
             .flex()
             .flex_col()
@@ -186,7 +209,7 @@ impl Onboarding {
                     .child(div().flex_1().child(Input::new(&self.key)))
                     .child(button("check-key", "Check key", Tone::Primary, cx).on_click(cx.listener(|this, _, window, cx| this.check_key(window, cx)))),
             )
-            .when_some(message, |s, message| s.child(div().text_sm().text_color(if error { theme.danger } else { theme.muted }).child(message)))
+            .children(self.key_message(&theme))
             .child(
                 div()
                     .flex()
@@ -314,7 +337,13 @@ impl Onboarding {
             .text_center()
             .gap_4()
             .pt_6()
-            .child(div().text_size(px(44.)).child("🎉"))
+            .child(mascot(
+                "all-set",
+                px(64.),
+                Mood::Happy,
+                theme.ai,
+                theme.panel,
+            ))
             .child(title("All set."))
             .child(lead(&line, &theme));
         if ai_on && counts.not_organized > 0 {

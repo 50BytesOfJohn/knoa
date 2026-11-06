@@ -11,9 +11,11 @@ use gpui::{
 };
 use lyon_tessellation::{LineCap, LineJoin};
 
-/// The wordmark at rest, fully written.
-pub fn wordmark(height: Pixels, ink: Hsla) -> Div {
-    let shape = Shape::new(height);
+use crate::ui::theme::BRAND_RED;
+
+/// "Knoa" without its full stop, for places where the mascot stands in for the dot.
+pub fn wordmark_letters(height: Pixels, ink: Hsla) -> Div {
+    let shape = Shape::new(height).without_dot();
     frame(height, &shape).child(drawing(shape, ink, None))
 }
 
@@ -27,9 +29,6 @@ pub fn written_wordmark(id: impl Into<ElementId>, height: Pixels, ink: Hsla) -> 
         move |el, delta| el.child(drawing(shape, ink, Some(delta * total))),
     )
 }
-
-/// The dot keeps its colour in every theme: it's part of the logo, not of the UI.
-const DOT_COLOR: u32 = 0x00e0_573c;
 
 /// A pen stroke in the design's units: where it starts, then cubic segments as
 /// `[control_a.x, control_a.y, control_b.x, control_b.y, to.x, to.y]`.
@@ -82,7 +81,7 @@ struct Shape {
     weight: f32,
     origin: [f32; 2],
     size: [f32; 2],
-    dot: [f32; 2],
+    dot: Option<[f32; 2]>,
 }
 
 impl Shape {
@@ -98,7 +97,17 @@ impl Shape {
             weight,
             origin,
             size: [right - origin[0], bottom - origin[1]],
-            dot,
+            dot: Some(dot),
+        }
+    }
+
+    /// Ends at the last letter's tail, with no room kept for the dot.
+    fn without_dot(self) -> Shape {
+        let right = TAIL_END_X + self.weight / 2.;
+        Shape {
+            size: [right - self.origin[0], self.size[1]],
+            dot: None,
+            ..self
         }
     }
 
@@ -152,14 +161,17 @@ fn paint(
 
     let (opacity, lift) =
         elapsed.map_or((1., 0.), |t| dot_drop((t - timeline.dot_start) / DOT_DROP));
-    if opacity > 0. {
+    if let Some(dot) = shape.dot
+        && opacity > 0.
+    {
         let radius = px(shape.weight * scale);
-        let center = at([shape.dot[0], shape.dot[1] + lift]);
+        let center = at([dot[0], dot[1] + lift]);
         let bounds = Bounds::new(
             point(center.x - radius, center.y - radius),
             size(radius * 2., radius * 2.),
         );
-        let color: Hsla = rgb(DOT_COLOR).into();
+        // The dot keeps its colour in every theme: it's part of the logo, not of the UI.
+        let color: Hsla = rgb(BRAND_RED).into();
         window.paint_quad(fill(bounds, color.opacity(opacity)).corner_radii(radius));
     }
 }
@@ -241,13 +253,13 @@ impl Timeline {
 }
 
 fn stroke_length(stroke: &Stroke) -> f32 {
-    const STEPS: usize = 16;
+    const STEPS: u16 = 16;
     let mut from = stroke.start;
     let mut length = 0.;
     for c in stroke.curves {
         let mut prev = from;
         for step in 1..=STEPS {
-            let next = cubic_point(from, c, step as f32 / STEPS as f32);
+            let next = cubic_point(from, c, f32::from(step) / f32::from(STEPS));
             length += (next[0] - prev[0]).hypot(next[1] - prev[1]);
             prev = next;
         }

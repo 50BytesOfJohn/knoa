@@ -9,15 +9,21 @@ use gpui::{
 use gpui_component::tooltip::Tooltip;
 use knoa_core::Place;
 
-use super::{MainView, NewLink, OpenSettings, Overlay};
-use crate::{
-    services::organizer::AiStatus,
-    ui::{
-        components::{icon, workspace_mark},
-        theme::{MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
-        wordmark::wordmark,
-    },
+mod footer;
+
+use super::{MainView, NewLink, Overlay};
+use crate::ui::{
+    components::{icon, workspace_mark},
+    mascot::ai_mark,
+    theme::{MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
 };
+
+/// What leads a place's row: a Lucide icon, or the AI's dot for places about the AI.
+#[derive(Clone, Copy)]
+enum PlaceMark {
+    Icon(&'static str),
+    Ai,
+}
 
 /// The sidebar's top row, shared with the traffic lights. With the sidebar's 1 px border its
 /// middle lines up with theirs, which `traffic_light_position` in `app.rs` places.
@@ -68,7 +74,7 @@ impl MainView {
                 Place::Folder(folder.id),
                 current,
                 &folder.name,
-                "folder",
+                PlaceMark::Icon("folder"),
                 folder.count,
                 Some((color, shortcut)),
                 cx,
@@ -157,26 +163,51 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> gpui::Div {
         let places = [
-            (Place::Everything, "Everything", "layers", counts.everything),
-            (Place::UpNext, "Up next", "bookmark", counts.up_next),
-            (Place::Unsorted, "Unsorted", "inbox", counts.unsorted),
+            (
+                Place::Everything,
+                "Everything",
+                PlaceMark::Icon("layers"),
+                counts.everything,
+            ),
+            (
+                Place::UpNext,
+                "Up next",
+                PlaceMark::Icon("bookmark"),
+                counts.up_next,
+            ),
+            (
+                Place::Unsorted,
+                "Unsorted",
+                PlaceMark::Icon("inbox"),
+                counts.unsorted,
+            ),
             (
                 Place::NotOrganized,
                 "Not organized",
-                "sparkles",
+                PlaceMark::Ai,
                 counts.not_organized,
             ),
-            (Place::SetAside, "Set aside", "archive", counts.set_aside),
-            (Place::Trash, "Trash", "trash", counts.trash),
+            (
+                Place::SetAside,
+                "Set aside",
+                PlaceMark::Icon("archive"),
+                counts.set_aside,
+            ),
+            (
+                Place::Trash,
+                "Trash",
+                PlaceMark::Icon("trash"),
+                counts.trash,
+            ),
         ];
         let mut list = div().flex().flex_col().gap_0p5().px_2();
-        for (place, label, icon_name, count) in places {
+        for (place, label, mark, count) in places {
             // Set aside and Trash only show while they hold something.
             let hideable = matches!(place, Place::SetAside | Place::Trash);
             if hideable && count == 0 && current != place {
                 continue;
             }
-            list = list.child(self.place_row(place, current, label, icon_name, count, None, cx));
+            list = list.child(self.place_row(place, current, label, mark, count, None, cx));
         }
         list
     }
@@ -240,7 +271,7 @@ impl MainView {
         place: Place,
         current: Place,
         label: &str,
-        icon_name: &'static str,
+        mark: PlaceMark,
         count: usize,
         folder: Option<(gpui::Hsla, Option<String>)>,
         cx: &mut Context<'_, MainView>,
@@ -272,7 +303,10 @@ impl MainView {
                 s.bg(theme.hover).font_weight(FontWeight::MEDIUM)
             })
             .hover(|s| s.bg(theme.hover))
-            .child(icon(icon_name, px(15.), icon_color))
+            .child(match mark {
+                PlaceMark::Icon(name) => icon(name, px(15.), icon_color).into_any_element(),
+                PlaceMark::Ai => ai_mark(px(15.), theme.ai).into_any_element(),
+            })
             .child(div().flex_1().truncate().child(label.to_owned()))
             .when_some(folder.and_then(|(_, key)| key), |s, key| {
                 s.child(div().text_xs().text_color(theme.faint).child(key))
@@ -282,46 +316,5 @@ impl MainView {
             })
             .on_click(cx.listener(move |this, _, window, cx| this.set_place(place, window, cx)))
             .into_any_element()
-    }
-
-    fn footer(&self, organizing: usize, cx: &mut Context<'_, MainView>) -> impl IntoElement {
-        let theme = Theme::get(cx);
-        let status = self.organizer.read(cx).status().clone();
-        // Idle and ready says nothing worth a mark next to the wordmark.
-        let ai = match &status {
-            AiStatus::Off => Some(("AI off".to_owned(), theme.faint)),
-            AiStatus::Ready if organizing > 0 => Some((format!("✦ {organizing}"), theme.ai)),
-            AiStatus::Ready => None,
-            AiStatus::NeedsAttention(_) => Some(("✦ needs attention".to_owned(), theme.danger)),
-        };
-        div()
-            .flex_none()
-            .h(px(48.))
-            .px_4()
-            .flex()
-            .items_center()
-            .gap_2()
-            .border_t_1()
-            .border_color(theme.hairline)
-            .child(wordmark(px(20.), theme.text))
-            .when_some(ai, |s, (label, color)| {
-                s.child(div().text_xs().text_color(color).child(label))
-            })
-            .child(div().flex_1())
-            .child(
-                div()
-                    .id("settings")
-                    .size(px(28.))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover))
-                    .child(icon("settings", px(16.), theme.muted))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_settings(&OpenSettings, window, cx);
-                    })),
-            )
     }
 }

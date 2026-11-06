@@ -6,7 +6,10 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use crate::ui::theme::{SERIF, Theme};
+use crate::ui::{
+    components::problem,
+    theme::{SERIF, Theme},
+};
 
 /// The page's title and one line on what it holds.
 pub fn header(title: impl Into<String>, about: &str, theme: &Theme) -> Div {
@@ -106,6 +109,15 @@ pub fn note(text: impl Into<String>, color: gpui::Hsla) -> AnyElement {
         .text_sm()
         .text_color(color)
         .child(text.into())
+        .into_any_element()
+}
+
+/// A problem and how to fix it, set like a note.
+pub fn problem_note(text: impl Into<String>, theme: &Theme) -> AnyElement {
+    div()
+        .px_4()
+        .py_3()
+        .child(problem(text.into(), theme))
         .into_any_element()
 }
 

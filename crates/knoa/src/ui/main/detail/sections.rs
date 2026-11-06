@@ -12,13 +12,15 @@ use crate::{
     services::organizer::Organizer,
     ui::{
         components::{Tone, button, icon},
+        mascot::{Mood, ai_mark, mascot},
         theme::Theme,
     },
 };
 
-const AI_MARK: &str = "✦";
+/// The AI's dot as a character, for the end of a line of text it wrote.
+const AI_MARK: &str = "●";
 
-/// The summary, with a trailing ✦ when the AI wrote it.
+/// The summary, ending in the AI's dot when the AI wrote it.
 pub(super) fn summary(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
     let summary = bookmark.summary.as_ref()?;
     let text = div()
@@ -89,7 +91,7 @@ impl MainView {
     fn organize_notice(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Option<Div> {
         let (message, action) = match bookmark.status {
             status if status.is_organized() => return None,
-            Status::Queued | Status::Organizing => ("✦ Organizing this one now…", None),
+            Status::Queued | Status::Organizing => ("Organizing this one now…", None),
             Status::Failed => ("Organizing didn't work out.", Some("Try again")),
             _ if bookmark.summary.is_none() => {
                 ("Only the title and link so far.", Some("Organize"))
@@ -98,8 +100,18 @@ impl MainView {
         };
         let theme = Theme::get(cx).clone();
         let (id, library) = (bookmark.id, self.library.clone());
+        let organizing = matches!(bookmark.status, Status::Queued | Status::Organizing);
         Some(
             notice(theme.ai_soft)
+                .when(organizing, |s| {
+                    s.child(mascot(
+                        "organize-notice",
+                        px(24.),
+                        Mood::Organizing,
+                        theme.ai,
+                        theme.ai_soft,
+                    ))
+                })
                 .child(div().flex_1().min_w_0().child(message))
                 .when_some(action, |s, label| {
                     s.child(
@@ -174,7 +186,7 @@ pub(super) fn fields(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
 }
 
 /// Where the bookmark came from, when it was saved and which model organized it: the
-/// "why" behind the values marked ✦.
+/// "why" behind the values marked with the AI's dot.
 pub(super) fn provenance(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
     let glyph = |name: &str| icon(name, px(12.), theme.faint).into_any_element();
     let mut lines = Vec::new();
@@ -192,8 +204,10 @@ pub(super) fn provenance(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
     }
     if let Some(model) = &bookmark.model {
         let name = model.rsplit('/').next().unwrap_or(model);
-        let mark = div().w(px(12.)).text_color(theme.ai).child(AI_MARK);
-        lines.push((mark.into_any_element(), format!("Marks what {name} chose")));
+        lines.push((
+            ai_mark(px(12.), theme.ai).into_any_element(),
+            format!("Marks what {name} chose"),
+        ));
     }
     if lines.is_empty() {
         return None;

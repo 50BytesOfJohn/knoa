@@ -2,6 +2,7 @@
 
 pub mod components;
 mod main;
+pub mod mascot;
 mod onboarding;
 pub mod theme;
 pub mod wordmark;

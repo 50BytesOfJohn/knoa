@@ -21,6 +21,7 @@ use crate::{
     state::settings::SettingsFile,
     ui::{
         components::{icon, site_mark},
+        mascot::{Mood, mascot},
         theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
     },
 };
@@ -441,6 +442,7 @@ impl MainView {
     fn empty_state(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let library = self.library.read(cx);
+        let caught_up = library.search().is_empty() && library.place() == Place::NotOrganized;
         let (title, body) = if !library.search().is_empty() {
             (
                 "Nothing matches",
@@ -450,6 +452,11 @@ impl MainView {
             (
                 "Trash is empty",
                 "Bookmarks you delete wait here for 30 days.".to_owned(),
+            )
+        } else if library.place() == Place::NotOrganized {
+            (
+                "All caught up",
+                "Every bookmark here has been organized.".to_owned(),
             )
         } else if library.place() == Place::Everything {
             let synced = library.workspace().is_some_and(|w| !w.browsers.is_empty());
@@ -479,7 +486,11 @@ impl MainView {
             .items_center()
             .gap_2()
             .text_color(theme.muted)
-            .child(icon("telescope", px(28.), theme.faint))
+            .child(if caught_up {
+                mascot("caught-up", px(56.), Mood::Happy, theme.ai, theme.canvas).into_any_element()
+            } else {
+                icon("telescope", px(28.), theme.faint).into_any_element()
+            })
             .child(
                 div()
                     .font_family(crate::ui::theme::SERIF)

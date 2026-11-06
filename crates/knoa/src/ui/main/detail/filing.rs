@@ -8,7 +8,7 @@ use gpui::{
 use knoa_core::{Bookmark, Folder, FolderLink, Origin};
 
 use super::{MainView, sections::section};
-use crate::ui::{components::icon, theme::Theme};
+use crate::ui::{components::icon, mascot::ai_mark, theme::Theme};
 
 /// Below this, the AI's confidence in a folder is worth showing; above it, it's noise.
 const UNSURE: f32 = 0.8;
@@ -31,7 +31,7 @@ impl MainView {
                 .text_color(theme.text)
                 .child(removable(
                     if *origin == Origin::Ai {
-                        ai_mark(&theme)
+                        ai_mark(px(12.), theme.ai)
                     } else {
                         div().text_color(theme.faint).child("#")
                     },
@@ -111,7 +111,7 @@ impl MainView {
             .text_color(theme.text)
             .child(removable(swatch(color), theme))
             .child(folder.name.clone())
-            .when(by_ai, |s| s.child(ai_mark(theme)))
+            .when(by_ai, |s| s.child(ai_mark(px(12.), theme.ai)))
             .when_some(unsure, |s, p| {
                 s.child(
                     div()
@@ -184,10 +184,6 @@ fn pill(id: impl Into<gpui::ElementId>) -> Stateful<Div> {
 
 fn swatch(color: Hsla) -> Div {
     div().size(px(7.)).flex_none().rounded_full().bg(color)
-}
-
-fn ai_mark(theme: &Theme) -> Div {
-    div().text_color(theme.ai).child("✦")
 }
 
 /// A chip's leading mark, which turns into an × on hover: the chips stay calm until you

@@ -14,7 +14,7 @@ use crate::{
     services::organizer::Organizer,
     state::library::Library,
     ui::{
-        components::{Tone, button},
+        components::{Tone, button, problem},
         theme::{SERIF, Theme},
     },
 };
@@ -117,9 +117,7 @@ impl Render for AddLink {
                     .child(format!("Add a link to {workspace}")),
             )
             .child(Input::new(&self.url))
-            .when_some(self.error, |s, error| {
-                s.child(div().text_sm().text_color(theme.danger).child(error))
-            })
+            .when_some(self.error, |s, error| s.child(problem(error, &theme)))
             .child(
                 div()
                     .flex()
