@@ -9,6 +9,7 @@ mod kind;
 mod prompt;
 mod schema;
 
+pub use folders::{FilingInput, file_into_folders};
 use knoa_core::{Enrichment, Fields, FolderId, Kind};
 
 use crate::{Classifier, Error, LanguageModel, StructuredRequest};
@@ -71,7 +72,7 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     let folders = match classifier {
         // A bookmark set aside isn't filed; it gets folders once the user keeps it.
         _ if answer.set_aside.is_some() => Vec::new(),
-        Some(classifier) => folders::pick(classifier, input, &answer).await?,
+        Some(classifier) => file_into_folders(classifier, &filing_input(input, &answer)).await?,
         // Chat models give no probability; record their picks as certain.
         None => answer.folders.iter().map(|id| (*id, 1.0)).collect(),
     };
@@ -85,4 +86,17 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         set_aside: answer.set_aside,
         model: reply.model,
     })
+}
+
+fn filing_input<'a>(input: &'a OrganizeInput<'_>, answer: &'a answer::Answer) -> FilingInput<'a> {
+    FilingInput {
+        title: input.bookmark.title,
+        url: input.bookmark.url,
+        browser_folder: input.bookmark.browser_folder,
+        kind: answer.kind,
+        summary: answer.summary.as_deref(),
+        tags: &answer.tags,
+        instructions: input.instructions,
+        folders: input.folders,
+    }
 }

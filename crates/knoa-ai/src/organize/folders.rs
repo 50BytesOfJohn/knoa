@@ -1,9 +1,9 @@
 //! Folder matching with a yes/no classifier: one question per auto-assign folder.
 
-use knoa_core::FolderId;
+use knoa_core::{FolderId, Kind};
 use serde_json::{Value, json};
 
-use super::{FolderInput, OrganizeInput, answer::Answer};
+use super::FolderInput;
 use crate::{Classifier, Error, Question};
 
 /// A folder needs at least this probability to be picked.
@@ -11,18 +11,31 @@ const MIN_PROBABILITY: f32 = 0.7;
 /// A second folder is picked only when it's this close to the best one.
 const SECOND_WITHIN: f32 = 0.1;
 
-pub async fn pick<C: Classifier>(
+/// What the classifier sees of a bookmark: what organizing it found, not the page.
+pub struct FilingInput<'a> {
+    pub title: &'a str,
+    pub url: &'a str,
+    pub browser_folder: Option<&'a str>,
+    pub kind: Kind,
+    pub summary: Option<&'a str>,
+    pub tags: &'a [String],
+    /// The workspace's organizing instructions.
+    pub instructions: &'a str,
+    /// Folders with auto-assign on.
+    pub folders: &'a [FolderInput],
+}
+
+/// Picks the bookmark's folders, each with its probability. Needs only the classifier, so
+/// filing an organized bookmark again costs one request.
+pub async fn file_into_folders<C: Classifier>(
     classifier: &C,
-    input: &OrganizeInput<'_>,
-    answer: &Answer,
+    input: &FilingInput<'_>,
 ) -> Result<Vec<(FolderId, f32)>, Error> {
     if input.folders.is_empty() {
         return Ok(Vec::new());
     }
     let questions: Vec<Question> = input.folders.iter().map(question).collect();
-    let probabilities = classifier
-        .classify(&state(input, answer), &questions)
-        .await?;
+    let probabilities = classifier.classify(&state(input), &questions).await?;
     Ok(choose(
         input
             .folders
@@ -64,16 +77,15 @@ fn question(folder: &FolderInput) -> Question {
     }
 }
 
-fn state(input: &OrganizeInput<'_>, answer: &Answer) -> Value {
-    let b = &input.bookmark;
+fn state(input: &FilingInput<'_>) -> Value {
     json!({
         "bookmark": {
-            "title": b.title,
-            "url": super::prompt::redact(b.url),
-            "browser_folder": b.browser_folder,
-            "kind": answer.kind.slug(),
-            "summary": answer.summary,
-            "tags": answer.tags,
+            "title": input.title,
+            "url": super::prompt::redact(input.url),
+            "browser_folder": input.browser_folder,
+            "kind": input.kind.slug(),
+            "summary": input.summary,
+            "tags": input.tags,
         },
         "user_instructions": input.instructions,
     })

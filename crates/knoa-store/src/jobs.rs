@@ -3,7 +3,7 @@
 //! A job is a row in `jobs`. It stays there until the bookmark is organized or gives up,
 //! so quitting the app mid-way loses nothing.
 
-use knoa_core::{Bookmark, BookmarkId, Enrichment, Page, WorkspaceId};
+use knoa_core::{Bookmark, BookmarkId, Enrichment, FolderId, Page, WorkspaceId};
 use rusqlite::{OptionalExtension as _, params};
 
 use crate::{Result, Store, search};
@@ -13,24 +13,42 @@ use crate::{Result, Store, search};
 pub struct Job {
     pub bookmark: Bookmark,
     pub attempts: u32,
+    /// Only file the bookmark into folders again, from what it already has.
+    pub folders_only: bool,
 }
 
 impl Store {
     /// Queues every bookmark in the workspace the AI hasn't organized, and returns how many
     /// were added.
     pub fn queue_not_organized(&mut self, workspace: WorkspaceId) -> Result<usize> {
-        self.queue_matching(workspace, "status IN ('new', 'failed')")
+        self.queue_matching(workspace, "status IN ('new', 'failed')", false)
     }
 
     /// Queues every bookmark in the workspace, organized or not, so the AI files them
     /// again with the current folders and instructions. Returns how many were queued.
     pub fn queue_all(&mut self, workspace: WorkspaceId) -> Result<usize> {
-        self.queue_matching(workspace, "1")
+        self.queue_matching(workspace, "1", false)
+    }
+
+    /// Queues the workspace's organized bookmarks to be filed into folders again, without
+    /// fetching or organizing them again. Bookmarks set aside get no folders, so they are
+    /// left out. Returns how many were queued.
+    pub fn queue_folders(&mut self, workspace: WorkspaceId) -> Result<usize> {
+        self.queue_matching(
+            workspace,
+            "status = 'organized' AND set_aside IS NULL",
+            true,
+        )
     }
 
     /// Queues the workspace's bookmarks outside Trash that match `condition`, a SQL
     /// expression over `bookmarks` with no parameters.
-    fn queue_matching(&mut self, workspace: WorkspaceId, condition: &str) -> Result<usize> {
+    fn queue_matching(
+        &mut self,
+        workspace: WorkspaceId,
+        condition: &str,
+        folders_only: bool,
+    ) -> Result<usize> {
         let tx = self.conn.transaction()?;
         let ids: Vec<i64> = {
             let mut stmt = tx.prepare(&format!(
@@ -40,7 +58,7 @@ impl Store {
                 .collect::<rusqlite::Result<_>>()?
         };
         for id in &ids {
-            enqueue(&tx, *id)?;
+            enqueue(&tx, *id, folders_only)?;
         }
         tx.commit()?;
         Ok(ids.len())
@@ -49,7 +67,7 @@ impl Store {
     /// Queues one bookmark, also when it was organized before (the detail panel's Organize).
     pub fn queue(&mut self, id: BookmarkId) -> Result<()> {
         let tx = self.conn.transaction()?;
-        enqueue(&tx, id.0)?;
+        enqueue(&tx, id.0, false)?;
         tx.commit()?;
         Ok(())
     }
@@ -57,15 +75,17 @@ impl Store {
     /// Takes up to `limit` due jobs and marks their bookmarks as organizing.
     pub fn take_jobs(&mut self, now: i64, limit: usize) -> Result<Vec<Job>> {
         let tx = self.conn.transaction()?;
-        let due: Vec<(i64, u32)> = {
+        let due: Vec<(i64, u32, bool)> = {
             let mut stmt = tx.prepare(
-                "SELECT j.bookmark_id, j.attempts FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+                "SELECT j.bookmark_id, j.attempts, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
                  WHERE j.run_after <= ?1 AND b.status = 'queued' ORDER BY b.added_at DESC LIMIT ?2",
             )?;
-            stmt.query_map(params![now, limit], |row| Ok((row.get(0)?, row.get(1)?)))?
-                .collect::<rusqlite::Result<_>>()?
+            stmt.query_map(params![now, limit], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?
         };
-        for (id, _) in &due {
+        for (id, ..) in &due {
             tx.execute(
                 "UPDATE bookmarks SET status = 'organizing' WHERE id = ?1",
                 [id],
@@ -74,9 +94,13 @@ impl Store {
         tx.commit()?;
 
         let mut jobs = Vec::with_capacity(due.len());
-        for (id, attempts) in due {
+        for (id, attempts, folders_only) in due {
             if let Some(bookmark) = self.bookmark(BookmarkId(id))? {
-                jobs.push(Job { bookmark, attempts });
+                jobs.push(Job {
+                    bookmark,
+                    attempts,
+                    folders_only,
+                });
             }
         }
         Ok(jobs)
@@ -176,6 +200,20 @@ impl Store {
         Ok(())
     }
 
+    /// Adds the folders a folders-only job picked and takes the bookmark off the queue.
+    /// Everything else it has stays as it was.
+    pub fn finish_filed(&mut self, id: BookmarkId, folders: &[(FolderId, f32)]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "UPDATE bookmarks SET status = 'organized', error = NULL WHERE id = ?1",
+            [id.0],
+        )?;
+        Store::add_ai_folders(&tx, id, folders)?;
+        tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Takes the bookmark off the queue without AI results: no AI is set up, so the page's
     /// own metadata is all it gets. It stays "not organized".
     pub fn finish_page_only(&mut self, id: BookmarkId) -> Result<()> {
@@ -201,11 +239,15 @@ impl Store {
         Ok(())
     }
 
-    /// Gives up on a job. The bookmark keeps its title and URL and can be queued again.
+    /// Gives up on a job. The bookmark keeps its title and URL and can be queued again. One
+    /// that only missed its folders is still organized.
     pub fn fail_job(&mut self, id: BookmarkId, error: &str) -> Result<()> {
         let tx = self.conn.transaction()?;
         tx.execute(
-            "UPDATE bookmarks SET status = 'failed', error = ?2 WHERE id = ?1",
+            "UPDATE bookmarks SET error = ?2, status = CASE
+                WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1 AND folders_only = 1)
+                THEN 'organized' ELSE 'failed' END
+             WHERE id = ?1",
             params![id.0, error],
         )?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
@@ -214,14 +256,15 @@ impl Store {
     }
 }
 
-fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64) -> Result<()> {
+fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {
     tx.execute(
         "UPDATE bookmarks SET status = 'queued' WHERE id = ?1 AND status != 'organizing'",
         [id],
     )?;
     tx.execute(
-        "INSERT INTO jobs (bookmark_id) VALUES (?1) ON CONFLICT DO UPDATE SET run_after = 0",
-        [id],
+        "INSERT INTO jobs (bookmark_id, folders_only) VALUES (?1, ?2) ON CONFLICT DO UPDATE
+         SET run_after = 0, folders_only = excluded.folders_only",
+        params![id, folders_only],
     )?;
     Ok(())
 }
@@ -272,5 +315,33 @@ mod tests {
             .map(|job| job.bookmark.id)
             .collect();
         assert_eq!(requeued, [kept.bookmark.id]);
+    }
+
+    #[test]
+    fn full_run_replaces_a_waiting_folders_only_job() {
+        let mut store = Store::open_in_memory().unwrap();
+        let links = [bookmark("https://a.dev/", "A", 1)];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+        let enrichment = Enrichment {
+            kind: Kind::Article,
+            summary: None,
+            fields: Fields::new(),
+            extras: Vec::new(),
+            tags: Vec::new(),
+            folders: Vec::new(),
+            set_aside: None,
+            model: "test".into(),
+        };
+        store
+            .finish_organized(job.bookmark.id, &enrichment, 10)
+            .unwrap();
+
+        assert_eq!(store.queue_folders(WORKSPACE).unwrap(), 1);
+        store.queue(job.bookmark.id).unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+        assert!(!job.folders_only);
     }
 }

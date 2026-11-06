@@ -124,7 +124,10 @@ processed. They only add.
 
 "Organize again", for one workspace or all of them, queues every bookmark outside Trash
 for a full run, so new folders and changed instructions reach bookmarks organized
-before. Like any re-run it keeps user values and only adds folders.
+before. Like any re-run it keeps user values and only adds folders. Its "folders only"
+choice queues organized bookmarks as folders-only jobs: no fetch and no chat call, just
+the folder classifier over the stored kind, summary and tags. A provider without a
+classifier gives those bookmarks a full run.
 
 AI providers sit behind two traits in `knoa-ai`
 ([ADR 0009](adr/0009-provider-neutral-ai.md)); OpenRouter is a small hand-written client

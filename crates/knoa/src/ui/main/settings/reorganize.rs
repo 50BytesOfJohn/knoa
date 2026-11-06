@@ -1,6 +1,6 @@
 //! The "organize again" row: queues bookmarks that were already organized, so new
-//! folders and changed instructions reach them. It costs AI credit, so it takes a second
-//! click.
+//! folders and changed instructions reach them. Either just their folders or everything.
+//! Both cost AI credit, so each takes a second click.
 
 use gpui::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
@@ -25,10 +25,37 @@ pub enum Scope {
     AllWorkspaces,
 }
 
+/// How much of the organizing runs again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    /// Only the folder classifier, from what the bookmark already has.
+    Folders,
+    /// Fetch, kind, summary, fields, tags and folders.
+    Everything,
+}
+
+impl Mode {
+    fn id(self) -> &'static str {
+        match self {
+            Mode::Folders => "reorganize-folders",
+            Mode::Everything => "reorganize-everything",
+        }
+    }
+
+    fn label(self, confirming: bool) -> &'static str {
+        match (self, confirming) {
+            (Mode::Folders, false) => "Folders only…",
+            (Mode::Folders, true) => "File them all",
+            (Mode::Everything, false) => "Everything…",
+            (Mode::Everything, true) => "Organize them all",
+        }
+    }
+}
+
 pub struct Reorganize {
     scope: Scope,
     library: Entity<Library>,
-    confirming: bool,
+    confirming: Option<Mode>,
     /// How many bookmarks the last click queued.
     queued: Option<usize>,
     queuing: Option<Task<()>>,
@@ -39,7 +66,7 @@ impl Reorganize {
         Reorganize {
             scope,
             library,
-            confirming: false,
+            confirming: None,
             queued: None,
             queuing: None,
         }
@@ -52,13 +79,13 @@ impl Reorganize {
         }
     }
 
-    fn click(&mut self, cx: &mut Context<'_, Reorganize>) {
-        if !self.confirming {
-            self.confirming = true;
+    fn click(&mut self, mode: Mode, cx: &mut Context<'_, Reorganize>) {
+        if self.confirming != Some(mode) {
+            self.confirming = Some(mode);
             cx.notify();
             return;
         }
-        self.confirming = false;
+        self.confirming = None;
         let (store, scope) = (self.library.read(cx).store(), self.scope);
         let task = cx.background_spawn(async move {
             let mut store = lock(&store);
@@ -66,9 +93,13 @@ impl Reorganize {
                 Scope::Workspace(id) => vec![id],
                 Scope::AllWorkspaces => store.workspaces()?.into_iter().map(|w| w.id).collect(),
             };
-            workspaces
-                .into_iter()
-                .try_fold(0, |total, id| Ok(total + store.queue_all(id)?))
+            workspaces.into_iter().try_fold(0, |total, id| {
+                let queued = match mode {
+                    Mode::Folders => store.queue_folders(id)?,
+                    Mode::Everything => store.queue_all(id)?,
+                };
+                Ok(total + queued)
+            })
         });
         let library = self.library.clone();
         self.queuing = Some(cx.spawn(async move |this, cx| {
@@ -85,6 +116,23 @@ impl Reorganize {
         }));
         cx.notify();
     }
+
+    fn mode_button(
+        &self,
+        mode: Mode,
+        theme: &Theme,
+        cx: &mut Context<'_, Self>,
+    ) -> impl IntoElement {
+        let confirming = self.confirming == Some(mode);
+        button(
+            (mode.id(), self.scope_key()),
+            mode.label(confirming),
+            Tone::Soft,
+            cx,
+        )
+        .when(confirming, |s| s.text_color(theme.ai))
+        .on_click(cx.listener(move |this, _, _, cx| this.click(mode, cx)))
+    }
 }
 
 impl Render for Reorganize {
@@ -93,8 +141,8 @@ impl Render for Reorganize {
         let theme = &theme;
         let (label, about) = match self.scope {
             Scope::Workspace(_) => (
-                "Organize everything again",
-                "Files every bookmark here again with the current folders and instructions. Folders you set or removed stay as they are.",
+                "Organize again",
+                "Folders only files organized bookmarks into the current folders, without reading pages or asking the chat model again. Everything also redoes summaries, fields and tags with the current instructions. Folders you set or removed stay as they are.",
             ),
             Scope::AllWorkspaces => (
                 "Organize every workspace again",
@@ -105,14 +153,11 @@ impl Render for Reorganize {
             Some(count) => format!("Queued {count} bookmarks."),
             None => about.to_owned(),
         };
-        let action = if self.confirming {
-            "Organize them all"
-        } else {
-            "Organize again…"
-        };
-        let control = button(("reorganize", self.scope_key()), action, Tone::Soft, cx)
-            .when(self.confirming, |s| s.text_color(theme.ai))
-            .on_click(cx.listener(|this, _, _, cx| this.click(cx)));
-        form::row(label, Some(&about), div().child(control), theme)
+        let controls = div()
+            .flex()
+            .gap_2()
+            .child(self.mode_button(Mode::Folders, theme, cx))
+            .child(self.mode_button(Mode::Everything, theme, cx));
+        form::row(label, Some(&about), controls, theme)
     }
 }

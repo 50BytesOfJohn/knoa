@@ -190,6 +190,11 @@ CREATE TABLE ai_usage (
     PRIMARY KEY (day, provider, model)
 );
 ",
+    r"
+-- A folders-only job asks the folder classifier again and keeps everything else the
+-- bookmark already has.
+ALTER TABLE jobs ADD COLUMN folders_only INTEGER NOT NULL DEFAULT 0;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

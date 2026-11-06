@@ -8,8 +8,8 @@ use std::{sync::Arc, time::Duration};
 
 use futures::{FutureExt as _, StreamExt as _, channel::mpsc, stream::FuturesUnordered};
 use gpui::{App, AppContext as _, AsyncApp, BackgroundExecutor, Context, Entity, Global, Task};
-use knoa_ai::{BookmarkInput, FolderInput, OrganizeInput, Provider};
-use knoa_core::{BookmarkId, Enrichment, Page, WorkspaceId};
+use knoa_ai::{BookmarkInput, FilingInput, FolderInput, OrganizeInput, Provider};
+use knoa_core::{BookmarkId, Enrichment, FolderId, Page, WorkspaceId};
 use knoa_fetch::Fetcher;
 use knoa_store::Job;
 use tokio::runtime::Handle;
@@ -193,7 +193,11 @@ async fn next_wait(store: &SharedStore, cx: &AsyncApp) -> Duration {
 
 async fn process(job: Job, work: Arc<Work>) -> Outcome {
     let id = job.bookmark.id;
-    let outcome = organize_one(&job, &work).await;
+    let outcome = if job.folders_only {
+        file_one(&job, &work).await
+    } else {
+        organize_one(&job, &work).await
+    };
     // After every outcome: a job that failed may still have paid for answers.
     if let Some(provider) = &work.provider {
         usage::save(provider, work.store.clone(), &work.background).await;
@@ -318,10 +322,65 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         .await;
     match answer {
         Ok(Ok(enrichment)) => save_enrichment(work, bookmark.id, enrichment).await,
-        Ok(Err(err)) if err.needs_user() => Outcome::NeedsAttention(err.to_string()),
-        Ok(Err(err)) if err.is_transient() => retry(err.to_string(), job.attempts),
-        Ok(Err(err)) => Outcome::Failed(err.to_string()),
+        Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
+    }
+}
+
+/// Files an organized bookmark into folders again from its stored kind, summary and tags,
+/// with one classifier request and no page fetch. A provider without a classifier picks
+/// folders in the chat call, so the bookmark gets a full run instead.
+async fn file_one(job: &Job, work: &Work) -> Outcome {
+    let bookmark = &job.bookmark;
+    let Some(provider) = work.provider.clone() else {
+        // AI was turned off after queuing: nothing to ask, and the bookmark stays as it is.
+        return finish_filed(work, bookmark.id, Vec::new()).await;
+    };
+    let (Some(kind), Some(_)) = (bookmark.kind, provider.classifier()) else {
+        return organize_one(job, work).await;
+    };
+    let store = work.store.clone();
+    let workspace = bookmark.workspace;
+    let context = work
+        .background
+        .spawn(async move { WorkspaceContext::load(&store, workspace) })
+        .await;
+    let context = match context {
+        Ok(context) => context,
+        Err(err) => return Outcome::Failed(err.to_string()),
+    };
+    let bookmark = bookmark.clone();
+    let answer = work
+        .network
+        .spawn(async move {
+            let tags: Vec<String> = bookmark.tags.into_iter().map(|(tag, _)| tag).collect();
+            let input = FilingInput {
+                title: &bookmark.title,
+                url: &bookmark.url,
+                browser_folder: bookmark.browser_folder.as_deref(),
+                kind,
+                summary: bookmark.summary.as_deref(),
+                tags: &tags,
+                instructions: &context.instructions,
+                folders: &context.folders,
+            };
+            knoa_ai::file_into_folders(&*provider, &input).await
+        })
+        .await;
+    match answer {
+        Ok(Ok(folders)) => finish_filed(work, job.bookmark.id, folders).await,
+        Ok(Err(err)) => ai_failure(&err, job.attempts),
+        Err(err) => Outcome::Failed(format!("folder task failed: {err}")),
+    }
+}
+
+fn ai_failure(err: &knoa_ai::Error, attempts: u32) -> Outcome {
+    if err.needs_user() {
+        Outcome::NeedsAttention(err.to_string())
+    } else if err.is_transient() {
+        retry(err.to_string(), attempts)
+    } else {
+        Outcome::Failed(err.to_string())
     }
 }
 
@@ -370,6 +429,18 @@ async fn save_enrichment(work: &Work, id: BookmarkId, enrichment: Enrichment) ->
     match work
         .background
         .spawn(async move { lock(&store).finish_organized(id, &enrichment, now()) })
+        .await
+    {
+        Ok(()) => Outcome::Done,
+        Err(err) => Outcome::Failed(err.to_string()),
+    }
+}
+
+async fn finish_filed(work: &Work, id: BookmarkId, folders: Vec<(FolderId, f32)>) -> Outcome {
+    let store = work.store.clone();
+    match work
+        .background
+        .spawn(async move { lock(&store).finish_filed(id, &folders) })
         .await
     {
         Ok(()) => Outcome::Done,

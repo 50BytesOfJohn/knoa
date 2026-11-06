@@ -19,5 +19,7 @@ pub use error::Error;
 pub use model::{
     Choice, Classifier, LanguageModel, Message, Question, StructuredReply, StructuredRequest,
 };
-pub use organize::{BookmarkInput, FolderInput, OrganizeInput, organize};
+pub use organize::{
+    BookmarkInput, FilingInput, FolderInput, OrganizeInput, file_into_folders, organize,
+};
 pub use provider::{Provider, ProviderConfig, ProviderKind};
