@@ -10,7 +10,10 @@ use gpui::{
 use gpui_component::input::{Input, InputState};
 use knoa_ai::ProviderKind;
 
-use super::form;
+use super::{
+    form,
+    reorganize::{Reorganize, Scope},
+};
 use crate::{
     services::{
         ai,
@@ -33,6 +36,7 @@ const DOLLARS_PER_BOOKMARK: f64 = 0.000_17;
 
 pub struct AiPage {
     library: Entity<Library>,
+    reorganize: Entity<Reorganize>,
     key: Entity<InputState>,
     /// The result of the last key check, and whether it failed.
     message: Option<(String, bool)>,
@@ -61,8 +65,10 @@ impl AiPage {
             this.load_usage(cx);
         })
         .detach();
+        let reorganize = cx.new(|_| Reorganize::new(Scope::AllWorkspaces, library.clone()));
         let mut page = AiPage {
             library,
+            reorganize,
             key,
             message: None,
             checking: None,
@@ -242,7 +248,11 @@ impl AiPage {
                 theme,
             )
         };
-        form::group("Existing bookmarks", vec![row], theme)
+        let mut rows = vec![row];
+        if library.workspaces().len() > 1 {
+            rows.push(self.reorganize.clone().into_any_element());
+        }
+        form::group("Existing bookmarks", rows, theme)
     }
 
     fn message_row(&self, theme: &Theme) -> Option<AnyElement> {

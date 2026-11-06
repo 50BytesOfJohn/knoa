@@ -6,6 +6,7 @@ mod appearance;
 mod form;
 mod general;
 mod nav;
+mod reorganize;
 mod updates;
 mod workspace;
 
