@@ -20,9 +20,10 @@ run: ## Run the app (release build)
 	$(COOL) cargo build --release
 	cargo run --release
 
-dev: ## Run the app (debug build, verbose logs)
-	$(COOL) cargo build
-	RUST_LOG=knoa=debug cargo run
+# Running the bundle's executable directly keeps the logs here and Ctrl-C quits the app.
+dev: ## Run Knoa Dev: the debug build as an app bundle, verbose logs (needs Xcode)
+	$(COOL) env KNOA_DEV=1 scripts/bundle.sh
+	RUST_LOG=knoa=debug target/debug/Knoa.app/Contents/MacOS/Knoa
 
 bundle: ## Build target/release/Knoa.app with its icon and Sparkle (needs Xcode)
 	$(COOL) scripts/bundle.sh

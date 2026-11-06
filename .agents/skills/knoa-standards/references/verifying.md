@@ -4,9 +4,10 @@
 
 ## Run and check
 
-1. `make dev` in the background. It logs at debug level.
-2. Drive the app with the computer-use tools: open the screen you changed and do what a
-   user would do.
+1. `make dev` in the background. It runs Knoa Dev, the debug build as its own app, and
+   logs at debug level.
+2. Drive Knoa Dev (`dev.knoa.Knoa-Dev`) with the computer-use tools, never an installed
+   Knoa: open the screen you changed and do what a user would do.
 3. Check the happy path and the one failure most likely to happen (no network, empty
    library, bad input).
 4. Read the log for warnings and errors your change caused.
@@ -17,7 +18,7 @@ command's output. Say in the PR what you checked.
 
 ## Screenshots
 
-Needed for any UI change. With the app running, capture only the Knoa window:
+Needed for any UI change. With the app running, capture only the Knoa Dev window:
 
 ```bash
 .agents/skills/knoa-standards/scripts/screenshot.sh shot.png
