@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.1.3](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.3) - 2026-11-06
+
+### Added
+
+- Add popular editor themes ([#12](https://github.com/50BytesOfJohn/knoa/pull/12))
 ## [0.1.2](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.2) - 2026-11-06
 
 ### Changed
