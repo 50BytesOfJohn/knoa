@@ -6,7 +6,10 @@ mod decisions;
 use std::time::Duration;
 
 use knoa_core::Usage;
-use reqwest::{Client, Response, StatusCode, header};
+use reqwest::{
+    Client, Response, StatusCode,
+    header::{self, HeaderMap, HeaderName, HeaderValue},
+};
 use serde::{Deserialize, de::DeserializeOwned};
 
 use crate::{Error, usage::Meter};
@@ -29,21 +32,7 @@ impl OpenRouter {
     ) -> Result<OpenRouter, Error> {
         let client = Client::builder()
             .timeout(Duration::from_secs(60))
-            .default_headers(
-                [
-                    // OpenRouter's app attribution headers.
-                    (
-                        header::REFERER,
-                        header::HeaderValue::from_static("https://github.com/50BytesOfJohn/knoa"),
-                    ),
-                    (
-                        header::HeaderName::from_static("x-title"),
-                        header::HeaderValue::from_static("Knoa"),
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-            )
+            .default_headers(attribution_headers())
             .build()?;
         Ok(OpenRouter {
             client,
@@ -95,6 +84,23 @@ impl OpenRouter {
             cost: usage.cost,
         });
     }
+}
+
+/// OpenRouter's app attribution: the referer is the app's identity, the rest fill in its
+/// page on openrouter.ai/apps. Unknown categories are dropped silently, so the one here
+/// must stay on their list.
+fn attribution_headers() -> HeaderMap {
+    [
+        (header::REFERER, "https://www.50bytesofjohn.dev/knoa"),
+        (HeaderName::from_static("x-openrouter-title"), "Knoa"),
+        (
+            HeaderName::from_static("x-openrouter-categories"),
+            "personal-agent",
+        ),
+    ]
+    .into_iter()
+    .map(|(name, value)| (name, HeaderValue::from_static(value)))
+    .collect()
 }
 
 /// The `usage` block of both endpoints. Chat calls them prompt and completion tokens.
