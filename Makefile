@@ -1,19 +1,37 @@
 .PHONY: run dev bundle app dist changelog release fmt fmt-check lint test check
 
+# Settings for this machine only, like FAST = 1. Git ignores the file.
+-include local.mk
+
+# Builds run at background priority, which keeps them on the efficiency cores so the Mac
+# stays cool and the fans stay quiet. They take longer. FAST=1 builds at full speed.
+ifeq ($(FAST),)
+COOL := taskpolicy -c background
+ifndef CARGO_BUILD_JOBS
+# One job per efficiency core. Intel Macs have none, so they get half their cores.
+CARGO_BUILD_JOBS := $(shell sysctl -n hw.perflevel1.logicalcpu 2>/dev/null || \
+	echo $$(( $$(sysctl -n hw.logicalcpu) / 2 )))
+endif
+export CARGO_BUILD_JOBS
+endif
+
+# The app itself runs at normal priority, so only the build step goes through $(COOL).
 run: ## Run the app (release build)
+	$(COOL) cargo build --release
 	cargo run --release
 
 dev: ## Run the app (debug build, verbose logs)
+	$(COOL) cargo build
 	RUST_LOG=knoa=debug cargo run
 
 bundle: ## Build target/release/Knoa.app with its icon and Sparkle (needs Xcode)
-	scripts/bundle.sh
+	$(COOL) scripts/bundle.sh
 
 app: bundle ## Build and open Knoa.app
 	open target/release/Knoa.app
 
 dist: ## Signed, notarized Knoa.dmg and update zip in target/dist (see scripts/package.sh)
-	scripts/package.sh
+	$(COOL) scripts/package.sh
 
 changelog: ## What the next release's notes will say (needs git-cliff)
 	git-cliff --unreleased --strip all
@@ -33,9 +51,9 @@ fmt-check: ## Verify formatting without changing files
 	taplo fmt --check
 
 lint: ## Clippy with warnings as errors
-	cargo lint
+	$(COOL) cargo lint
 
 test: ## Run all tests
-	cargo test --workspace --locked
+	$(COOL) cargo test --workspace --locked
 
 check: fmt-check lint test ## Everything CI runs
