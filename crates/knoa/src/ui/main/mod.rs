@@ -16,12 +16,13 @@ mod sidebar;
 mod trash;
 mod workspaces;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui::{
     App, AppContext as _, ClipboardItem, Context, Entity, FocusHandle, Focusable as _,
     InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, ParentElement as _, Render,
-    ScrollHandle, Styled as _, Subscription, Window, actions, div, prelude::FluentBuilder as _,
+    ScrollHandle, Styled as _, Subscription, Task, Window, actions, div,
+    prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
@@ -102,6 +103,10 @@ pub struct MainView {
     scroll: ScrollHandle,
     selected: Option<BookmarkId>,
     detail_open: bool,
+    /// The bookmark whose folder chips show every folder, to add it to another.
+    folder_picker: Option<BookmarkId>,
+    /// The bookmark whose link was just copied, until the task clears the confirmation.
+    copied: Option<(BookmarkId, Task<()>)>,
     overlay: Option<Overlay>,
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
@@ -146,6 +151,8 @@ impl MainView {
             scroll: ScrollHandle::new(),
             selected: None,
             detail_open: false,
+            folder_picker: None,
+            copied: None,
             overlay: None,
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
@@ -333,8 +340,26 @@ impl MainView {
             .selected
             .and_then(|id| self.library.read(cx).bookmark(id))
         {
-            cx.write_to_clipboard(ClipboardItem::new_string(bookmark.url.clone()));
+            let (id, url) = (bookmark.id, bookmark.url.clone());
+            self.copy_to_clipboard(id, url, cx);
         }
+    }
+
+    /// Copies a bookmark's link and confirms it on the detail panel's copy button for a
+    /// moment.
+    fn copy_to_clipboard(&mut self, id: BookmarkId, url: String, cx: &mut Context<'_, MainView>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(url));
+        let reset = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(1500))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                this.copied = None;
+                cx.notify();
+            });
+        });
+        self.copied = Some((id, reset));
+        cx.notify();
     }
 
     fn toggle_up_next(&mut self, _: &ToggleUpNext, _: &mut Window, cx: &mut Context<'_, MainView>) {

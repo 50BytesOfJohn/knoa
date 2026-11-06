@@ -108,10 +108,20 @@ The window background is a solid colour by default, or a wallpaper the user pick
 
 ### Detail panel (right, floating, ~340 px)
 
-- Image, kind and site, title (large serif), AI summary marked with ✦, typed fields in a
-  two-column grid, folders the AI added marked with ✦ and an Undo.
-- For unprocessed bookmarks: "Only the title and link so far" and an Organize button.
-- Actions at the bottom: **Open** (↵), Up next toggle, Copy link, Delete.
+- The image is never cropped: full-bleed when it fits under 300 px, otherwise whole and
+  inset on a soft backdrop. Then site and kind, title (large serif), AI summary with a trailing ✦, typed fields in
+  a two-column grid, then tags and folders.
+- One notice at most, above the fields: in Trash, set aside, or not organized yet ("Only
+  the title and link so far" and an Organize button).
+- Tags and folders are chips. AI-made ones carry ✦; hovering turns a chip's leading mark
+  into an ×, and a click removes it, which is also the one-click undo. The AI's folder
+  confidence shows only when it is below 80%.
+- Only the folders the bookmark is in show, plus a + that offers the rest. A bookmark in
+  no folder offers every folder straight away.
+- A quiet footer says where it came from (browser folder), when it was saved and which
+  model organized it, which also explains the ✦.
+- Actions at the bottom: **Open** (↵), then icons for Up next, Copy link (a check confirms
+  the copy) and Delete, each with its shortcut in a tooltip.
 - In Trash: how long until it is deleted for good, with **Restore** and Delete now.
 - A close button; closing gives the cards the full width.
 
