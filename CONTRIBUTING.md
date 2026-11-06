@@ -6,6 +6,9 @@ bug reports, ideas, docs, code.
 ## Before you start
 
 - For anything bigger than a small fix, open an issue first so we can agree on the approach.
+  Ideas and questions go to [Discussions](https://github.com/50BytesOfJohn/knoa/discussions).
+- Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md). Security issues are reported
+  privately, as [SECURITY.md](SECURITY.md) describes.
 - Read [docs/VISION.md](docs/VISION.md) (what Knoa should feel like) and
   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (how it's built).
 
