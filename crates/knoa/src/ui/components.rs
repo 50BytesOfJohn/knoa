@@ -93,6 +93,19 @@ pub fn chip(label: impl Into<SharedString>, bg: Hsla, fg: Hsla) -> Div {
         .child(label.into())
 }
 
+/// A problem to fix, in the danger colour and always with an icon, so it never passes for
+/// the AI's red.
+pub fn problem(text: impl Into<SharedString>, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_start()
+        .gap_2()
+        .text_sm()
+        .text_color(theme.danger)
+        .child(icon("circle-alert", px(14.), theme.danger).mt(px(3.)))
+        .child(div().flex_1().min_w_0().child(text.into()))
+}
+
 /// The site's first letter on a colored disc: a stand-in for favicons, which would mean
 /// asking a third party about every bookmarked site.
 pub fn site_mark(site: &str, size: Pixels, cx: &App) -> AnyElement {

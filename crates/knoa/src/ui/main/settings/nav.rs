@@ -9,6 +9,7 @@ use gpui::{
 use super::{Page, SettingsView};
 use crate::ui::{
     components::{icon, workspace_mark},
+    mascot::ai_mark,
     theme::{PANEL_RADIUS, SERIF, Theme},
 };
 
@@ -20,12 +21,25 @@ impl SettingsView {
         let workspaces = self.library.read(cx).workspaces().to_vec();
 
         let mut app_pages = div().flex().flex_col().gap_0p5().px_2();
-        for (page, label, icon_name) in [
-            (Page::General, "General", "settings-2"),
-            (Page::Appearance, "Appearance", "palette"),
-            (Page::Ai, "AI", "sparkle"),
+        let icon_mark =
+            |page, name| icon(name, px(15.), self.icon_color(page, &theme)).into_any_element();
+        for (page, label, mark) in [
+            (
+                Page::General,
+                "General",
+                icon_mark(Page::General, "settings-2"),
+            ),
+            (
+                Page::Appearance,
+                "Appearance",
+                icon_mark(Page::Appearance, "palette"),
+            ),
+            (
+                Page::Ai,
+                "AI",
+                ai_mark(px(15.), theme.ai).into_any_element(),
+            ),
         ] {
-            let mark = icon(icon_name, px(15.), self.icon_color(page, &theme));
             app_pages = app_pages.child(self.nav_row(page, label, mark, cx));
         }
 

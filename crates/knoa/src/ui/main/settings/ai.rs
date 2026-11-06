@@ -5,7 +5,7 @@ mod usage;
 
 use gpui::{
     AnyElement, AppContext as _, Context, Div, Entity, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Task, TaskExt as _, Window, div,
+    StatefulInteractiveElement as _, Styled as _, Task, TaskExt as _, Window, div, px,
 };
 use gpui_component::input::{Input, InputState};
 use knoa_ai::ProviderKind;
@@ -23,6 +23,7 @@ use crate::{
     },
     ui::{
         components::{Tone, button},
+        mascot::{Mood, mascot},
         theme::Theme,
     },
 };
@@ -127,11 +128,24 @@ impl Render for AiPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let status = Organizer::entity(cx).read(cx).status().clone();
-        let mut page = div().flex().flex_col().gap_8().child(form::header(
-            "AI",
-            "Knoa works without AI too. With it, new bookmarks get a kind, a summary, tags and folders.",
-            &theme,
-        ));
+        let organizing = self.library.read(cx).counts().organizing;
+        let header = div()
+            .flex()
+            .items_center()
+            .gap_6()
+            .child(div().flex_1().child(form::header(
+                "AI",
+                "Knoa works without AI too. With it, new bookmarks get a kind, a summary, tags and folders.",
+                &theme,
+            )))
+            .child(mascot(
+                "ai-page-mascot",
+                px(48.),
+                Mood::of(&status, organizing),
+                theme.ai,
+                theme.panel,
+            ));
+        let mut page = div().flex().flex_col().gap_8().child(header);
         page = match &status {
             AiStatus::Off => page.child(self.connect_group(&theme, cx)),
             AiStatus::Ready | AiStatus::NeedsAttention(_) => page
@@ -199,9 +213,9 @@ impl AiPage {
             theme,
         )];
         if let AiStatus::NeedsAttention(problem) = status {
-            rows.push(form::note(
+            rows.push(form::problem_note(
                 format!("OpenRouter says: {problem}. Check your key or credits."),
-                theme.danger,
+                theme,
             ));
         }
         rows.extend(self.message_row(theme));
@@ -233,7 +247,10 @@ impl AiPage {
 
     fn message_row(&self, theme: &Theme) -> Option<AnyElement> {
         let (text, is_error) = self.message.as_ref()?;
-        let color = if *is_error { theme.danger } else { theme.muted };
-        Some(form::note(text.clone(), color))
+        Some(if *is_error {
+            form::problem_note(text.clone(), theme)
+        } else {
+            form::note(text.clone(), theme.muted)
+        })
     }
 }

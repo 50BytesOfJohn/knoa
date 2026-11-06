@@ -13,6 +13,8 @@ pub const DETAIL_WIDTH: Pixels = px(340.);
 pub const PANEL_RADIUS: Pixels = px(18.);
 pub const CARD_RADIUS: Pixels = px(14.);
 pub const SERIF: &str = "Charter";
+/// The logo's full stop. The AI mascot is that dot come alive, so AI-made values share it.
+pub const BRAND_RED: u32 = 0x00e0_573c;
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -33,8 +35,10 @@ pub struct Theme {
     pub on_accent: Hsla,
     pub soft: Hsla,
     pub hover: Hsla,
-    /// AI-made values (✦), separate from the accent on purpose.
+    /// AI marks and the mascot: the brand red, separate from the accent on purpose.
     pub ai: Hsla,
+    /// AI-made text, a shade of the brand red that stays readable at small sizes.
+    pub ai_text: Hsla,
     pub ai_soft: Hsla,
     pub code_card: Hsla,
     pub code_text: Hsla,
@@ -109,9 +113,10 @@ fn rgb(hex: u32) -> Hsla {
     gpui::rgb(hex).into()
 }
 
+/// No reds or oranges: a folder dot must never pass for the AI's.
 fn folder_palette(dark: bool) -> [Hsla; 8] {
     let lightness = if dark { 0.66 } else { 0.55 };
-    [0.02, 0.08, 0.13, 0.36, 0.5, 0.58, 0.72, 0.9].map(|hue| hsla(hue, 0.55, lightness, 1.))
+    [0.12, 0.2, 0.36, 0.47, 0.57, 0.65, 0.74, 0.84].map(|hue| hsla(hue, 0.55, lightness, 1.))
 }
 
 fn paper() -> Theme {
@@ -131,11 +136,13 @@ fn paper() -> Theme {
         on_accent: rgb(0x00ff_ffff),
         soft: rgb(0x00f0_ede6),
         hover: rgb(0x00ec_e8e0),
-        ai: rgb(0x00b2_6a1d),
-        ai_soft: rgb(0x00f8_ecdc),
+        ai: rgb(BRAND_RED),
+        ai_text: rgb(0x00b8_402a),
+        ai_soft: rgb(0x00fb_e7e0),
         code_card: rgb(0x0024_2a2e),
         code_text: rgb(0x00e8_ecee),
-        danger: rgb(0x00b3_3a2b),
+        // Wine, not red: errors must not look like the AI's mark.
+        danger: rgb(0x008e_1538),
         folders: folder_palette(false),
     }
 }
@@ -171,11 +178,12 @@ fn night() -> Theme {
         on_accent: rgb(0x0012_1314),
         soft: rgb(0x0026_2729),
         hover: rgb(0x002b_2d30),
-        ai: rgb(0x00e3_a35a),
-        ai_soft: rgb(0x0036_2a1c),
+        ai: rgb(BRAND_RED),
+        ai_text: rgb(0x00f0_8a70),
+        ai_soft: rgb(0x003b_231d),
         code_card: rgb(0x000f_1215),
         code_text: rgb(0x00d8_dee2),
-        danger: rgb(0x00e0_6e5c),
+        danger: rgb(0x00f5_8fb8),
         folders: folder_palette(true),
     }
 }
