@@ -7,7 +7,7 @@ use gpui::{
     Context, Div, InteractiveElement as _, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
-use gpui_component::switch::Switch;
+use gpui_component::{switch::Switch, tooltip::Tooltip};
 
 use super::{SettingsView, form};
 use crate::{state::settings::SettingsFile, ui::theme::Theme};
@@ -73,7 +73,8 @@ fn tile(
     theme: &Theme,
     cx: &mut Context<'_, SettingsView>,
 ) -> impl gpui::IntoElement {
-    let id = option.id;
+    let (id, name) = (option.id, option.name);
+    let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
     // The ring sits in a fixed 2 px border, so selecting a tile never shifts the grid.
     let ring = if selected {
         theme.accent
@@ -105,10 +106,18 @@ fn tile(
             div()
                 .px_1()
                 .text_sm()
+                .truncate()
                 .when(selected, |s| s.font_weight(gpui::FontWeight::MEDIUM))
                 .when(!selected, |s| s.text_color(theme.muted))
                 .child(option.name),
         )
+        .tooltip(move |window, cx| {
+            Tooltip::new(name)
+                .bg(bg)
+                .text_color(fg)
+                .border_color(border)
+                .build(window, cx)
+        })
         .on_click(cx.listener(move |_, _, _, cx| {
             SettingsFile::update(cx, |s| s.theme = id.into());
             Theme::apply(id, cx);

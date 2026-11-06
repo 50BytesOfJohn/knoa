@@ -1,6 +1,23 @@
 //! Knoa's themes: colors, type, spacing and radii. Several themes, not only light and dark;
 //! the default is a calm, solid light one. gpui-component's theme is derived from ours so
 //! inputs and scrollbars match.
+//!
+//! Besides Knoa's own themes there are ports of popular editor themes, one module per
+//! family, built from each family's published palette. Red means only the brand and the
+//! AI in every theme, so a port takes its danger and folder colors from the family's
+//! other hues.
+
+mod catppuccin;
+mod dracula;
+mod everforest;
+mod gruvbox;
+mod kanagawa;
+mod knoa;
+mod nord;
+mod one;
+mod rose_pine;
+mod solarized;
+mod tokyo_night;
 
 use gpui::{App, Global, Hsla, Pixels, hsla, px};
 
@@ -43,6 +60,7 @@ pub struct Theme {
     pub code_card: Hsla,
     pub code_text: Hsla,
     pub danger: Hsla,
+    /// No reds or oranges: a folder dot must never pass for the AI's.
     pub folders: [Hsla; 8],
 }
 
@@ -53,15 +71,31 @@ impl Theme {
         cx.global::<Theme>()
     }
 
-    pub fn all() -> [Theme; 4] {
-        [paper(), sage(), night(), dusk()]
+    /// Knoa's own themes first, then the ported families in alphabetical order.
+    pub fn all() -> Vec<Theme> {
+        [
+            knoa::themes(),
+            catppuccin::themes(),
+            dracula::themes(),
+            everforest::themes(),
+            gruvbox::themes(),
+            kanagawa::themes(),
+            nord::themes(),
+            one::themes(),
+            rose_pine::themes(),
+            solarized::themes(),
+            tokyo_night::themes(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
     }
 
     pub fn by_id(id: &str) -> Theme {
         Theme::all()
             .into_iter()
             .find(|t| t.id == id)
-            .unwrap_or_else(paper)
+            .unwrap_or_else(knoa::paper)
     }
 
     pub fn folder_color(&self, index: u8) -> Hsla {
@@ -113,92 +147,68 @@ fn rgb(hex: u32) -> Hsla {
     gpui::rgb(hex).into()
 }
 
-/// No reds or oranges: a folder dot must never pass for the AI's.
-fn folder_palette(dark: bool) -> [Hsla; 8] {
-    let lightness = if dark { 0.66 } else { 0.55 };
-    [0.12, 0.2, 0.36, 0.47, 0.57, 0.65, 0.74, 0.84].map(|hue| hsla(hue, 0.55, lightness, 1.))
+/// A color given the way some palettes publish theirs: degrees and percentages.
+fn hsl(hue: f32, saturation: f32, lightness: f32) -> Hsla {
+    hsla(hue / 360., saturation / 100., lightness / 100., 1.)
 }
 
-fn paper() -> Theme {
-    Theme {
-        id: "paper",
-        name: "Paper",
-        dark: false,
-        canvas: rgb(0x00ef_ece6),
-        panel: rgb(0x00fb_faf7),
-        hairline: rgb(0x00e2_ddd4),
-        card: rgb(0x00ff_ffff),
-        card_hover_shadow: hsla(0.08, 0.3, 0.2, 0.14),
-        text: rgb(0x0022_201c),
-        muted: rgb(0x006f_6a61),
-        faint: rgb(0x00a3_9d92),
-        accent: rgb(0x002f_5d50),
-        on_accent: rgb(0x00ff_ffff),
-        soft: rgb(0x00f0_ede6),
-        hover: rgb(0x00ec_e8e0),
-        ai: rgb(BRAND_RED),
-        ai_text: rgb(0x00b8_402a),
-        ai_soft: rgb(0x00fb_e7e0),
-        code_card: rgb(0x0024_2a2e),
-        code_text: rgb(0x00e8_ecee),
-        // Wine, not red: errors must not look like the AI's mark.
-        danger: rgb(0x008e_1538),
-        folders: folder_palette(false),
+/// `over` laid on `base` at `amount` opacity. For the steps a palette doesn't publish.
+fn mix(base: Hsla, over: Hsla, amount: f32) -> Hsla {
+    base.blend(over.opacity(amount))
+}
+
+/// Halfway between two palette colors, for families with fewer than eight folder hues.
+fn between(a: Hsla, b: Hsla) -> Hsla {
+    mix(a, b, 0.5)
+}
+
+/// Eight folder colors from five hues: each hue and the midpoint to the next, ending
+/// halfway to the last. For families with too few hues once red and orange are out.
+fn spread(hues: [Hsla; 5]) -> [Hsla; 8] {
+    std::array::from_fn(|slot| {
+        let hue = hues[slot / 2];
+        if slot % 2 == 0 {
+            hue
+        } else {
+            between(hue, hues[slot / 2 + 1])
+        }
+    })
+}
+
+/// The brand red's text shade, the same in every theme of a mode.
+fn ai_text(dark: bool) -> Hsla {
+    rgb(if dark { 0x00f0_8a70 } else { 0x00b8_402a })
+}
+
+/// The brand red laid on `panel`, behind AI-made values.
+fn ai_soft(panel: Hsla, dark: bool) -> Hsla {
+    mix(panel, rgb(BRAND_RED), if dark { 0.16 } else { 0.12 })
+}
+
+/// A step below `canvas`, for code cards in palettes whose darkest color is the canvas.
+fn below(canvas: Hsla) -> Hsla {
+    mix(canvas, gpui::black(), 0.3)
+}
+
+fn card_hover_shadow(dark: bool) -> Hsla {
+    if dark {
+        hsla(0., 0., 0., 0.45)
+    } else {
+        hsla(0.08, 0.3, 0.2, 0.14)
     }
 }
 
-fn sage() -> Theme {
-    Theme {
-        id: "sage",
-        name: "Sage",
-        canvas: rgb(0x00e3_e9e1),
-        panel: rgb(0x00f6_f8f4),
-        hairline: rgb(0x00d5_ddd2),
-        soft: rgb(0x00e9_eee6),
-        hover: rgb(0x00e2_e8de),
-        accent: rgb(0x003d_6b45),
-        ..paper()
-    }
-}
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
 
-fn night() -> Theme {
-    Theme {
-        id: "night",
-        name: "Night",
-        dark: true,
-        canvas: rgb(0x0012_1314),
-        panel: rgb(0x001c_1d1f),
-        hairline: rgb(0x002e_3033),
-        card: rgb(0x0023_2427),
-        card_hover_shadow: hsla(0., 0., 0., 0.45),
-        text: rgb(0x00ec_eae6),
-        muted: rgb(0x009c_9891),
-        faint: rgb(0x0068_655f),
-        accent: rgb(0x008f_c7b4),
-        on_accent: rgb(0x0012_1314),
-        soft: rgb(0x0026_2729),
-        hover: rgb(0x002b_2d30),
-        ai: rgb(BRAND_RED),
-        ai_text: rgb(0x00f0_8a70),
-        ai_soft: rgb(0x003b_231d),
-        code_card: rgb(0x000f_1215),
-        code_text: rgb(0x00d8_dee2),
-        danger: rgb(0x00f5_8fb8),
-        folders: folder_palette(true),
-    }
-}
+    use super::Theme;
 
-fn dusk() -> Theme {
-    Theme {
-        id: "dusk",
-        name: "Dusk",
-        canvas: rgb(0x0017_1520),
-        panel: rgb(0x0021_1e2c),
-        hairline: rgb(0x0034_3045),
-        card: rgb(0x0028_2536),
-        soft: rgb(0x002c_2839),
-        hover: rgb(0x0032_2e42),
-        accent: rgb(0x00c3_a6f2),
-        ..night()
+    // Settings keep the theme by id, so a repeated id would quietly open the wrong theme.
+    #[test]
+    fn theme_ids_are_unique() {
+        let themes = Theme::all();
+        let ids: HashSet<_> = themes.iter().map(|t| t.id).collect();
+        assert_eq!(ids.len(), themes.len());
     }
 }
