@@ -48,13 +48,13 @@ version is in [CHANGELOG.md](CHANGELOG.md).
 ## Getting started
 
 Requirements: macOS, [rustup](https://rustup.rs) (it installs the pinned toolchain itself),
-and Xcode Command Line Tools (`xcode-select --install`). Optional:
+and Xcode 26 or later, whose icon compiler `make dev` and `make app` use. Optional:
 [`taplo`](https://taplo.tamasfe.dev) for TOML formatting (`brew install taplo`).
 
 ```sh
-make dev     # debug build, verbose logs (RUST_LOG=knoa=debug)
-make run     # optimized build
-make app     # build and open Knoa.app, with its icon (needs Xcode 26 or later)
+make dev     # Knoa Dev: debug build as an app bundle, verbose logs (RUST_LOG=knoa=debug)
+make run     # optimized build, without a bundle
+make app     # build and open the release Knoa.app
 ```
 
 The first build compiles GPUI and takes a few minutes; later builds are incremental.
