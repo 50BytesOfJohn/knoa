@@ -17,6 +17,18 @@ bug reports, ideas, docs, code.
 1. Fork and branch from `main`.
 2. `make dev` runs the app; `make fmt` formats.
 3. `make check` must pass. It's exactly what CI runs.
+
+   `make` builds at background priority, one job per efficiency core, so your Mac stays
+   cool and quiet. Builds take longer this way. To change that on your machine, put any
+   of these in a `local.mk` file at the repo root (git ignores it), or pass them to a
+   single run, like `make check FAST=1`:
+
+   ```make
+   # Build at full speed
+   FAST = 1
+   # Or keep background priority with a different job count
+   CARGO_BUILD_JOBS = 6
+   ```
 4. Keep pull requests focused, and update docs when behavior or design changes.
 5. Title commits and pull requests as a plain sentence that starts with a verb: "Add Arc
    import", "Fix search for quoted words". Titles become the changelog; "Add", "Fix" and

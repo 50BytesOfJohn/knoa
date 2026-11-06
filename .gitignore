@@ -1,6 +1,7 @@
 /target
 .DS_Store
 *.swp
+local.mk
 .env
 .env.*
 !.env.example
