@@ -21,10 +21,20 @@ use crate::{
 
 /// Settings leaves a band of the main screen showing on every side, so it reads as a sheet
 /// over the library rather than a new screen.
+const SHEET_INSET: Pixels = px(36.);
+
+/// Like a native sheet, settings hangs below the titlebar, so the traffic lights stay on the
+/// dimmed window instead of floating over the sheet.
+fn below_titlebar() -> Pixels {
+    MARGIN + TITLEBAR_HEIGHT
+}
+
 fn sheet_size(window: &Window) -> Size<Pixels> {
-    const INSET: Pixels = px(36.);
     let viewport = window.viewport_size();
-    size(viewport.width - INSET * 2., viewport.height - INSET * 2.)
+    size(
+        viewport.width - SHEET_INSET * 2.,
+        viewport.height - below_titlebar() - SHEET_INSET,
+    )
 }
 
 impl MainView {
@@ -74,9 +84,11 @@ impl MainView {
             scrim.child(
                 panel
                     .absolute()
-                    .top(MARGIN + TITLEBAR_HEIGHT)
+                    .top(below_titlebar())
                     .left(workspace_menu_left()),
             )
+        } else if sheet.is_some() {
+            scrim.child(panel.absolute().top(below_titlebar()).left(SHEET_INSET))
         } else {
             scrim.flex().items_center().justify_center().child(panel)
         };
