@@ -3,8 +3,8 @@
 
 use gpui::{
     AnyElement, App, Div, FontWeight, Hsla, InteractiveElement as _, IntoElement, ObjectFit,
-    ParentElement as _, StatefulInteractiveElement as _, Styled as _, StyledImage as _, div, img,
-    px,
+    ParentElement as _, Size, StatefulInteractiveElement as _, Styled as _, StyledImage as _, div,
+    img, px, size,
 };
 use gpui_component::tooltip::Tooltip;
 use knoa_core::{Bookmark, Kind, Status};
@@ -242,7 +242,7 @@ fn full(bookmark: &Bookmark, width: f32, show_summary: bool, theme: &Theme, cx: 
         card = card.child(cover(
             bookmark,
             image.path.clone(),
-            image_height(bookmark, width),
+            size(width, image_height(bookmark, width)),
             theme,
         ));
     }
@@ -256,7 +256,12 @@ fn full(bookmark: &Bookmark, width: f32, show_summary: bool, theme: &Theme, cx: 
     card.child(body)
 }
 
-fn cover(bookmark: &Bookmark, path: std::path::PathBuf, height: f32, theme: &Theme) -> AnyElement {
+fn cover(
+    bookmark: &Bookmark,
+    path: std::path::PathBuf,
+    card: Size<f32>,
+    theme: &Theme,
+) -> AnyElement {
     let badge = |name: &str| {
         div()
             .size(px(24.))
@@ -270,6 +275,10 @@ fn cover(bookmark: &Bookmark, path: std::path::PathBuf, height: f32, theme: &The
     // GPUI clips overflow to a rectangle, so the card's rounding doesn't reach the image;
     // round it to the card's inner edge, inside its 1 px border.
     let radius = CARD_RADIUS - px(1.);
+    // `img` takes the picture's aspect ratio unless one is set, and layout follows that
+    // ratio over an explicit height, so a poster or banner outside the card's range would
+    // spill out of its box. Give it the box's own ratio, inside the card's border.
+    let height = card.height;
     let mut cover = div()
         .relative()
         .w_full()
@@ -278,7 +287,9 @@ fn cover(bookmark: &Bookmark, path: std::path::PathBuf, height: f32, theme: &The
         .bg(theme.soft)
         .child(
             img(path)
-                .size_full()
+                .w_full()
+                .h(px(height))
+                .aspect_ratio((card.width - 2.) / height)
                 .rounded_t(radius)
                 .object_fit(ObjectFit::Cover),
         )
