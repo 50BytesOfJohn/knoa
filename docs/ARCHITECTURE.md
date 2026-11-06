@@ -122,6 +122,10 @@ per-request log; the provider's own dashboard has that.
 Folder "find bookmarks" and re-scan run folder matching over bookmarks that are already
 processed. They only add.
 
+"Organize again", for one workspace or all of them, queues every bookmark outside Trash
+for a full run, so new folders and changed instructions reach bookmarks organized
+before. Like any re-run it keeps user values and only adds folders.
+
 AI providers sit behind two traits in `knoa-ai`
 ([ADR 0009](adr/0009-provider-neutral-ai.md)); OpenRouter is a small hand-written client
 ([ADR 0003](adr/0003-openrouter-thin-client.md)). The API key is stored in the macOS

@@ -19,11 +19,23 @@ impl Store {
     /// Queues every bookmark in the workspace the AI hasn't organized, and returns how many
     /// were added.
     pub fn queue_not_organized(&mut self, workspace: WorkspaceId) -> Result<usize> {
+        self.queue_matching(workspace, "status IN ('new', 'failed')")
+    }
+
+    /// Queues every bookmark in the workspace, organized or not, so the AI files them
+    /// again with the current folders and instructions. Returns how many were queued.
+    pub fn queue_all(&mut self, workspace: WorkspaceId) -> Result<usize> {
+        self.queue_matching(workspace, "1")
+    }
+
+    /// Queues the workspace's bookmarks outside Trash that match `condition`, a SQL
+    /// expression over `bookmarks` with no parameters.
+    fn queue_matching(&mut self, workspace: WorkspaceId, condition: &str) -> Result<usize> {
         let tx = self.conn.transaction()?;
         let ids: Vec<i64> = {
-            let mut stmt = tx.prepare(
-                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND status IN ('new', 'failed') AND deleted_at IS NULL",
-            )?;
+            let mut stmt = tx.prepare(&format!(
+                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND deleted_at IS NULL AND {condition}"
+            ))?;
             stmt.query_map([workspace.0], |row| row.get(0))?
                 .collect::<rusqlite::Result<_>>()?
         };
@@ -212,4 +224,53 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64) -> Result<()> {
         [id],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use knoa_core::{Enrichment, Fields, Kind};
+
+    use super::*;
+    use crate::{
+        NewBookmarks,
+        test_support::{WORKSPACE, bookmark},
+    };
+
+    #[test]
+    fn queue_all_requeues_organized_bookmarks_but_not_trash() {
+        let mut store = Store::open_in_memory().unwrap();
+        let links = [
+            bookmark("https://a.dev/", "A", 1),
+            bookmark("https://b.dev/", "B", 2),
+        ];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let enrichment = Enrichment {
+            kind: Kind::Article,
+            summary: None,
+            fields: Fields::new(),
+            extras: Vec::new(),
+            tags: Vec::new(),
+            folders: Vec::new(),
+            set_aside: None,
+            model: "test".into(),
+        };
+        let [trashed, kept] = <[Job; 2]>::try_from(store.take_jobs(0, 2).unwrap()).unwrap();
+        for job in [&trashed, &kept] {
+            store
+                .finish_organized(job.bookmark.id, &enrichment, 10)
+                .unwrap();
+        }
+        store.trash(trashed.bookmark.id, 20).unwrap();
+
+        assert_eq!(store.queue_all(WORKSPACE).unwrap(), 1);
+        let requeued: Vec<_> = store
+            .take_jobs(0, 10)
+            .unwrap()
+            .into_iter()
+            .map(|job| job.bookmark.id)
+            .collect();
+        assert_eq!(requeued, [kept.bookmark.id]);
+    }
 }

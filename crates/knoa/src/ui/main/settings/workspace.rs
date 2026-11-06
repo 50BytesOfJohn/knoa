@@ -18,8 +18,12 @@ use gpui_component::{
 use knoa_browser::{Browser, Profile};
 use knoa_core::{Screening, Workspace, WorkspaceId};
 
-use super::form;
+use super::{
+    form,
+    reorganize::{Reorganize, Scope},
+};
 use crate::{
+    services::organizer::{AiStatus, Organizer},
     state::library::{Library, lock},
     ui::{
         components::{Tone, button, workspace_mark},
@@ -50,6 +54,8 @@ pub struct WorkspacePage {
     /// Delete takes a second click: it removes every bookmark in the workspace.
     confirm_delete: bool,
     deleted: bool,
+    /// `None` while creating a workspace.
+    reorganize: Option<Entity<Reorganize>>,
     library: Entity<Library>,
     _subscriptions: Vec<Subscription>,
 }
@@ -94,7 +100,10 @@ impl WorkspacePage {
             cx.subscribe(&guideline, Self::save_on_blur),
             // The header shows the name as it's typed.
             cx.observe(&name, |_, _, cx| cx.notify()),
+            // Organizing again is offered only while AI is on.
+            cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify()),
         ];
+        let reorganize = (!is_new).then(|| new_reorganize(workspace.id, &library, cx));
         WorkspacePage {
             existing: (!is_new).then_some(workspace.id),
             name,
@@ -108,6 +117,7 @@ impl WorkspacePage {
             blocked: knoa_browser::blocked_browsers(),
             confirm_delete: false,
             deleted: false,
+            reorganize,
             library,
             _subscriptions: subscriptions,
         }
@@ -193,6 +203,7 @@ impl WorkspacePage {
             library.update(cx, |library, cx| library.set_workspace(id, cx));
             this.update(cx, |this, cx| {
                 this.existing = Some(id);
+                this.reorganize = Some(new_reorganize(id, &this.library, cx));
                 cx.emit(WorkspacePageEvent::Created(id));
                 cx.notify();
             })?;
@@ -354,6 +365,10 @@ impl WorkspacePage {
                 theme,
             ));
         }
+        let ai_on = *Organizer::entity(cx).read(cx).status() != AiStatus::Off;
+        if let Some(reorganize) = self.reorganize.clone().filter(|_| ai_on) {
+            rows.push(reorganize.into_any_element());
+        }
         form::group("Organizing", rows, theme)
     }
 
@@ -386,6 +401,15 @@ impl WorkspacePage {
         );
         Some(form::group("Delete", vec![row], theme))
     }
+}
+
+fn new_reorganize(
+    id: WorkspaceId,
+    library: &Entity<Library>,
+    cx: &mut Context<'_, WorkspacePage>,
+) -> Entity<Reorganize> {
+    let library = library.clone();
+    cx.new(|_| Reorganize::new(Scope::Workspace(id), library))
 }
 
 fn blank_workspace(color: u8) -> Workspace {
