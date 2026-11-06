@@ -3,6 +3,16 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.1.2](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.2) - 2026-11-06
+
+### Changed
+
+- Track AI usage and cost in settings ([#6](https://github.com/50BytesOfJohn/knoa/pull/6))
+- Update OpenRouter app attribution headers ([#8](https://github.com/50BytesOfJohn/knoa/pull/8))
+- Set the repo up for open source contributors ([#7](https://github.com/50BytesOfJohn/knoa/pull/7))
+- Keep the traffic lights off the settings sheet ([#9](https://github.com/50BytesOfJohn/knoa/pull/9))
+- Redesign the detail panel ([#10](https://github.com/50BytesOfJohn/knoa/pull/10))
+- Give the AI a mascot and a red of its own ([#11](https://github.com/50BytesOfJohn/knoa/pull/11))
 ## [0.1.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.1) - 2026-11-05
 
 ### Changed
