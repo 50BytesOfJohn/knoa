@@ -51,8 +51,8 @@ impl MainView {
     }
 
     pub(super) fn select_first(&mut self, cx: &mut Context<'_, MainView>) {
-        if let Some(first) = self.layout.results.first() {
-            self.selected = Some(first.id);
+        if let Some(first) = self.layout.results.first().map(|b| b.id) {
+            self.set_selected(Some(first), cx);
             cx.notify();
         }
     }
@@ -70,8 +70,8 @@ impl MainView {
         };
         let Some(next) = next else { return };
         let placed = cards[next];
-        if let Some(bookmark) = self.layout.results.get(placed.index) {
-            self.selected = Some(bookmark.id);
+        if let Some(id) = self.layout.results.get(placed.index).map(|b| b.id) {
+            self.set_selected(Some(id), cx);
         }
         self.reveal(&placed, window);
         cx.notify();
