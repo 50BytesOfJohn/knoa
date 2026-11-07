@@ -11,7 +11,7 @@ use knoa_core::Workspace;
 use super::MainView;
 use crate::ui::{
     components::{icon, workspace_mark},
-    theme::Theme,
+    theme::{ROW_RADIUS, Theme},
 };
 
 impl MainView {
@@ -50,7 +50,7 @@ impl MainView {
                     .gap_2()
                     .h(px(34.))
                     .px_2()
-                    .rounded(px(10.))
+                    .rounded(ROW_RADIUS)
                     .text_sm()
                     .text_color(theme.muted)
                     .cursor_pointer()
@@ -78,7 +78,7 @@ impl MainView {
             .flex()
             .items_center()
             .gap_2p5()
-            .rounded(px(10.))
+            .rounded(ROW_RADIUS)
             .cursor_pointer()
             .when(is_current, |s| s.bg(theme.soft))
             .hover(|s| s.bg(theme.hover))

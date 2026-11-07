@@ -12,7 +12,7 @@ use gpui::{
     div,
 };
 
-pub use main::{OpenSettings, bind_keys};
+pub use main::{OpenSettings, bind_keys, traffic_light_position};
 
 use crate::state::{
     library::Library,

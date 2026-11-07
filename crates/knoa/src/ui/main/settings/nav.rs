@@ -10,7 +10,7 @@ use super::{Page, SettingsView};
 use crate::ui::{
     components::{icon, workspace_mark},
     mascot::ai_mark,
-    theme::{PANEL_RADIUS, SERIF, Theme},
+    theme::{PANEL_RADIUS, ROW_HEIGHT, ROW_RADIUS, SERIF, Theme},
 };
 
 const NAV_WIDTH: gpui::Pixels = px(220.);
@@ -115,9 +115,9 @@ impl SettingsView {
             .flex()
             .items_center()
             .gap_2()
-            .h(px(30.))
+            .h(ROW_HEIGHT)
             .px_2()
-            .rounded(px(9.))
+            .rounded(ROW_RADIUS)
             .text_sm()
             .cursor_pointer()
             .when(muted, |s| s.text_color(theme.muted))

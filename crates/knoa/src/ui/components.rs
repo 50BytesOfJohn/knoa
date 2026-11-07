@@ -8,7 +8,7 @@ use gpui::{
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
 use knoa_core::Kind;
 
-use crate::ui::theme::Theme;
+use crate::ui::theme::{CARD_RADIUS, Theme};
 
 /// A Lucide icon by file name, e.g. `"bookmark"`.
 pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
@@ -150,7 +150,7 @@ pub fn blocked_browsers_notice(blocked: &[Browser], cx: &App) -> Option<Div> {
             .flex_col()
             .items_start()
             .gap_2()
-            .rounded(px(12.))
+            .rounded(CARD_RADIUS)
             .bg(theme.soft)
             .text_xs()
             .text_color(theme.muted)

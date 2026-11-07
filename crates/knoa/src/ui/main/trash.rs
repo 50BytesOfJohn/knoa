@@ -9,7 +9,7 @@ use knoa_core::{Bookmark, BookmarkId, Place, TRASH_SECONDS};
 use super::{DeleteSelected, MainView};
 use crate::ui::{
     components::{Tone, button, icon},
-    theme::{PANEL_RADIUS, Theme},
+    theme::{CARD_RADIUS, PANEL_RADIUS, Theme},
 };
 
 pub const TRASH_BAR_HEIGHT: f32 = 56.;
@@ -111,7 +111,7 @@ impl MainView {
                 .flex()
                 .items_center()
                 .gap_2()
-                .rounded(px(12.))
+                .rounded(CARD_RADIUS)
                 .bg(theme.soft)
                 .text_sm()
                 .child(icon("trash", px(14.), theme.muted))
