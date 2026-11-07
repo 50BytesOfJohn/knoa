@@ -76,7 +76,7 @@ fn open_main_window(library: gpui::Entity<Library>, cx: &mut App) -> anyhow::Res
         titlebar: Some(TitlebarOptions {
             title: Some(APP_NAME.into()),
             appears_transparent: true,
-            traffic_light_position: Some(point(px(26.), px(26.))),
+            traffic_light_position: Some(crate::ui::traffic_light_position()),
         }),
         app_id: Some(APP_ID.into()),
         ..Default::default()

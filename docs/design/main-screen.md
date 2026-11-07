@@ -39,10 +39,14 @@
 └─────────────┘
 ```
 
-All panels float over the window background with a 12 px margin and large corner radii.
+All panels float over the window background, 12 px from its edge: the largest space in
+the layout, so nothing inside a panel is spaced wider than the room around it. Content
+keeps a 16 px gutter from the panels, the same as between cards. Panels use a 16 px
+radius, the same curve macOS gives the window; rows and small controls inside them use
+8 px, concentric with the panel 8 px in. Cards use 10 px.
 The window background is a solid colour by default, or a wallpaper the user picks.
 
-### Sidebar (left, floating, ~232 px)
+### Sidebar (left, floating, ~240 px)
 
 1. **Titlebar:** the traffic lights on the left; on the right the **workspace button**
    (the workspace's coloured mark and a chevron, its name on hover) and **add link**.

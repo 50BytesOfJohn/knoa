@@ -39,6 +39,7 @@ use add_link::AddLink;
 use content::LayoutCache;
 use folder_editor::FolderEditor;
 use settings::{Page, SettingsView};
+pub use sidebar::traffic_light_position;
 
 actions!(
     cards,

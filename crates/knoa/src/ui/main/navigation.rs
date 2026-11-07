@@ -3,9 +3,7 @@
 use gpui::{Context, Window, point, px};
 use knoa_core::BookmarkId;
 
-use super::{
-    MainView, MoveDown, MoveLeft, MoveRight, MoveUp, masonry::Placed, search::SEARCH_AREA_HEIGHT,
-};
+use super::{MainView, MoveDown, MoveLeft, MoveRight, MoveUp, content::cards_top, masonry::Placed};
 
 #[derive(Clone, Copy)]
 enum Direction {
@@ -96,7 +94,7 @@ impl MainView {
 
     /// Scrolls just enough to bring the card fully into view.
     fn reveal(&self, card: &Placed, window: &Window) {
-        let top_inset = SEARCH_AREA_HEIGHT + 12.;
+        let top_inset = cards_top();
         let viewport = f32::from(window.viewport_size().height);
         let scroll_top = -f32::from(self.scroll.offset().y);
         let card_top = card.y + top_inset;

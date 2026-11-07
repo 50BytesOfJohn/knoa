@@ -6,13 +6,14 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
+use super::{BUTTON_ICON, BUTTON_PADDING, CONTENT_INSET, TITLEBAR_BUTTON};
 use crate::{
     services::organizer::AiStatus,
     ui::{
         components::icon,
         main::{MainView, OpenSettings},
         mascot::{Mood, mascot},
-        theme::Theme,
+        theme::{ROW_RADIUS, Theme},
         wordmark::wordmark_letters,
     },
 };
@@ -47,8 +48,9 @@ impl MainView {
             );
         div()
             .flex_none()
-            .h(px(52.))
-            .px_4()
+            .h(px(56.))
+            .pl(CONTENT_INSET)
+            .pr(BUTTON_PADDING)
             .flex()
             .items_center()
             .gap_2()
@@ -62,14 +64,14 @@ impl MainView {
             .child(
                 div()
                     .id("settings")
-                    .size(px(28.))
-                    .rounded_full()
+                    .size(TITLEBAR_BUTTON)
+                    .rounded(ROW_RADIUS)
                     .flex()
                     .items_center()
                     .justify_center()
                     .cursor_pointer()
                     .hover(|s| s.bg(theme.hover))
-                    .child(icon("settings", px(16.), theme.muted))
+                    .child(icon("settings", BUTTON_ICON, theme.muted))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_settings(&OpenSettings, window, cx);
                     })),

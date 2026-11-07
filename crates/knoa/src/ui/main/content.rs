@@ -22,11 +22,11 @@ use crate::{
     ui::{
         components::{icon, site_mark},
         mascot::{Mood, mascot},
-        theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
+        theme::{DETAIL_WIDTH, GUTTER, MARGIN, PANEL_RADIUS, ROW_RADIUS, SIDEBAR_WIDTH, Theme},
     },
 };
 
-const GAP: f32 = 14.;
+const GAP: f32 = 16.;
 const HEADER_HEIGHT: f32 = 38.;
 const UP_NEXT_HEIGHT: f32 = 92.;
 /// Cards built above and below the viewport, so fast scrolling doesn't show gaps.
@@ -45,13 +45,18 @@ pub struct LayoutCache {
 /// The horizontal span between the sidebar and the detail panel (or the window edge).
 pub fn content_span(window: &Window, show_detail: bool) -> (f32, f32) {
     let width = f32::from(window.viewport_size().width);
-    let left = f32::from(SIDEBAR_WIDTH + MARGIN * 2.);
+    let left = f32::from(MARGIN + SIDEBAR_WIDTH + GUTTER);
     let right = if show_detail {
-        width - f32::from(DETAIL_WIDTH + MARGIN * 2.)
+        width - f32::from(DETAIL_WIDTH + MARGIN + GUTTER)
     } else {
-        width - f32::from(MARGIN)
+        width - f32::from(GUTTER)
     };
     (left, right.max(left + 200.))
+}
+
+/// Where the cards start: below the search pill, which floats as high as the sidebar.
+pub(super) fn cards_top() -> f32 {
+    SEARCH_AREA_HEIGHT + f32::from(MARGIN)
 }
 
 /// Room above the cards for the strip the place shows, if any.
@@ -89,7 +94,7 @@ impl MainView {
         let mut canvas = div()
             .relative()
             .w(px(width))
-            .h(px(self.layout.layout.height + f32::from(MARGIN)));
+            .h(px(self.layout.layout.height + f32::from(GUTTER)));
         if !up_next.is_empty() {
             canvas = canvas.child(self.up_next_strip(&up_next, width, cx));
         } else if trash_bar {
@@ -153,12 +158,7 @@ impl MainView {
                     .on_action(cx.listener(Self::copy_link))
                     .on_action(cx.listener(Self::delete_selected))
                     .on_action(cx.listener(Self::dismiss))
-                    .child(
-                        div()
-                            .pt(px(SEARCH_AREA_HEIGHT + f32::from(MARGIN)))
-                            .pb(MARGIN)
-                            .child(body),
-                    ),
+                    .child(div().pt(px(cards_top())).pb(GUTTER).child(body)),
             )
             .child(self.date_rail(viewport_height, cx))
     }
@@ -309,7 +309,7 @@ impl MainView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .rounded(px(10.))
+                    .rounded(ROW_RADIUS)
                     .bg(theme.soft)
                     .cursor_pointer()
                     .hover(|s| s.bg(theme.hover))
@@ -424,7 +424,7 @@ impl MainView {
                             .child(format!("{} · {}", group.label, group.len)),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        let top = SEARCH_AREA_HEIGHT + f32::from(MARGIN) + target - 8.;
+                        let top = cards_top() + target - 8.;
                         this.scroll
                             .set_offset(gpui::point(px(0.), px(-top.max(0.))));
                         cx.notify();

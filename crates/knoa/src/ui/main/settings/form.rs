@@ -8,7 +8,7 @@ use gpui::{
 
 use crate::ui::{
     components::problem,
-    theme::{SERIF, Theme},
+    theme::{CARD_RADIUS, SERIF, Theme},
 };
 
 /// The page's title and one line on what it holds.
@@ -37,7 +37,7 @@ pub fn group(title: &str, rows: Vec<AnyElement>, theme: &Theme) -> Div {
     let mut body = div()
         .flex()
         .flex_col()
-        .rounded(px(12.))
+        .rounded(CARD_RADIUS)
         .border_1()
         .border_color(theme.hairline);
     for (index, row) in rows.into_iter().enumerate() {

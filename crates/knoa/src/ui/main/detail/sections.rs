@@ -13,7 +13,7 @@ use crate::{
     ui::{
         components::{Tone, button, icon},
         mascot::{Mood, ai_mark, mascot},
-        theme::Theme,
+        theme::{CARD_RADIUS, Theme},
     },
 };
 
@@ -134,7 +134,7 @@ fn notice(bg: Hsla) -> Div {
         .flex()
         .items_center()
         .gap_3()
-        .rounded(px(12.))
+        .rounded(CARD_RADIUS)
         .bg(bg)
         .text_sm()
 }

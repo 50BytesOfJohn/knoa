@@ -23,12 +23,23 @@ use gpui::{App, Global, Hsla, Pixels, hsla, px};
 
 pub const DEFAULT_THEME: &str = "paper";
 
-/// Space around and between floating panels.
+/// Space between the window's edge and the panels that float against it. The largest
+/// space in the layout, so the panels read as floating and nothing inside them is
+/// spaced wider than the room around them.
 pub const MARGIN: Pixels = px(12.);
-pub const SIDEBAR_WIDTH: Pixels = px(232.);
+/// Space between a panel and the content beside it, the same as between cards.
+pub const GUTTER: Pixels = px(16.);
+pub const SIDEBAR_WIDTH: Pixels = px(240.);
 pub const DETAIL_WIDTH: Pixels = px(340.);
-pub const PANEL_RADIUS: Pixels = px(18.);
-pub const CARD_RADIUS: Pixels = px(14.);
+/// The same curve macOS 26 gives a window without a toolbar, so the panels echo the
+/// window's corners. Every floating panel shares it.
+pub const PANEL_RADIUS: Pixels = px(16.);
+pub const CARD_RADIUS: Pixels = px(10.);
+/// Rows, buttons and items inside a panel. Rows sit 8 px in from a panel's edge, so
+/// this is concentric with the panel's corners.
+pub const ROW_RADIUS: Pixels = px(8.);
+/// A place in the sidebar, or a page in the settings sidebar that mirrors it.
+pub const ROW_HEIGHT: Pixels = px(32.);
 pub const SERIF: &str = "Charter";
 /// The logo's full stop. The AI mascot is that dot come alive, so AI-made values share it.
 pub const BRAND_RED: u32 = 0x00e0_573c;
