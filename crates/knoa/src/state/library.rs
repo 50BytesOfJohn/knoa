@@ -1,5 +1,5 @@
 //! The library as the UI sees it: the workspaces, the current workspace's query and its
-//! results, sidebar counts and folders. Every database call runs on the background
+//! results, sidebar counts, folders and tags. Every database call runs on the background
 //! executor.
 
 use std::{
@@ -30,6 +30,8 @@ pub struct Library {
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: Vec<Folder>,
+    /// The workspace's tags, most used first.
+    tags: Vec<(String, usize)>,
     refresh: Option<Task<()>>,
     /// Set while a refresh is waiting out the throttle.
     refresh_pending: bool,
@@ -61,6 +63,7 @@ impl Library {
             kind_counts: Vec::new(),
             counts: Counts::default(),
             folders: Vec::new(),
+            tags: Vec::new(),
             refresh: None,
             refresh_pending: false,
         };
@@ -121,6 +124,10 @@ impl Library {
 
     pub fn folders(&self) -> &[Folder] {
         &self.folders
+    }
+
+    pub fn tags(&self) -> &[(String, usize)] {
+        &self.tags
     }
 
     pub fn bookmark(&self, id: BookmarkId) -> Option<&Bookmark> {
@@ -238,6 +245,7 @@ impl Library {
         self.kind_counts = loaded.kind_counts;
         self.counts = loaded.counts;
         self.folders = loaded.folders;
+        self.tags = loaded.tags;
         // A folder that was deleted can't stay selected.
         if let Place::Folder(id) = self.place
             && !self.folders.iter().any(|f| f.id == id)
@@ -262,6 +270,7 @@ struct Loaded {
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: Vec<Folder>,
+    tags: Vec<(String, usize)>,
 }
 
 fn load(store: &SharedStore, workspace: WorkspaceId, query: &Query) -> knoa_store::Result<Loaded> {
@@ -272,6 +281,7 @@ fn load(store: &SharedStore, workspace: WorkspaceId, query: &Query) -> knoa_stor
         kind_counts: store.kind_counts(query)?,
         counts: store.counts(workspace)?,
         folders: store.folders(workspace)?,
+        tags: store.tags(workspace)?,
     })
 }
 

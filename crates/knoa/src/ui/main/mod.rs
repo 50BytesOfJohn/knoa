@@ -37,6 +37,7 @@ use crate::{
 };
 use add_link::AddLink;
 use content::LayoutCache;
+use detail::TagEdits;
 use folder_editor::FolderEditor;
 use settings::{Page, SettingsView};
 pub use sidebar::traffic_light_position;
@@ -106,6 +107,7 @@ pub struct MainView {
     detail_open: bool,
     /// The bookmark whose folder chips show every folder, to add it to another.
     folder_picker: Option<BookmarkId>,
+    tag_edits: Option<TagEdits>,
     /// The bookmark whose link was just copied, until the task clears the confirmation.
     copied: Option<(BookmarkId, Task<()>)>,
     overlay: Option<Overlay>,
@@ -153,6 +155,7 @@ impl MainView {
             selected: None,
             detail_open: false,
             folder_picker: None,
+            tag_edits: None,
             copied: None,
             overlay: None,
             confirm_empty_trash: false,
@@ -306,7 +309,11 @@ impl MainView {
         else {
             return;
         };
-        if self.search.read(cx).focus_handle(cx).is_focused(window) {
+        let typing_tag = self
+            .tag_edits
+            .as_ref()
+            .is_some_and(|edits| edits.is_typing(window, cx));
+        if typing_tag || self.search.read(cx).focus_handle(cx).is_focused(window) {
             return;
         }
         let text = text.clone();
@@ -381,6 +388,7 @@ impl MainView {
 
 impl Render for MainView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        self.forget_stale_tag_edits();
         let theme = Theme::get(cx).clone();
         let show_detail = self.detail_open && self.selected.is_some();
         let overlay = self.render_overlay(window, cx);

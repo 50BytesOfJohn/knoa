@@ -2,6 +2,9 @@
 
 mod filing;
 mod sections;
+mod tags;
+
+pub(super) use tags::TagEdits;
 
 use gpui::{
     Context, Div, FontWeight, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
@@ -50,7 +53,7 @@ impl MainView {
                     .gap_6()
                     .children(self.detail_notice(&bookmark, cx))
                     .children(sections::fields(&bookmark, &theme))
-                    .children(self.detail_tags(&bookmark, cx))
+                    .children(self.detail_tags(&bookmark, in_trash, cx))
                     // A bookmark in Trash is out of every folder's view, so it can't be filed.
                     .when(!in_trash, |s| s.child(self.detail_folders(&bookmark, cx)))
                     .children(sections::provenance(&bookmark, &theme)),
