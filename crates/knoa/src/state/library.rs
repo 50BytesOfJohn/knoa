@@ -1,5 +1,5 @@
 //! The library as the UI sees it: the workspaces, the current workspace's query and its
-//! results, sidebar counts and folders. Every database call runs on the background
+//! results, sidebar counts, folders and tags. Every database call runs on the background
 //! executor.
 
 use std::{
@@ -30,6 +30,8 @@ pub struct Library {
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: Vec<Folder>,
+    /// The workspace's tags, most used first.
+    tags: Vec<(String, usize)>,
     /// The bookmark the detail panel shows, loaded on its own so a change that moves it
     /// out of the results (filing it out of Unsorted) doesn't take it off screen.
     selected: Option<BookmarkId>,
@@ -65,6 +67,7 @@ impl Library {
             kind_counts: Vec::new(),
             counts: Counts::default(),
             folders: Vec::new(),
+            tags: Vec::new(),
             selected: None,
             selected_bookmark: None,
             refresh: None,
@@ -127,6 +130,10 @@ impl Library {
 
     pub fn folders(&self) -> &[Folder] {
         &self.folders
+    }
+
+    pub fn tags(&self) -> &[(String, usize)] {
+        &self.tags
     }
 
     /// A bookmark in the results, or the selected one wherever it is.
@@ -256,6 +263,7 @@ impl Library {
         self.kind_counts = loaded.kind_counts;
         self.counts = loaded.counts;
         self.folders = loaded.folders;
+        self.tags = loaded.tags;
         // The selection may have moved on while this was loading.
         if loaded.selected_id == self.selected {
             self.selected_bookmark = loaded.selected;
@@ -284,6 +292,7 @@ struct Loaded {
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: Vec<Folder>,
+    tags: Vec<(String, usize)>,
     /// The bookmark `selected` was loaded for: `None` there means it no longer exists.
     selected_id: Option<BookmarkId>,
     selected: Option<Bookmark>,
@@ -306,6 +315,7 @@ fn load(
         kind_counts: store.kind_counts(query)?,
         counts: store.counts(workspace)?,
         folders: store.folders(workspace)?,
+        tags: store.tags(workspace)?,
         selected_id,
         selected,
     })
