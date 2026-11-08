@@ -1,5 +1,5 @@
-//! Tags and folders in the detail panel: where a bookmark is filed, and undoing the AI's
-//! choices in one click.
+//! Folders in the detail panel: where a bookmark is filed, and undoing the AI's choices
+//! in one click. Its chips are shared with the tags.
 
 use gpui::{
     Context, Div, Hsla, InteractiveElement as _, ParentElement as _, Stateful,
@@ -14,42 +14,6 @@ use crate::ui::{components::icon, mascot::ai_mark, theme::Theme};
 const UNSURE: f32 = 0.8;
 
 impl MainView {
-    pub(super) fn detail_tags(
-        &self,
-        bookmark: &Bookmark,
-        cx: &mut Context<'_, MainView>,
-    ) -> Option<Div> {
-        if bookmark.tags.is_empty() {
-            return None;
-        }
-        let theme = Theme::get(cx).clone();
-        let mut row = div().flex().flex_wrap().gap_1p5();
-        for (index, (tag, origin)) in bookmark.tags.iter().enumerate() {
-            let (id, tag_name, library) = (bookmark.id, tag.clone(), self.library.clone());
-            let item = pill(("tag", index))
-                .bg(theme.soft)
-                .text_color(theme.text)
-                .child(removable(
-                    if *origin == Origin::Ai {
-                        ai_mark(px(12.), theme.ai)
-                    } else {
-                        div().text_color(theme.faint).child("#")
-                    },
-                    &theme,
-                ))
-                .child(tag.clone())
-                .tooltip(super::tip("Remove tag", None, &theme))
-                .on_click(move |_, _, cx| {
-                    let tag = tag_name.clone();
-                    library.update(cx, |library, cx| {
-                        library.change(cx, move |store| store.remove_tag(id, &tag));
-                    });
-                });
-            row = row.child(item);
-        }
-        Some(section("Tags", &theme).child(row))
-    }
-
     /// The bookmark's folders, then a way to add it to another. With no folders yet, every
     /// folder is offered straight away.
     pub(super) fn detail_folders(
@@ -168,7 +132,7 @@ impl MainView {
     }
 }
 
-fn pill(id: impl Into<gpui::ElementId>) -> Stateful<Div> {
+pub(super) fn pill(id: impl Into<gpui::ElementId>) -> Stateful<Div> {
     div()
         .id(id)
         .group("pill")
@@ -188,7 +152,7 @@ fn swatch(color: Hsla) -> Div {
 
 /// A chip's leading mark, which turns into an × on hover: the chips stay calm until you
 /// reach for one, and the × takes no room of its own.
-fn removable(mark: Div, theme: &Theme) -> Div {
+pub(super) fn removable(mark: Div, theme: &Theme) -> Div {
     let center = || {
         div()
             .absolute()
