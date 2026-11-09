@@ -116,6 +116,21 @@ impl Store {
         Ok(())
     }
 
+    /// Points a bookmark at a freshly fetched thumbnail. The old file is left to the
+    /// launch sweep, since other bookmarks may share it.
+    pub fn set_image(&mut self, id: BookmarkId, image: &Image) -> Result<()> {
+        self.conn.execute(
+            "UPDATE bookmarks SET image_path = ?2, image_width = ?3, image_height = ?4 WHERE id = ?1",
+            rusqlite::params![
+                id.0,
+                image.path.to_string_lossy(),
+                image.width,
+                image.height
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Every thumbnail a bookmark points to, in Trash or not. Several bookmarks can share one.
     pub fn image_paths(&self) -> Result<HashSet<PathBuf>> {
         let mut stmt = self

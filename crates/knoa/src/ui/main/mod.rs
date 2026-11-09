@@ -1,9 +1,11 @@
 //! The main screen: sidebar, search pill, library cards and the detail panel.
 
 mod add_link;
+mod bookmark_menu;
 mod cards;
 mod content;
 mod detail;
+mod edits;
 mod folder_editor;
 mod groups;
 mod masonry;
@@ -28,7 +30,7 @@ use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
 
 use crate::{
-    services::organizer::Organizer,
+    services::{organizer::Organizer, thumbnails::Thumbnails},
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -142,6 +144,7 @@ impl MainView {
                 this.on_library_changed(cx);
             }),
             cx.observe(&organizer, |_, _, cx| cx.notify()),
+            cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
         ];
         let cards_focus = cx.focus_handle();
@@ -360,13 +363,19 @@ impl MainView {
     }
 
     fn copy_link(&mut self, _: &CopyLink, _: &mut Window, cx: &mut Context<'_, MainView>) {
-        if let Some(bookmark) = self
-            .selected
-            .and_then(|id| self.library.read(cx).bookmark(id))
-        {
-            let (id, url) = (bookmark.id, bookmark.url.clone());
+        if let Some(id) = self.selected {
+            self.copy_link_of(id, cx);
+        }
+    }
+
+    fn copy_link_of(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
+        if let Some(url) = self.url_of(id, cx) {
             self.copy_to_clipboard(id, url, cx);
         }
+    }
+
+    fn url_of(&self, id: BookmarkId, cx: &App) -> Option<String> {
+        self.library.read(cx).bookmark(id).map(|b| b.url.clone())
     }
 
     /// Copies a bookmark's link and confirms it on the detail panel's copy button for a
@@ -390,15 +399,6 @@ impl MainView {
         if let Some(id) = self.selected {
             self.set_up_next(id, cx);
         }
-    }
-
-    pub fn set_up_next(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
-        let Some(on) = self.library.read(cx).bookmark(id).map(|b| !b.up_next) else {
-            return;
-        };
-        self.library.update(cx, |library, cx| {
-            library.change(cx, move |store| store.set_up_next(id, on));
-        });
     }
 }
 

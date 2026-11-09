@@ -20,6 +20,11 @@ pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
         .text_color(color)
 }
 
+/// The same icon as [`icon`], for gpui-component pieces that take an `Icon`.
+pub fn icon_asset(name: &str) -> gpui_component::Icon {
+    gpui_component::Icon::empty().path(format!("icons/{name}.svg"))
+}
+
 pub fn kind_icon(kind: Option<Kind>) -> &'static str {
     match kind {
         Some(Kind::Article) => "file-text",
