@@ -1,5 +1,5 @@
-//! Knoa's domain types: workspaces, bookmarks, kinds and their fields, folders, search
-//! queries and AI usage.
+//! Knoa's domain types: workspaces, bookmarks, kinds and their fields, folders, tags,
+//! search queries and AI usage.
 //!
 //! No I/O lives here. Storage is in `knoa-store`, network work in `knoa-fetch` and `knoa-ai`.
 
@@ -21,6 +21,9 @@ pub use field::{FieldDef, FieldType, Fields, format_duration};
 pub use folder::{Folder, FolderColor, FolderId, FolderLink};
 pub use kind::{Kind, KindDef};
 pub use query::{Comparison, FieldFilter, Place, Query};
-pub use tag::{MAX_AI_TAGS, normalize_tag};
+pub use tag::{
+    ListedTag, MAX_AI_TAGS, MAX_LISTED_TAGS, MAX_TAG_CHARS, MAX_TAG_DESCRIPTION_CHARS, TagList,
+    normalize_tag,
+};
 pub use usage::{ModelUsage, Usage, UsageTotals};
 pub use workspace::{Screening, Workspace, WorkspaceId};

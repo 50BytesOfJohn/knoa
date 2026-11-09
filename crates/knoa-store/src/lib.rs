@@ -1,5 +1,5 @@
-//! Knoa's library on disk: one SQLite file with workspaces, bookmarks, folders, tags, the
-//! organizing queue, AI usage totals and a full-text index.
+//! Knoa's library on disk: one SQLite file with workspaces, bookmarks, folders, tags and
+//! tag lists, the organizing queue, AI usage totals and a full-text index.
 //!
 //! `Store` is synchronous. The app runs it on GPUI's background executor, never on the UI
 //! thread.
@@ -10,6 +10,7 @@ mod jobs;
 mod read;
 mod schema;
 mod search;
+mod tag_list;
 mod tags;
 mod trash;
 mod usage;

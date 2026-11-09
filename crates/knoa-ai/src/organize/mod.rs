@@ -10,7 +10,7 @@ mod prompt;
 mod schema;
 
 pub use folders::{FilingInput, file_into_folders};
-use knoa_core::{Enrichment, Fields, FolderId, Kind};
+use knoa_core::{Enrichment, Fields, FolderId, Kind, TagList};
 
 use crate::{Classifier, Error, LanguageModel, StructuredRequest};
 
@@ -43,6 +43,8 @@ pub struct OrganizeInput<'a> {
     pub guideline: Option<&'a str>,
     /// Folders with auto-assign on.
     pub folders: &'a [FolderInput],
+    /// The tags the user wants used here, if any.
+    pub tag_list: &'a TagList,
 }
 
 pub async fn organize<M: LanguageModel, C: Classifier>(
@@ -64,7 +66,7 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     };
     let reply = model.generate(&request).await?;
     let folder_ids: Vec<FolderId> = input.folders.iter().map(|f| f.id).collect();
-    let mut answer = answer::parse(reply.json, kind, &folder_ids)?;
+    let mut answer = answer::parse(reply.json, kind, &folder_ids, input.tag_list)?;
     for (name, value) in input.bookmark.page_fields {
         answer.fields.insert(name.clone(), value.clone());
     }

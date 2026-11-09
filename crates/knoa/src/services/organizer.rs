@@ -9,7 +9,7 @@ use std::{sync::Arc, time::Duration};
 use futures::{FutureExt as _, StreamExt as _, channel::mpsc, stream::FuturesUnordered};
 use gpui::{App, AppContext as _, AsyncApp, BackgroundExecutor, Context, Entity, Global, Task};
 use knoa_ai::{BookmarkInput, FilingInput, FolderInput, OrganizeInput, Provider};
-use knoa_core::{BookmarkId, Enrichment, FolderId, Page, WorkspaceId};
+use knoa_core::{BookmarkId, Enrichment, FolderId, Page, TagList, WorkspaceId};
 use knoa_fetch::Fetcher;
 use knoa_store::Job;
 use tokio::runtime::Handle;
@@ -316,6 +316,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
                 instructions: &context.instructions,
                 guideline: context.guideline.as_deref(),
                 folders: &context.folders,
+                tag_list: &context.tag_list,
             };
             knoa_ai::organize(&*provider, provider.classifier(), &input).await
         })
@@ -384,11 +385,12 @@ fn ai_failure(err: &knoa_ai::Error, attempts: u32) -> Outcome {
     }
 }
 
-/// What the bookmark's workspace tells the AI: its instructions, guideline and the folders
-/// it may file into.
+/// What the bookmark's workspace tells the AI: its instructions, guideline, tag list and
+/// the folders it may file into.
 struct WorkspaceContext {
     instructions: String,
     guideline: Option<String>,
+    tag_list: TagList,
     folders: Vec<FolderInput>,
 }
 
@@ -415,6 +417,7 @@ impl WorkspaceContext {
                 .as_ref()
                 .and_then(|w| w.screening.active_guideline())
                 .map(str::to_owned),
+            tag_list: workspace.map(|w| w.tag_list).unwrap_or_default(),
             folders,
         })
     }

@@ -1,5 +1,7 @@
 //! Workspaces: separate libraries, each fed by its own browser profiles and organized by
-//! its own instructions and folders.
+//! its own instructions, folders and tag list.
+
+use crate::TagList;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WorkspaceId(pub i64);
@@ -19,6 +21,7 @@ pub struct Workspace {
     /// How the user wants things organized here, in their own words.
     pub instructions: String,
     pub screening: Screening,
+    pub tag_list: TagList,
 }
 
 /// An optional rule for which synced bookmarks this workspace keeps. Off by default, so

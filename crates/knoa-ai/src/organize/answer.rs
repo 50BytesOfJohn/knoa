@@ -1,7 +1,7 @@
 //! Validating the model's answer. Strict schemas aren't a guarantee, so everything is
 //! checked and coerced here, never trusted.
 
-use knoa_core::{Fields, FolderId, Kind, MAX_AI_TAGS, normalize_tag};
+use knoa_core::{Fields, FolderId, Kind, MAX_AI_TAGS, MAX_TAG_CHARS, TagList, normalize_tag};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -44,7 +44,12 @@ pub struct Answer {
 }
 
 /// Parses and cleans the answer for a bookmark of `kind`.
-pub fn parse(json: Value, kind: Kind, folder_ids: &[FolderId]) -> Result<Answer, Error> {
+pub fn parse(
+    json: Value,
+    kind: Kind,
+    folder_ids: &[FolderId],
+    tag_list: &TagList,
+) -> Result<Answer, Error> {
     let raw: Raw = serde_json::from_value(json)
         .map_err(|err| Error::BadAnswer(format!("answer doesn't match the schema: {err}")))?;
 
@@ -98,24 +103,18 @@ pub fn parse(json: Value, kind: Kind, folder_ids: &[FolderId]) -> Result<Answer,
         summary,
         fields,
         extras,
-        tags: clean_tags(&raw.tags, kind),
+        tags: clean_tags(&raw.tags, kind, tag_list),
         folders,
         set_aside,
     })
 }
 
-/// Normalized, deduplicated, capped, and without tags that only repeat the kind.
-fn clean_tags(tags: &[String], kind: Kind) -> Vec<String> {
-    let kind_words = [
-        kind.slug().to_owned(),
-        kind.label().to_lowercase(),
-        kind.plural().to_lowercase(),
-    ];
+/// Normalized, deduplicated and capped, keeping only the tags `keeps` allows.
+fn clean_tags(tags: &[String], kind: Kind, tag_list: &TagList) -> Vec<String> {
     let mut clean: Vec<String> = Vec::new();
     for tag in tags {
         let tag = normalize_tag(tag);
-        if !tag.is_empty() && tag.len() <= 40 && !kind_words.contains(&tag) && !clean.contains(&tag)
-        {
+        if keeps(&tag, kind, tag_list) && !clean.contains(&tag) {
             clean.push(tag);
         }
     }
@@ -123,8 +122,30 @@ fn clean_tags(tags: &[String], kind: Kind) -> Vec<String> {
     clean
 }
 
+/// A listed tag always stays, even one that names the kind. When the AI is held to the
+/// list, nothing else does; otherwise a tag stays unless it's too long or only repeats
+/// the kind.
+fn keeps(tag: &str, kind: Kind, tag_list: &TagList) -> bool {
+    if tag.is_empty() || tag.len() > MAX_TAG_CHARS {
+        return false;
+    }
+    if tag_list.contains(tag) {
+        return true;
+    }
+    if tag_list.restricts() {
+        return false;
+    }
+    let kind_words = [
+        kind.slug().to_owned(),
+        kind.label().to_lowercase(),
+        kind.plural().to_lowercase(),
+    ];
+    !kind_words.iter().any(|word| word == tag)
+}
+
 #[cfg(test)]
 mod tests {
+    use knoa_core::ListedTag;
     use serde_json::json;
 
     use super::*;
@@ -141,6 +162,7 @@ mod tests {
             }),
             Kind::Movie,
             &[FolderId(7)],
+            &TagList::default(),
         )
         .unwrap();
         assert_eq!(answer.kind, Kind::Movie);
@@ -164,7 +186,9 @@ mod tests {
             json.as_object_mut()
                 .unwrap()
                 .extend(extra.as_object().unwrap().clone());
-            parse(json, Kind::Article, &[]).unwrap().set_aside
+            parse(json, Kind::Article, &[], &TagList::default())
+                .unwrap()
+                .set_aside
         };
         assert_eq!(answer(json!({})), None);
         assert_eq!(answer(json!({"fits": true, "fit_reason": "work"})), None);
@@ -172,5 +196,21 @@ mod tests {
             answer(json!({"fits": false, "fit_reason": " A recipe, not work. "})).as_deref(),
             Some("A recipe, not work.")
         );
+    }
+
+    #[test]
+    fn a_list_the_ai_is_held_to_keeps_only_listed_tags() {
+        let tag_list = TagList {
+            tags: ["article", "rust"]
+                .map(|name| ListedTag {
+                    name: name.into(),
+                    description: String::new(),
+                })
+                .into(),
+            only_these: true,
+        };
+        let json = json!({"summary": "", "fields": {}, "extras": [], "tags": ["Rust", "compilers", "article"]});
+        let answer = parse(json, Kind::Article, &[], &tag_list).unwrap();
+        assert_eq!(answer.tags, ["rust", "article"]);
     }
 }

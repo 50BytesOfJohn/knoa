@@ -4,7 +4,7 @@
 
 use std::fmt::Write as _;
 
-use knoa_core::Kind;
+use knoa_core::{Kind, TagList};
 use url::Url;
 
 use super::{FolderInput, OrganizeInput};
@@ -48,6 +48,7 @@ pub fn messages(input: &OrganizeInput<'_>, kind: Kind, folders_in_answer: bool) 
              fit_reason in one short sentence. When unsure, it fits.\n"
         );
     }
+    context.push_str(&tag_list_text(input.tag_list));
     if folders_in_answer && !input.folders.is_empty() {
         context.push_str(
             "The user's folders. Put the bookmark in at most two that clearly fit, or none:\n",
@@ -78,6 +79,32 @@ fn instructions_text(input: &OrganizeInput<'_>) -> String {
         return String::new();
     }
     format!("The user's organizing instructions:\n{instructions}\n\n")
+}
+
+fn tag_list_text(list: &TagList) -> String {
+    if list.tags.is_empty() {
+        return String::new();
+    }
+    let mut text = if list.restricts() {
+        "The user's tag list. Use only these tags, spelled exactly as here: add every one \
+         that fits and no others, or none if none fits.\n"
+    } else {
+        "The user's tag list. Whenever one of these fits, use it, spelled exactly as here, \
+         rather than a word of your own. Add other tags only for what the list doesn't cover.\n"
+    }
+    .to_owned();
+    if list.tags.iter().any(|tag| !tag.description.is_empty()) {
+        text.push_str("A hint after a tag says when the user wants it:\n");
+    }
+    for tag in &list.tags {
+        let _ = write!(text, "- {}", tag.name);
+        if !tag.description.is_empty() {
+            let _ = write!(text, ": {}", tag.description);
+        }
+        text.push('\n');
+    }
+    text.push('\n');
+    text
 }
 
 fn folder_list(folders: &[FolderInput]) -> String {

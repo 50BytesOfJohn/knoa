@@ -11,13 +11,12 @@ use gpui::{
     Pixels, Stateful, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div,
     img, prelude::FluentBuilder as _, px,
 };
-use gpui_component::tooltip::Tooltip;
 use knoa_browser::Activation;
 use knoa_core::{Bookmark, Image};
 
 use super::{CopyLink, DeleteSelected, MainView, ToggleUpNext};
 use crate::ui::{
-    components::{Tone, button, icon, kind_icon, site_mark},
+    components::{Tone, button, icon, kind_icon, site_mark, tip},
     theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
 };
 
@@ -273,25 +272,4 @@ fn icon_button(id: &'static str, name: &str, color: gpui::Hsla, theme: &Theme) -
         .cursor_pointer()
         .hover(move |s| s.bg(hover))
         .child(icon(name, px(16.), color))
-}
-
-/// A tooltip in the panel's colors, with the key that does the same from the card grid.
-fn tip(
-    text: &'static str,
-    action: Option<&'static dyn gpui::Action>,
-    theme: &Theme,
-) -> impl Fn(&mut Window, &mut gpui::App) -> gpui::AnyView + 'static {
-    let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
-    move |window, cx| {
-        let tooltip = Tooltip::new(text);
-        let tooltip = match action {
-            Some(action) => tooltip.action(action, Some("Cards")),
-            None => tooltip,
-        };
-        tooltip
-            .bg(bg)
-            .text_color(fg)
-            .border_color(border)
-            .build(window, cx)
-    }
 }

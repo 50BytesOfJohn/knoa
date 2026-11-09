@@ -50,6 +50,8 @@ See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md).
 - A bookmark stores its kind, `fields` and `extras`. Fields and extras are JSON columns;
   field filters use SQLite's `json_extract`.
 - Tags and folders are many-to-many with bookmarks.
+- A workspace can have a tag list: up to 40 tags, each with an optional hint of at most
+  60 characters, and a switch that holds the AI to the list. Empty by default.
 - Every AI-set value and folder link records its origin (AI or user). AI re-runs never
   overwrite user values.
 - Folders have a name, an optional description and an `auto_assign` flag (default on).
@@ -100,9 +102,10 @@ network requests), so quitting the app loses no work.
 4. **Organize** with one structured chat call for that kind (`json_schema`,
    `strict: true`, the kind's fields as a typed object). Output: summary, fields, extras,
    tags, and whether it fits when the workspace has a guideline. Input: the workspace's
-   instructions and guideline, the extracted evidence and about 4k characters of page
-   text. A bookmark that doesn't fit is stored as set aside, with the reason, and gets no
-   folders. Values read from the page override the model's.
+   instructions, guideline and tag list, the extracted evidence and about 4k characters
+   of page text. A bookmark that doesn't fit is stored as set aside, with the reason, and
+   gets no folders. Values read from the page override the model's. When the workspace
+   holds the AI to its tag list, tags not on it are dropped.
 5. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
    bookmark's workspace
    (OpenRouter Decisions, with a sentinel question). A provider without a classifier

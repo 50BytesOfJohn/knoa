@@ -1,10 +1,12 @@
 //! A workspace's page: name and color, the browsers it syncs and opens links in, how it's
-//! organized, and an optional guideline for what it keeps. The same page creates one.
+//! organized, an optional guideline for what it keeps, and its tag list. The same page
+//! creates one.
 //!
 //! An existing workspace saves as you go, like the rest of settings: switches and colors
 //! at once, text when its field loses focus or the page is left.
 
 mod browsers;
+mod tag_list;
 
 use gpui::{
     AppContext as _, Context, Div, Entity, EventEmitter, InteractiveElement as _, IntoElement,
@@ -16,7 +18,7 @@ use gpui_component::{
     switch::Switch,
 };
 use knoa_browser::{Browser, Profile};
-use knoa_core::{Screening, Workspace, WorkspaceId};
+use knoa_core::{Screening, TagList, Workspace, WorkspaceId};
 
 use super::{
     form,
@@ -31,6 +33,7 @@ use crate::{
     },
 };
 use browsers::synced_from;
+use tag_list::{TagListChanged, TagListEditor};
 
 pub enum WorkspacePageEvent {
     /// The new workspace exists now, and this page edits it.
@@ -46,6 +49,7 @@ pub struct WorkspacePage {
     instructions: Entity<TextareaState>,
     guideline: Entity<TextareaState>,
     screening: bool,
+    tag_list: Entity<TagListEditor>,
     color: u8,
     browsers: Vec<String>,
     opens_in: Option<String>,
@@ -87,6 +91,7 @@ impl WorkspacePage {
             input.set_value(workspace.screening.guideline.clone(), window, cx);
             input
         });
+        let tag_list = cx.new(|cx| TagListEditor::new(&workspace.tag_list, window, cx));
         if is_new {
             name.update(cx, |input, cx| input.focus(window, cx));
         }
@@ -98,6 +103,7 @@ impl WorkspacePage {
             }),
             cx.subscribe(&instructions, Self::save_on_blur),
             cx.subscribe(&guideline, Self::save_on_blur),
+            cx.subscribe(&tag_list, |this, _, _: &TagListChanged, cx| this.save(cx)),
             // The header shows the name as it's typed.
             cx.observe(&name, |_, _, cx| cx.notify()),
             // Organizing again is offered only while AI is on.
@@ -110,6 +116,7 @@ impl WorkspacePage {
             instructions,
             guideline,
             screening: workspace.screening.enabled,
+            tag_list,
             color: workspace.color,
             browsers: workspace.browsers,
             opens_in: workspace.opens_in,
@@ -180,6 +187,7 @@ impl WorkspacePage {
                 enabled: self.screening,
                 guideline: self.guideline.read(cx).value().trim().to_owned(),
             },
+            tag_list: self.tag_list.read(cx).tag_list(cx),
         }
     }
 
@@ -246,6 +254,7 @@ impl Render for WorkspacePage {
             .child(self.browsers_group(&theme, cx))
             .child(self.opens_in_group(&theme, cx))
             .child(self.organizing_group(&theme, cx))
+            .child(self.tag_list.clone())
             .children(self.footer(&theme, cx))
     }
 }
@@ -421,5 +430,6 @@ fn blank_workspace(color: u8) -> Workspace {
         opens_in: None,
         instructions: String::new(),
         screening: Screening::default(),
+        tag_list: TagList::default(),
     }
 }

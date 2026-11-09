@@ -1,15 +1,16 @@
-//! Workspaces and the browser profiles each one syncs.
+//! Workspaces, the browser profiles each one syncs, and their tag lists.
 
-use knoa_core::{Screening, Workspace, WorkspaceId};
+use knoa_core::{Screening, TagList, Workspace, WorkspaceId};
 use rusqlite::{Transaction, params};
 
-use crate::{Result, Store};
+use crate::{Result, Store, tag_list};
 
 impl Store {
     /// All workspaces in switcher order. There is always at least one.
     pub fn workspaces(&self) -> Result<Vec<Workspace>> {
         let mut stmt = self.conn.prepare_cached(
             "SELECT w.id, w.name, w.color, w.instructions, w.screening, w.guideline, w.opens_in,
+                    w.only_listed_tags,
                     (SELECT json_group_array(browser) FROM workspace_browsers WHERE workspace_id = w.id)
              FROM workspaces w ORDER BY w.position",
         )?;
@@ -26,17 +27,26 @@ impl Store {
                         enabled: row.get(4)?,
                         guideline: row.get(5)?,
                     },
+                    tag_list: TagList {
+                        tags: Vec::new(),
+                        only_these: row.get(7)?,
+                    },
                 },
-                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?,
             ))
         })?;
-        rows.map(|row| {
-            let (mut workspace, browsers) = row?;
-            workspace.browsers = serde_json::from_str(&browsers)?;
-            workspace.browsers.sort();
-            Ok(workspace)
-        })
-        .collect()
+        let mut workspaces = rows
+            .map(|row| {
+                let (mut workspace, browsers) = row?;
+                workspace.browsers = serde_json::from_str(&browsers)?;
+                workspace.browsers.sort();
+                Ok(workspace)
+            })
+            .collect::<Result<Vec<Workspace>>>()?;
+        for workspace in &mut workspaces {
+            workspace.tag_list.tags = tag_list::load(&self.conn, workspace.id)?;
+        }
+        Ok(workspaces)
     }
 
     pub fn workspace(&self, id: WorkspaceId) -> Result<Option<Workspace>> {
@@ -57,7 +67,7 @@ impl Store {
         let tx = self.conn.transaction()?;
         tx.execute(
             "UPDATE workspaces SET name = ?2, color = ?3, instructions = ?4, screening = ?5,
-                guideline = ?6, opens_in = ?7 WHERE id = ?1",
+                guideline = ?6, opens_in = ?7, only_listed_tags = ?8 WHERE id = ?1",
             params![
                 workspace.id.0,
                 workspace.name,
@@ -66,9 +76,11 @@ impl Store {
                 workspace.screening.enabled,
                 workspace.screening.guideline,
                 workspace.opens_in,
+                workspace.tag_list.only_these,
             ],
         )?;
         set_browsers(&tx, workspace.id, &workspace.browsers)?;
+        tag_list::replace(&tx, workspace.id, &workspace.tag_list.tags)?;
         tx.commit()?;
         Ok(())
     }
