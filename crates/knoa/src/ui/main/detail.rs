@@ -86,7 +86,7 @@ impl MainView {
             bookmark
                 .image
                 .as_ref()
-                .map(|image| cover::cover(image, &theme)),
+                .map(|image| cover::image(image, &theme)),
         );
         let refresh = cover::refresh_status(bookmark.id, has_cover, cx);
         let (on_cover, under_byline) = if has_cover {

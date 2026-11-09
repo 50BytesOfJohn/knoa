@@ -97,7 +97,7 @@ impl MainView {
         };
         let theme = Theme::get(cx).clone();
         let id = bookmark.id;
-        let organizing = matches!(bookmark.status, Status::Queued | Status::Organizing);
+        let organizing = bookmark.status.is_waiting();
         Some(
             notice(theme.ai_soft)
                 .when(organizing, |s| {

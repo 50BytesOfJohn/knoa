@@ -49,7 +49,7 @@ pub(super) fn refresh_status(id: BookmarkId, on_image: bool, cx: &App) -> Option
 
 /// The image under the panel's top edge, always whole: the cards crop to keep the grid
 /// calm, so the detail panel is where a poster or logo shows in full.
-pub(super) fn cover(image: &Image, theme: &Theme) -> Div {
+pub(super) fn image(image: &Image, theme: &Theme) -> Div {
     let natural = f32::from(DETAIL_WIDTH) * image.aspect_ratio();
     let full_bleed = natural <= MAX_COVER_HEIGHT;
     let height = natural.min(MAX_COVER_HEIGHT);

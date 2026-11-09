@@ -42,6 +42,18 @@ impl MainView {
         });
     }
 
+    pub(super) fn restore(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
+        self.library.update(cx, |library, cx| {
+            library.change(cx, move |store| store.restore(id));
+        });
+    }
+
+    pub(super) fn delete_for_good(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
+        self.library.update(cx, |library, cx| {
+            library.change(cx, move |store| store.delete_for_good(id));
+        });
+    }
+
     /// The strip above the cards in Trash. Emptying it asks for a second click.
     pub(super) fn trash_bar(&self, width: f32, cx: &mut Context<'_, MainView>) -> Div {
         let theme = Theme::get(cx).clone();
@@ -127,8 +139,6 @@ impl MainView {
     /// Restore and Delete now, in place of the usual actions.
     pub(super) fn trash_actions(&self, id: BookmarkId, cx: &mut Context<'_, MainView>) -> Div {
         let theme = Theme::get(cx).clone();
-        let library = self.library.clone();
-        let restore = library.clone();
         div()
             .flex_none()
             .p_3()
@@ -139,20 +149,11 @@ impl MainView {
             .child(
                 button("restore", "Restore", Tone::Primary, cx)
                     .flex_1()
-                    .on_click(move |_, _, cx| {
-                        restore.update(cx, |library, cx| {
-                            library.change(cx, move |store| store.restore(id));
-                        });
-                    }),
+                    .on_click(cx.listener(move |this, _, _, cx| this.restore(id, cx))),
             )
             .child(
-                button("delete-for-good", "Delete now", Tone::Soft, cx).on_click(
-                    move |_, _, cx| {
-                        library.update(cx, |library, cx| {
-                            library.change(cx, move |store| store.delete_for_good(id));
-                        });
-                    },
-                ),
+                button("delete-for-good", "Delete now", Tone::Soft, cx)
+                    .on_click(cx.listener(move |this, _, _, cx| this.delete_for_good(id, cx))),
             )
     }
 }

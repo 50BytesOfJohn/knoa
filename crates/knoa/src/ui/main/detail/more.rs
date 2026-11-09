@@ -2,19 +2,14 @@
 //! right-click opens.
 
 use gpui::{
-    Anchor, App, Context, Div, Hsla, InteractiveElement, Interactivity, IntoElement,
-    ParentElement as _, RenderOnce, Stateful, StatefulInteractiveElement as _, StyleRefinement,
-    Styled, Window, div, px,
+    Anchor, App, Context, Div, Hsla, InteractiveElement, Interactivity, IntoElement, RenderOnce,
+    Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled, Window,
 };
 use gpui_component::{Selectable, menu::DropdownMenu};
 use knoa_core::BookmarkId;
 
-use super::MainView;
-use crate::ui::{
-    components::{icon, tip},
-    main::bookmark_menu::bookmark_menu,
-    theme::Theme,
-};
+use super::{MainView, icon_button};
+use crate::ui::{components::tip, main::bookmark_menu::bookmark_menu, theme::Theme};
 
 impl MainView {
     pub(super) fn more_button(
@@ -24,18 +19,8 @@ impl MainView {
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
         let view = cx.entity().downgrade();
-        let base = div()
-            .id("more")
-            .size(px(34.))
-            .flex_none()
-            .rounded_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .hover(|s| s.bg(theme.soft))
-            .child(icon("ellipsis", px(16.), theme.muted))
-            .tooltip(tip("More", None, theme));
+        let base =
+            icon_button("more", "ellipsis", theme.muted, theme).tooltip(tip("More", None, theme));
         MoreButton {
             base,
             open: false,
