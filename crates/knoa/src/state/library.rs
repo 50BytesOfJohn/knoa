@@ -32,6 +32,10 @@ pub struct Library {
     folders: Vec<Folder>,
     /// The workspace's tags, most used first.
     tags: Vec<(String, usize)>,
+    /// The bookmark the detail panel shows, loaded on its own so a change that moves it
+    /// out of the results (filing it out of Unsorted) doesn't take it off screen.
+    selected: Option<BookmarkId>,
+    selected_bookmark: Option<Bookmark>,
     refresh: Option<Task<()>>,
     /// Set while a refresh is waiting out the throttle.
     refresh_pending: bool,
@@ -64,6 +68,8 @@ impl Library {
             counts: Counts::default(),
             folders: Vec::new(),
             tags: Vec::new(),
+            selected: None,
+            selected_bookmark: None,
             refresh: None,
             refresh_pending: false,
         };
@@ -130,8 +136,20 @@ impl Library {
         &self.tags
     }
 
+    /// A bookmark in the results, or the selected one wherever it is.
     pub fn bookmark(&self, id: BookmarkId) -> Option<&Bookmark> {
-        self.results.iter().find(|b| b.id == id)
+        self.results
+            .iter()
+            .find(|b| b.id == id)
+            .or_else(|| self.selected_bookmark.as_ref().filter(|b| b.id == id))
+    }
+
+    /// Keeps `id` loaded through later refreshes, even once it leaves the results.
+    pub fn set_selected(&mut self, id: Option<BookmarkId>) {
+        if self.selected != id {
+            self.selected = id;
+            self.selected_bookmark = id.and_then(|id| self.bookmark(id).cloned());
+        }
     }
 
     pub fn set_place(&mut self, place: Place, cx: &mut Context<'_, Library>) {
@@ -168,8 +186,8 @@ impl Library {
     pub fn refresh(&mut self, cx: &mut Context<'_, Library>) {
         let store = self.store.clone();
         let query = self.query();
-        let workspace = self.workspace;
-        let load = cx.background_spawn(async move { load(&store, workspace, &query) });
+        let (workspace, selected) = (self.workspace, self.selected);
+        let load = cx.background_spawn(async move { load(&store, workspace, &query, selected) });
         self.refresh_pending = false;
         self.refresh = Some(cx.spawn(async move |this, cx| {
             let loaded = load.await;
@@ -246,6 +264,10 @@ impl Library {
         self.counts = loaded.counts;
         self.folders = loaded.folders;
         self.tags = loaded.tags;
+        // The selection may have moved on while this was loading.
+        if loaded.selected_id == self.selected {
+            self.selected_bookmark = loaded.selected;
+        }
         // A folder that was deleted can't stay selected.
         if let Place::Folder(id) = self.place
             && !self.folders.iter().any(|f| f.id == id)
@@ -271,10 +293,22 @@ struct Loaded {
     counts: Counts,
     folders: Vec<Folder>,
     tags: Vec<(String, usize)>,
+    /// The bookmark `selected` was loaded for: `None` there means it no longer exists.
+    selected_id: Option<BookmarkId>,
+    selected: Option<Bookmark>,
 }
 
-fn load(store: &SharedStore, workspace: WorkspaceId, query: &Query) -> knoa_store::Result<Loaded> {
+fn load(
+    store: &SharedStore,
+    workspace: WorkspaceId,
+    query: &Query,
+    selected_id: Option<BookmarkId>,
+) -> knoa_store::Result<Loaded> {
     let store = lock(store);
+    let selected = match selected_id {
+        Some(id) => store.bookmark(id)?,
+        None => None,
+    };
     Ok(Loaded {
         workspaces: store.workspaces()?,
         results: store.search(query, RESULT_LIMIT)?,
@@ -282,6 +316,8 @@ fn load(store: &SharedStore, workspace: WorkspaceId, query: &Query) -> knoa_stor
         counts: store.counts(workspace)?,
         folders: store.folders(workspace)?,
         tags: store.tags(workspace)?,
+        selected_id,
+        selected,
     })
 }
 

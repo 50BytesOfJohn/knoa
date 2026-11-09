@@ -165,21 +165,37 @@ impl MainView {
         }
     }
 
+    /// The selection outlives filing it elsewhere, so it can be filed again or opened. It
+    /// ends when the bookmark is deleted, or trashed or restored: those send it away.
     fn on_library_changed(&mut self, cx: &mut Context<'_, MainView>) {
         let library = self.library.read(cx);
+        let in_trash = library.place() == Place::Trash;
+        let still_here = |id| {
+            library
+                .bookmark(id)
+                .is_some_and(|b| b.deleted_at.is_some() == in_trash)
+        };
         if let Some(id) = self.selected
-            && library.bookmark(id).is_none()
+            && !still_here(id)
         {
-            self.selected = None;
+            self.set_selected(None, cx);
             self.detail_open = false;
         }
         cx.notify();
     }
 
     pub fn select(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
-        self.selected = Some(id);
+        self.set_selected(Some(id), cx);
         self.detail_open = true;
         cx.notify();
+    }
+
+    /// The only way to change the selection: the library has to know it to keep the
+    /// bookmark loaded.
+    fn set_selected(&mut self, id: Option<BookmarkId>, cx: &mut Context<'_, MainView>) {
+        self.selected = id;
+        self.library
+            .update(cx, |library, _| library.set_selected(id));
     }
 
     pub fn set_place(&mut self, place: Place, window: &mut Window, cx: &mut Context<'_, MainView>) {
@@ -259,7 +275,7 @@ impl MainView {
     ) {
         self.library
             .update(cx, |library, cx| library.set_workspace(id, cx));
-        self.selected = None;
+        self.set_selected(None, cx);
         self.detail_open = false;
         self.scroll
             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
