@@ -195,6 +195,17 @@ CREATE TABLE ai_usage (
 -- bookmark already has.
 ALTER TABLE jobs ADD COLUMN folders_only INTEGER NOT NULL DEFAULT 0;
 ",
+    r"
+-- Tags the user wants the AI to use in a workspace, each with an optional hint.
+CREATE TABLE workspace_tags (
+    workspace_id INTEGER NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    tag          TEXT NOT NULL,
+    description  TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (workspace_id, tag)
+);
+-- The AI may add only listed tags.
+ALTER TABLE workspaces ADD COLUMN only_listed_tags INTEGER NOT NULL DEFAULT 0;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

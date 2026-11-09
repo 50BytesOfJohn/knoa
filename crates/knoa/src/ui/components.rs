@@ -1,10 +1,11 @@
 //! Small building blocks shared by Knoa's views.
 
 use gpui::{
-    AnyElement, App, Div, ElementId, Hsla, InteractiveElement as _, IntoElement,
+    AnyElement, AnyView, App, Div, ElementId, Hsla, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Svg,
-    div, px, svg,
+    Window, div, px, svg,
 };
+use gpui_component::tooltip::Tooltip;
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
 use knoa_core::Kind;
 
@@ -183,4 +184,26 @@ pub fn workspace_mark(name: &str, color: u8, size: Pixels, cx: &App) -> Div {
         .text_size(size * 0.5)
         .font_weight(gpui::FontWeight::BOLD)
         .child(initial)
+}
+
+/// A tooltip in the theme's panel colors, with the key that does the same from the card
+/// grid, if any.
+pub fn tip(
+    text: &'static str,
+    action: Option<&'static dyn gpui::Action>,
+    theme: &Theme,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
+    move |window, cx| {
+        let tooltip = Tooltip::new(text);
+        let tooltip = match action {
+            Some(action) => tooltip.action(action, Some("Cards")),
+            None => tooltip,
+        };
+        tooltip
+            .bg(bg)
+            .text_color(fg)
+            .border_color(border)
+            .build(window, cx)
+    }
 }

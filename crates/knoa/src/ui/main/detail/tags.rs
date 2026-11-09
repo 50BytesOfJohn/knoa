@@ -1,20 +1,22 @@
-//! Tags in the detail panel: adding them, with the workspace's own tags as suggestions,
-//! and removing them in a way that can be taken back.
+//! Tags in the detail panel: adding them, with the workspace's tag list and own tags as
+//! suggestions, removing them in a way that can be taken back, and listing them.
 
 use gpui::{
-    Context, Div, InteractiveElement as _, ParentElement as _, Stateful,
+    Context, Div, InteractiveElement as _, IntoElement as _, ParentElement as _, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::{
     Sizable as _,
     input::{Escape, Input},
 };
-use knoa_core::{Bookmark, BookmarkId, Origin, normalize_tag};
+use knoa_core::{Bookmark, BookmarkId, Origin, TagList, normalize_tag};
 
 mod edits;
+mod list_menu;
 
 pub(in crate::ui::main) use edits::TagEdits;
 use edits::TagField;
+use list_menu::with_list_menu;
 
 use super::{
     MainView,
@@ -45,12 +47,21 @@ impl MainView {
             return None;
         }
         let theme = Theme::get(cx).clone();
+        let tag_list = self
+            .library
+            .read(cx)
+            .workspace()
+            .map(|w| w.tag_list.clone())
+            .unwrap_or_default();
         let mut row = div().flex().flex_wrap().gap_1p5();
         for (index, tag) in shown.iter().enumerate() {
+            // A tag just taken off is only there to put back, so it has no menu.
             row = row.child(if tag.removed {
                 self.removed_chip(bookmark.id, tag, index, &theme, cx)
+                    .into_any_element()
             } else {
-                self.tag_chip(bookmark.id, tag, index, &theme, cx)
+                let chip = self.tag_chip(bookmark.id, tag, index, &theme, cx);
+                with_list_menu(chip, tag.name.clone(), &tag_list, cx).into_any_element()
             });
         }
         let field = self.tag_field(bookmark.id);
@@ -63,7 +74,7 @@ impl MainView {
         let suggestions = field
             .map(|field| {
                 let typed = field.input.read(cx).value();
-                suggestions(self.library.read(cx).tags(), &shown, &typed)
+                suggestions(&tag_list, self.library.read(cx).tags(), &shown, &typed)
             })
             .unwrap_or_default();
         Some(
@@ -233,16 +244,26 @@ impl MainView {
     }
 }
 
-/// The workspace's tags that match what's typed, most used first, with tags that start
-/// with it ahead of ones that only contain it.
-fn suggestions(vocabulary: &[(String, usize)], shown: &[Shown], typed: &str) -> Vec<String> {
+/// Tags that match what's typed. Ones that start with it go ahead of ones that only
+/// contain it; within each, the tag list's come first by name, even ones no bookmark has
+/// yet, then the workspace's other tags, most used first.
+fn suggestions(
+    tag_list: &TagList,
+    vocabulary: &[(String, usize)],
+    shown: &[Shown],
+    typed: &str,
+) -> Vec<String> {
     let typed = normalize_tag(typed);
-    let mut matches: Vec<&String> = vocabulary
+    let listed = tag_list.tags.iter().map(|tag| &tag.name);
+    let unlisted = vocabulary
         .iter()
         .map(|(name, _)| name)
+        .filter(|name| !tag_list.contains(name));
+    let mut matches: Vec<&String> = listed
+        .chain(unlisted)
         .filter(|name| !shown.iter().any(|s| &s.name == *name) && name.contains(&typed))
         .collect();
-    // A stable sort, so each group stays most used first.
+    // A stable sort, so each group keeps the order above.
     matches.sort_by_key(|name| !name.starts_with(&typed));
     matches.into_iter().take(MAX_SUGGESTIONS).cloned().collect()
 }

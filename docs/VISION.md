@@ -65,6 +65,10 @@ quality are a priority from the first milestone.
     re-scan action. Both only add bookmarks. Bookmarks that no longer match are marked,
     not removed.
 - A bookmark the user removes from a folder is never added back to it by the AI.
+- **Tags** grow from what the AI and the user add. A workspace can also have a short tag
+  list, each tag with an optional hint, that the AI uses whenever one fits; the user can
+  hold the AI to the list. It is off the main path: a tag is listed from its right-click
+  menu or the workspace's settings.
 
 ## Workspaces
 
