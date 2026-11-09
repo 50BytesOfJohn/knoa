@@ -1,27 +1,25 @@
 //! The floating detail panel for the selected bookmark.
 
+mod cover;
 mod filing;
+mod more;
 mod sections;
 mod tags;
 
 pub(super) use tags::TagEdits;
 
 use gpui::{
-    Context, Div, FontWeight, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
-    Pixels, Stateful, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div,
-    img, prelude::FluentBuilder as _, px,
+    Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 use knoa_browser::Activation;
-use knoa_core::{Bookmark, Image};
+use knoa_core::Bookmark;
 
 use super::{CopyLink, DeleteSelected, MainView, ToggleUpNext};
 use crate::ui::{
     components::{Tone, button, icon, kind_icon, site_mark, tip},
     theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
 };
-
-/// Taller images (posters, book covers) are shown smaller so the text still starts on screen.
-const MAX_COVER_HEIGHT: f32 = 300.;
 
 impl MainView {
     pub(super) fn render_detail(
@@ -84,10 +82,18 @@ impl MainView {
     fn detail_header(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Div {
         let theme = Theme::get(cx).clone();
         let has_cover = bookmark.image.is_some();
-        let mut header = div()
-            .relative()
-            .w_full()
-            .children(bookmark.image.as_ref().map(|image| cover(image, &theme)));
+        let mut header = div().relative().w_full().children(
+            bookmark
+                .image
+                .as_ref()
+                .map(|image| cover::cover(image, &theme)),
+        );
+        let refresh = cover::refresh_status(bookmark.id, has_cover, cx);
+        let (on_cover, under_byline) = if has_cover {
+            (refresh, None)
+        } else {
+            (None, refresh)
+        };
         header = header.child(
             div()
                 .px_5()
@@ -97,6 +103,7 @@ impl MainView {
                 .gap_2()
                 // Without an image, the close button sits on the byline's row.
                 .child(self.byline(bookmark, cx).when(!has_cover, |s| s.pr(px(36.))))
+                .children(under_byline.map(|pill| div().flex().child(pill)))
                 .child(
                     div()
                         .font_family(SERIF)
@@ -108,7 +115,9 @@ impl MainView {
                 )
                 .children(sections::summary(bookmark, &theme)),
         );
-        header.child(self.close_button(has_cover, cx))
+        header
+            .children(on_cover.map(|pill| div().absolute().top_3().left_3().child(pill)))
+            .child(self.close_button(has_cover, cx))
     }
 
     fn byline(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Div {
@@ -221,42 +230,8 @@ impl MainView {
                     .tooltip(tip("Move to Trash", Some(&DeleteSelected), &theme))
                     .on_click(cx.listener(move |this, _, _, cx| this.move_to_trash(id, cx))),
             )
+            .child(self.more_button(id, cx))
     }
-}
-
-/// The image under the panel's top edge, always whole: the cards crop to keep the grid
-/// calm, so the detail panel is where a poster or logo shows in full.
-fn cover(image: &Image, theme: &Theme) -> Div {
-    let natural = f32::from(DETAIL_WIDTH) * image.aspect_ratio();
-    let full_bleed = natural <= MAX_COVER_HEIGHT;
-    let height = natural.min(MAX_COVER_HEIGHT);
-    // Too tall to show full-bleed: shown whole, inset and centered on the backdrop.
-    let inset = if full_bleed { 0. } else { 12. };
-    // Round to the panel's inner edge, inside its 1 px border.
-    let radius: Pixels = PANEL_RADIUS - px(1.);
-    // `img` takes the picture's aspect ratio unless one is set, and layout follows that
-    // ratio over an explicit height, so the box's own ratio is set: inside the panel's
-    // side borders and above the box's bottom hairline.
-    let inner = (f32::from(DETAIL_WIDTH) - 2., height - 1. - inset * 2.);
-    let picture = img(image.path.clone())
-        .w_full()
-        .h(px(inner.1))
-        .aspect_ratio(inner.0 / inner.1);
-    let picture = if full_bleed {
-        picture.rounded_t(radius).object_fit(ObjectFit::Fill)
-    } else {
-        picture.rounded(px(6.)).object_fit(ObjectFit::Contain)
-    };
-    div()
-        .h(px(height))
-        .w_full()
-        .py(px(inset))
-        .overflow_hidden()
-        .rounded_t(radius)
-        .bg(theme.soft)
-        .border_b_1()
-        .border_color(theme.hairline)
-        .child(picture)
 }
 
 fn icon_button(id: &'static str, name: &str, color: gpui::Hsla, theme: &Theme) -> Stateful<Div> {

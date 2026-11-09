@@ -60,8 +60,7 @@ enum Outcome {
 }
 
 impl Organizer {
-    pub fn init(library: Entity<Library>, fetcher: Fetcher, cx: &mut App) {
-        let fetcher = Arc::new(fetcher);
+    pub fn init(library: Entity<Library>, fetcher: Arc<Fetcher>, cx: &mut App) {
         let organizer = cx.new(|cx| {
             let (wake, wake_rx) = mpsc::unbounded();
             let run =

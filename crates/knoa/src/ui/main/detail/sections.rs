@@ -8,13 +8,10 @@ use jiff::{Timestamp, tz::TimeZone};
 use knoa_core::{Bookmark, Status};
 
 use super::MainView;
-use crate::{
-    services::organizer::Organizer,
-    ui::{
-        components::{Tone, button, icon},
-        mascot::{Mood, ai_mark, mascot},
-        theme::{CARD_RADIUS, Theme},
-    },
+use crate::ui::{
+    components::{Tone, button, icon},
+    mascot::{Mood, ai_mark, mascot},
+    theme::{CARD_RADIUS, Theme},
 };
 
 /// The AI's dot as a character, for the end of a line of text it wrote.
@@ -99,7 +96,7 @@ impl MainView {
             _ => ("Read from the page only, without AI.", Some("Organize")),
         };
         let theme = Theme::get(cx).clone();
-        let (id, library) = (bookmark.id, self.library.clone());
+        let id = bookmark.id;
         let organizing = matches!(bookmark.status, Status::Queued | Status::Organizing);
         Some(
             notice(theme.ai_soft)
@@ -115,12 +112,8 @@ impl MainView {
                 .child(div().flex_1().min_w_0().child(message))
                 .when_some(action, |s, label| {
                     s.child(
-                        button("organize", label, Tone::Soft, cx).on_click(move |_, _, cx| {
-                            library.update(cx, |library, cx| {
-                                library.change(cx, move |store| store.queue(id));
-                            });
-                            Organizer::wake(cx);
-                        }),
+                        button("organize", label, Tone::Soft, cx)
+                            .on_click(cx.listener(move |this, _, _, cx| this.organize(id, cx))),
                     )
                 }),
         )

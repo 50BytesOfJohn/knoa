@@ -1,6 +1,7 @@
 //! The main screen: sidebar, search pill, library cards and the detail panel.
 
 mod add_link;
+mod bookmark_menu;
 mod cards;
 mod content;
 mod detail;
@@ -28,7 +29,7 @@ use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
 
 use crate::{
-    services::organizer::Organizer,
+    services::{organizer::Organizer, thumbnails::Thumbnails},
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -142,6 +143,7 @@ impl MainView {
                 this.on_library_changed(cx);
             }),
             cx.observe(&organizer, |_, _, cx| cx.notify()),
+            cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
         ];
         let cards_focus = cx.focus_handle();

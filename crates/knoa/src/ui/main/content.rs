@@ -11,7 +11,9 @@ use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId, Place};
 
 use super::{
-    MainView, cards,
+    MainView,
+    bookmark_menu::with_bookmark_menu,
+    cards,
     groups::{self, Group},
     masonry::{Layout, Placed, Spec},
     search::SEARCH_AREA_HEIGHT,
@@ -235,7 +237,7 @@ impl MainView {
             .top(px(placed.y))
             .left(px(placed.x))
             .w(px(placed.width))
-            .child(
+            .child(with_bookmark_menu(
                 cards::interactive(placed.index, card, placed.height, theme)
                     .on_click(cx.listener(on_click))
                     .on_aux_click(cx.listener(on_click))
@@ -247,7 +249,9 @@ impl MainView {
                             },
                         )),
                     ),
-            )
+                id,
+                cx,
+            ))
     }
 
     fn click_card(
@@ -299,29 +303,28 @@ impl MainView {
         let mut row = div().id("up-next-row").flex().gap_2().overflow_x_scroll();
         for bookmark in items {
             let id = bookmark.id;
-            row = row.child(
-                div()
-                    .id(("up-next", id.0 as usize))
-                    .flex_none()
-                    .w(px(200.))
-                    .h(px(44.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .rounded(ROW_RADIUS)
-                    .bg(theme.soft)
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover))
-                    .child(site_mark(&bookmark.site, px(20.), cx))
-                    .child(div().text_xs().line_clamp(2).child(bookmark.title.clone()))
-                    .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                        this.click_card(id, event, window, cx);
-                    }))
-                    .on_aux_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                        this.click_card(id, event, window, cx);
-                    })),
-            );
+            let item = div()
+                .id(("up-next", id.0 as usize))
+                .flex_none()
+                .w(px(200.))
+                .h(px(44.))
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2()
+                .rounded(ROW_RADIUS)
+                .bg(theme.soft)
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.hover))
+                .child(site_mark(&bookmark.site, px(20.), cx))
+                .child(div().text_xs().line_clamp(2).child(bookmark.title.clone()))
+                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    this.click_card(id, event, window, cx);
+                }))
+                .on_aux_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                    this.click_card(id, event, window, cx);
+                }));
+            row = row.child(with_bookmark_menu(item, id, cx));
         }
         div()
             .absolute()

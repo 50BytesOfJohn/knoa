@@ -11,7 +11,7 @@ use crate::{
     paths::Paths,
     services::{
         ai, credentials::Credentials, housekeeping, network::Network, organizer::Organizer, sync,
-        updates::Updates,
+        thumbnails::Thumbnails, updates::Updates,
     },
     state::{
         library::Library,
@@ -37,11 +37,9 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     let library = cx.new(|cx| Library::new(Arc::new(Mutex::new(store)), cx));
     housekeeping::run(&library, paths.thumbnails(), cx);
     sync::init(&library, cx);
-    Organizer::init(
-        library.clone(),
-        knoa_fetch::Fetcher::new(paths.thumbnails())?,
-        cx,
-    );
+    let fetcher = Arc::new(knoa_fetch::Fetcher::new(paths.thumbnails())?);
+    Organizer::init(library.clone(), fetcher.clone(), cx);
+    Thumbnails::init(library.clone(), fetcher, cx);
     ai::connect(cx);
     cx.set_global(paths);
 
