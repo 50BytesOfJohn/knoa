@@ -6,17 +6,16 @@
 //! at once, text when its field loses focus or the page is left.
 
 mod browsers;
+mod identity;
+mod organizing;
 mod tag_list;
 
 use gpui::{
-    AppContext as _, Context, Div, Entity, EventEmitter, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Subscription,
-    TaskExt as _, Window, div, prelude::FluentBuilder as _, px,
+    AppContext as _, Context, Div, Entity, EventEmitter, IntoElement, ParentElement as _, Render,
+    StatefulInteractiveElement as _, Styled as _, Subscription, TaskExt as _, Window, div,
+    prelude::FluentBuilder as _,
 };
-use gpui_component::{
-    input::{Input, InputEvent, InputState, Textarea, TextareaState},
-    switch::Switch,
-};
+use gpui_component::input::{InputEvent, InputState, TextareaState};
 use knoa_browser::{Browser, Profile};
 use knoa_core::{Screening, TagList, Workspace, WorkspaceId};
 
@@ -25,14 +24,13 @@ use super::{
     reorganize::{Reorganize, Scope},
 };
 use crate::{
-    services::organizer::{AiStatus, Organizer},
+    services::organizer::Organizer,
     state::library::Library,
     ui::{
-        components::{Tone, button, workspace_mark},
+        components::{Tone, button},
         theme::Theme,
     },
 };
-use browsers::synced_from;
 use tag_list::{TagListChanged, TagListEditor};
 
 pub enum WorkspacePageEvent {
@@ -260,127 +258,6 @@ impl Render for WorkspacePage {
 }
 
 impl WorkspacePage {
-    fn header(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
-        let Some(id) = self.existing else {
-            return form::header(
-                "New workspace",
-                "A separate library, like Work or Personal, with its own browsers and folders.",
-                theme,
-            );
-        };
-        let typed = self.name.read(cx).value().trim().to_owned();
-        let title = if typed.is_empty() {
-            self.stored(id, cx).map(|w| w.name).unwrap_or_default()
-        } else {
-            typed
-        };
-        let is_current = self.library.read(cx).workspace_id() == id;
-        let switch = if is_current {
-            div()
-                .text_sm()
-                .text_color(theme.muted)
-                .child("Shown now")
-                .into_any_element()
-        } else {
-            button("show-workspace", "Show it", Tone::Soft, cx)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.save(cx);
-                    this.library
-                        .update(cx, |library, cx| library.set_workspace(id, cx));
-                }))
-                .into_any_element()
-        };
-        div()
-            .flex()
-            .items_start()
-            .gap_4()
-            .child(workspace_mark(&title, self.color, px(40.), cx))
-            .child(div().flex_1().min_w_0().child(form::header(
-                title,
-                &synced_from(&self.browsers),
-                theme,
-            )))
-            .child(div().pt_1().child(switch))
-    }
-
-    fn identity_group(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
-        let mut swatches = div().flex().gap_2();
-        for index in 0..8u8 {
-            let selected = index == self.color;
-            swatches = swatches.child(
-                div()
-                    .id(("workspace-color", usize::from(index)))
-                    .size(px(22.))
-                    .rounded(px(7.))
-                    .border_2()
-                    .border_color(if selected {
-                        theme.text
-                    } else {
-                        gpui::transparent_black()
-                    })
-                    .p(px(2.))
-                    .cursor_pointer()
-                    .child(
-                        div()
-                            .size_full()
-                            .rounded(px(4.))
-                            .bg(theme.folder_color(index)),
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.color = index;
-                        this.changed(cx);
-                    })),
-            );
-        }
-        let rows = vec![
-            form::row(
-                "Name",
-                None,
-                div().w(px(240.)).child(Input::new(&self.name)),
-                theme,
-            ),
-            form::row("Color", None, swatches, theme),
-        ];
-        form::group("Name and color", rows, theme)
-    }
-
-    fn organizing_group(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
-        let mut rows = vec![
-            form::stacked(
-                "Instructions",
-                Some("How the AI should sort, tag and summarize what lands here."),
-                Textarea::new(&self.instructions).h(px(84.)),
-                theme,
-            ),
-            form::row(
-                "Only keep bookmarks that fit",
-                Some(
-                    "Off: everything from the browser lands here. On: the AI sets aside what doesn't fit, and you can keep it anyway.",
-                ),
-                Switch::new("screening")
-                    .checked(self.screening)
-                    .on_click(cx.listener(|this, on: &bool, _, cx| {
-                        this.screening = *on;
-                        this.changed(cx);
-                    })),
-                theme,
-            ),
-        ];
-        if self.screening {
-            rows.push(form::stacked(
-                "What belongs here",
-                None,
-                Textarea::new(&self.guideline).h(px(84.)),
-                theme,
-            ));
-        }
-        let ai_on = *Organizer::entity(cx).read(cx).status() != AiStatus::Off;
-        if let Some(reorganize) = self.reorganize.clone().filter(|_| ai_on) {
-            rows.push(reorganize.into_any_element());
-        }
-        form::group("Organizing", rows, theme)
-    }
-
     /// Create for a new workspace; Delete for an existing one, unless it's the last.
     fn footer(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Option<Div> {
         let Some(id) = self.existing else {

@@ -4,6 +4,7 @@
 //! `Store` is synchronous. The app runs it on GPUI's background executor, never on the UI
 //! thread, with one read-write connection and one read-only connection to the same file.
 
+mod add_link;
 mod folders;
 mod import;
 mod jobs;
@@ -20,7 +21,8 @@ use std::{path::Path, time::Duration};
 
 use rusqlite::{Connection, OpenFlags};
 
-pub use import::{AddedLink, ImportReport, NewBookmarks};
+pub use add_link::AddedLink;
+pub use import::{ImportReport, NewBookmarks};
 pub use jobs::Job;
 pub use read::Counts;
 
