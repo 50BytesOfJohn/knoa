@@ -3,29 +3,39 @@
 //! The AI must be told, or it describes "the PostHog login page" instead of inferring the
 //! bookmark from its URL, browser title and folder.
 
-use std::net::IpAddr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
-use url::Url;
+use url::{Host, Url};
 
 const PRIVATE_SUFFIXES: [&str; 3] = [".local", ".internal", ".ts.net"];
 
 /// A host on this machine or a private network: never fetched.
 pub fn is_private(url: &Url) -> bool {
-    let Some(host) = url.host_str() else {
-        return true;
-    };
-    if host == "localhost" || PRIVATE_SUFFIXES.iter().any(|suffix| host.ends_with(suffix)) {
-        return true;
-    }
-    match host.trim_matches(['[', ']']).parse::<IpAddr>() {
-        Ok(IpAddr::V4(ip)) => {
-            // 100.64.0.0/10 is carrier-grade NAT, which Tailscale uses.
-            let tailscale = ip.octets()[0] == 100 && (64..128).contains(&ip.octets()[1]);
-            ip.is_private() || ip.is_loopback() || ip.is_link_local() || tailscale
+    match url.host() {
+        None => true,
+        Some(Host::Domain(host)) => {
+            // `localhost.` is still localhost: a trailing dot only marks the name as absolute.
+            let host = host.trim_end_matches('.');
+            host == "localhost" || PRIVATE_SUFFIXES.iter().any(|suffix| host.ends_with(suffix))
         }
-        Ok(IpAddr::V6(ip)) => ip.is_loopback() || ip.is_unique_local(),
-        Err(_) => false,
+        Some(Host::Ipv4(ip)) => is_private_v4(ip),
+        Some(Host::Ipv6(ip)) => is_private_v6(ip),
     }
+}
+
+fn is_private_v4(ip: Ipv4Addr) -> bool {
+    // 100.64.0.0/10 is carrier-grade NAT, which Tailscale uses.
+    let [first, second, ..] = ip.octets();
+    let tailscale = first == 100 && (64..128).contains(&second);
+    ip.is_private() || ip.is_loopback() || ip.is_link_local() || ip.is_unspecified() || tailscale
+}
+
+fn is_private_v6(ip: Ipv6Addr) -> bool {
+    // `::ffff:192.168.1.4` reaches the IPv4 host, so it is as private as that host.
+    if let Some(v4) = ip.to_ipv4_mapped() {
+        return is_private_v4(v4);
+    }
+    ip.is_loopback() || ip.is_unspecified() || ip.is_unique_local() || ip.is_unicast_link_local()
 }
 
 const WALL_PATHS: &[&str] = &[
@@ -90,6 +100,9 @@ mod tests {
             "http://192.168.1.4/",
             "http://100.101.5.6/",
             "https://box.tail1.ts.net/",
+            "http://0.0.0.0:8080/",
+            "http://[::ffff:192.168.1.4]/",
+            "http://[fe80::1]/",
         ] {
             assert!(is_private(&Url::parse(url).unwrap()), "{url}");
         }

@@ -1,12 +1,12 @@
-//! The HTTP client: timeouts, size limits and the User-Agent fallback.
+//! The HTTP client: timeouts, redirects, size limits and the User-Agent fallback.
 
 use std::time::Duration;
 
-use reqwest::{Client, StatusCode, header};
+use reqwest::{Client, StatusCode, header, redirect};
 use serde::de::DeserializeOwned;
 use url::Url;
 
-use crate::Error;
+use crate::{Error, access};
 
 /// An honest User-Agent works best: Hacker News answers 419 and Cursor 403 to a browser UA.
 const KNOA_UA: &str = concat!(
@@ -39,7 +39,7 @@ impl Http {
                 .user_agent(ua)
                 .timeout(Duration::from_secs(20))
                 .connect_timeout(Duration::from_secs(8))
-                .redirect(reqwest::redirect::Policy::limited(8))
+                .redirect(redirect_policy())
                 .build()
         };
         Ok(Http {
@@ -72,6 +72,20 @@ impl Http {
         }
         Ok(serde_json::from_slice(&response.body).ok())
     }
+}
+
+/// Only the bookmarked URL is checked before fetching, so a public page could otherwise
+/// redirect Knoa to a private host and have that page stored and sent to the AI. Stopping
+/// hands back the redirect itself, which reads as an unreadable page.
+fn redirect_policy() -> redirect::Policy {
+    let limited = redirect::Policy::limited(8);
+    redirect::Policy::custom(move |attempt| {
+        if access::is_private(attempt.url()) {
+            attempt.stop()
+        } else {
+            limited.redirect(attempt)
+        }
+    })
 }
 
 async fn get(client: &Client, url: &Url, limit: usize) -> Result<Response, Error> {
