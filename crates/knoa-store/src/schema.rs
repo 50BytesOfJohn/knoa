@@ -2,6 +2,8 @@
 
 use rusqlite::Connection;
 
+use crate::{Error, Result};
+
 /// Each entry moves the schema one version forward. Never edit a shipped entry; append.
 const MIGRATIONS: &[&str] = &[
     r"
@@ -210,16 +212,26 @@ ALTER TABLE workspaces ADD COLUMN only_listed_tags INTEGER NOT NULL DEFAULT 0;
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
 /// cascade into every row that refers to it. The pragma can't change inside a transaction.
-pub fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
-    conn.pragma_update(None, "foreign_keys", "OFF")?;
+///
+/// Refuses a database from a newer Knoa: this version doesn't know its schema and could
+/// lose or corrupt what the newer one stored.
+pub fn migrate(conn: &mut Connection) -> Result<()> {
     let current: usize = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if current > MIGRATIONS.len() {
+        return Err(Error::NewerDatabase {
+            found: current,
+            supported: MIGRATIONS.len(),
+        });
+    }
+    conn.pragma_update(None, "foreign_keys", "OFF")?;
     for (index, sql) in MIGRATIONS.iter().enumerate().skip(current) {
         let tx = conn.transaction()?;
         tx.execute_batch(sql)?;
         tx.pragma_update(None, "user_version", index + 1)?;
         tx.commit()?;
     }
-    conn.pragma_update(None, "foreign_keys", "ON")
+    conn.pragma_update(None, "foreign_keys", "ON")?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -249,5 +261,16 @@ mod tests {
         assert_eq!(count("SELECT count(*) FROM bookmark_folders"), 1);
         assert_eq!(count("SELECT count(*) FROM bookmark_tags"), 1);
         assert_eq!(count("SELECT count(*) FROM jobs"), 1);
+    }
+
+    #[test]
+    fn a_database_from_a_newer_knoa_is_refused() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "user_version", MIGRATIONS.len() + 1)
+            .unwrap();
+        assert!(matches!(
+            migrate(&mut conn),
+            Err(Error::NewerDatabase { .. })
+        ));
     }
 }

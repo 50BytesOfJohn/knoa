@@ -30,6 +30,10 @@ pub enum Error {
     Sqlite(#[from] rusqlite::Error),
     #[error("stored JSON is invalid: {0}")]
     Json(#[from] serde_json::Error),
+    #[error(
+        "the library was saved by a newer version of Knoa (schema {found}, this version knows up to {supported}); update Knoa to open it"
+    )]
+    NewerDatabase { found: usize, supported: usize },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
