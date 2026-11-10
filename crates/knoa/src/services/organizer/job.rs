@@ -65,7 +65,7 @@ pub(super) async fn process(job: Job, work: Arc<Work>) -> Outcome {
         usage::save(provider, work.database.clone(), &work.background).await;
     }
     let database = work.database.clone();
-    let next = next_step(&outcome, job.attempts);
+    let next = next_step(&outcome, &job);
     let saved = work
         .background
         .spawn(async move { record(&mut database.write(), id, next) })
@@ -82,17 +82,24 @@ enum NextStep {
     RetryAfter(String, Duration),
     /// Back on the queue as it was: the organizer's pause holds it back, not the job.
     PutBack(String),
-    GiveUp(String),
+    GiveUp {
+        error: String,
+        folders_only: bool,
+    },
 }
 
-fn next_step(outcome: &Outcome, attempts: u32) -> NextStep {
+fn next_step(outcome: &Outcome, job: &Job) -> NextStep {
     match outcome {
         Outcome::Done => NextStep::Finished,
-        Outcome::Retry { error, after } if attempts + 1 < MAX_ATTEMPTS => {
+        Outcome::Retry { error, after } if job.attempts + 1 < MAX_ATTEMPTS => {
             NextStep::RetryAfter(error.clone(), *after)
         }
         Outcome::NeedsAttention(error) => NextStep::PutBack(error.clone()),
-        Outcome::Retry { error, .. } | Outcome::Failed(error) => NextStep::GiveUp(error.clone()),
+        Outcome::Retry { error, .. } | Outcome::Failed(error) => NextStep::GiveUp {
+            error: error.clone(),
+            // Even when `file_one` fell back to a full run, the bookmark was organized before.
+            folders_only: job.folders_only,
+        },
     }
 }
 
@@ -103,9 +110,12 @@ fn record(store: &mut Store, id: BookmarkId, next: NextStep) -> knoa_store::Resu
             store.retry_job(id, &error, now() + after.as_secs() as i64)
         }
         NextStep::PutBack(error) => store.put_back_job(id, &error),
-        NextStep::GiveUp(error) => {
+        NextStep::GiveUp {
+            error,
+            folders_only,
+        } => {
             tracing::warn!(?id, "giving up on organizing: {error}");
-            store.fail_job(id, &error)
+            store.fail_job(id, &error, folders_only)
         }
     }
 }
