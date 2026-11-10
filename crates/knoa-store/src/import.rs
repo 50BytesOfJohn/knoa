@@ -1,8 +1,8 @@
-//! Getting bookmarks in: idempotent browser imports and links added by hand.
+//! Getting bookmarks in from a browser: idempotent imports.
 
 use std::collections::HashSet;
 
-use knoa_core::{BookmarkId, NewBookmark, WorkspaceId, site_of};
+use knoa_core::{NewBookmark, WorkspaceId, site_of};
 use rusqlite::{OptionalExtension as _, params};
 
 use crate::{Result, Store, search, trash};
@@ -19,14 +19,6 @@ pub enum NewBookmarks {
     /// The first import: store titles and URLs only, organizing is a separate action.
     MetadataOnly,
     Organize,
-}
-
-/// A link the user added by hand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AddedLink {
-    pub id: BookmarkId,
-    /// False when the workspace already had this URL.
-    pub is_new: bool,
 }
 
 impl Store {
@@ -50,13 +42,14 @@ impl Store {
             if !seen.insert(bookmark.url.as_str()) {
                 continue;
             }
-            let Some((id, added)) = upsert(&tx, workspace, source, bookmark, new)? else {
-                continue;
-            };
-            if added {
-                report.added += 1;
+            match upsert(&tx, workspace, source, bookmark, new)? {
+                Upserted::Added(id) => {
+                    report.added += 1;
+                    search::reindex(&tx, id)?;
+                }
+                Upserted::Updated(id) => search::reindex(&tx, id)?,
+                Upserted::Unchanged | Upserted::DeletedForGood => {}
             }
-            search::reindex(&tx, id)?;
         }
         report.removed = mark_removed(&tx, workspace, source, &seen)?;
         trash::forget_gone_from_browser(&tx, workspace, source, &seen)?;
@@ -74,89 +67,113 @@ impl Store {
             .conn
             .query_row(sql, params![workspace.0, source], |row| row.get(0))?)
     }
-
-    /// Adds a link by hand and queues it for organizing. The user chose it, so the
-    /// workspace's guideline never sets it aside, and a deleted copy comes back. The URL
-    /// stands in as the title until the page is fetched.
-    pub fn add_link(&mut self, workspace: WorkspaceId, url: &str, now: i64) -> Result<AddedLink> {
-        let tx = self.conn.transaction()?;
-        let existing: Option<i64> = tx
-            .query_row(
-                "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND url = ?2",
-                params![workspace.0, url],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if let Some(id) = existing {
-            tx.execute(
-                "UPDATE bookmarks SET kept = 1, set_aside = NULL, deleted_at = NULL WHERE id = ?1",
-                [id],
-            )?;
-            tx.commit()?;
-            return Ok(AddedLink {
-                id: BookmarkId(id),
-                is_new: false,
-            });
-        }
-        trash::forget_deleted_url(&tx, workspace, url)?;
-        tx.execute(
-            "INSERT INTO bookmarks (workspace_id, url, title, site, added_at, status, kept)
-             VALUES (?1, ?2, ?2, ?3, ?4, 'queued', 1)",
-            params![workspace.0, url, site_of(url), now],
-        )?;
-        let id = tx.last_insert_rowid();
-        tx.execute("INSERT INTO jobs (bookmark_id) VALUES (?1)", [id])?;
-        search::reindex(&tx, id)?;
-        tx.commit()?;
-        Ok(AddedLink {
-            id: BookmarkId(id),
-            is_new: true,
-        })
-    }
 }
 
-/// Updates or inserts one browser bookmark. Returns its id and whether it is new, or
-/// `None` when the user deleted it for good.
+/// What importing one browser bookmark did to the workspace.
+enum Upserted {
+    Added(i64),
+    Updated(i64),
+    Unchanged,
+    /// The user deleted the URL for good and the browser hasn't bookmarked it again.
+    DeletedForGood,
+}
+
+/// The browser-synced columns of a bookmark already in the workspace.
+struct Stored {
+    id: i64,
+    title: String,
+    source: Option<String>,
+    guid: Option<String>,
+    folder: Option<String>,
+    removed_from_browser: bool,
+    deleted: bool,
+}
+
 fn upsert(
     tx: &rusqlite::Transaction<'_>,
     workspace: WorkspaceId,
     source: &str,
     bookmark: &NewBookmark,
     new: NewBookmarks,
-) -> Result<Option<(i64, bool)>> {
-    let guid = bookmark.browser_guid.as_deref();
-    let existing: Option<(i64, Option<String>, Option<String>)> = tx
-        .query_row(
-            "SELECT id, source, browser_guid FROM bookmarks WHERE workspace_id = ?1 AND url = ?2",
-            params![workspace.0, bookmark.url],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .optional()?;
-    if let Some((id, old_source, old_guid)) = existing {
-        let again =
-            trash::bookmarked_again(old_source.as_deref(), old_guid.as_deref(), source, guid);
-        tx.execute(
-            "UPDATE bookmarks SET title = ?2, source = ?3, browser_guid = ?4, browser_folder = ?5,
-             removed_from_browser = 0, deleted_at = CASE WHEN ?6 THEN NULL ELSE deleted_at END
-             WHERE id = ?1",
-            params![
-                id,
-                bookmark.title,
-                source,
-                guid,
-                bookmark.browser_folder,
-                again
-            ],
-        )?;
-        return Ok(Some((id, false)));
+) -> Result<Upserted> {
+    if let Some(stored) = stored(tx, workspace, &bookmark.url)? {
+        return update(tx, &stored, source, bookmark);
     }
+    let guid = bookmark.browser_guid.as_deref();
     if let Some((old_source, old_guid)) = trash::deleted_url(tx, workspace, &bookmark.url)? {
         if !trash::bookmarked_again(Some(&old_source), old_guid.as_deref(), source, guid) {
-            return Ok(None);
+            return Ok(Upserted::DeletedForGood);
         }
         trash::forget_deleted_url(tx, workspace, &bookmark.url)?;
     }
-    Ok(Some((insert(tx, workspace, source, bookmark, new)?, true)))
+    Ok(Upserted::Added(insert(
+        tx, workspace, source, bookmark, new,
+    )?))
+}
+
+fn stored(
+    tx: &rusqlite::Transaction<'_>,
+    workspace: WorkspaceId,
+    url: &str,
+) -> Result<Option<Stored>> {
+    let sql = "SELECT id, title, source, browser_guid, browser_folder, removed_from_browser,
+                      deleted_at IS NOT NULL
+               FROM bookmarks WHERE workspace_id = ?1 AND url = ?2";
+    let stored = tx
+        .query_row(sql, params![workspace.0, url], |row| {
+            Ok(Stored {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                source: row.get(2)?,
+                guid: row.get(3)?,
+                folder: row.get(4)?,
+                removed_from_browser: row.get(5)?,
+                deleted: row.get(6)?,
+            })
+        })
+        .optional()?;
+    Ok(stored)
+}
+
+/// Every save in the browser re-imports its whole file, so a bookmark the browser didn't
+/// change is left alone: rewriting it would reindex its page text while the store is
+/// locked, for every bookmark in the library.
+fn update(
+    tx: &rusqlite::Transaction<'_>,
+    stored: &Stored,
+    source: &str,
+    bookmark: &NewBookmark,
+) -> Result<Upserted> {
+    let guid = bookmark.browser_guid.as_deref();
+    let again = trash::bookmarked_again(
+        stored.source.as_deref(),
+        stored.guid.as_deref(),
+        source,
+        guid,
+    );
+    let unchanged = stored.title == bookmark.title
+        && stored.source.as_deref() == Some(source)
+        && stored.guid.as_deref() == guid
+        && stored.folder == bookmark.browser_folder
+        && !stored.removed_from_browser
+        && !(again && stored.deleted);
+    if unchanged {
+        return Ok(Upserted::Unchanged);
+    }
+    tx.execute(
+        "UPDATE bookmarks SET title = ?2, source = ?3, browser_guid = ?4, browser_folder = ?5,
+         removed_from_browser = 0, deleted_at = CASE WHEN ?6 THEN NULL ELSE deleted_at END
+         WHERE id = ?1",
+        params![
+            stored.id,
+            bookmark.title,
+            source,
+            guid,
+            bookmark.browser_folder,
+            again
+        ],
+    )?;
+    Ok(Upserted::Updated(stored.id))
 }
 
 fn insert(
@@ -222,7 +239,7 @@ fn mark_removed(
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{BookmarkId, Enrichment, Kind, Place, Query};
+    use knoa_core::{BookmarkId, Place, Query};
 
     use super::*;
     use crate::test_support::{WORKSPACE, bookmark};
@@ -284,6 +301,38 @@ mod tests {
     }
 
     #[test]
+    fn reimport_writes_only_what_the_browser_changed() {
+        let mut store = Store::open_in_memory().unwrap();
+        let sync = |store: &mut Store, links: &[NewBookmark]| {
+            store
+                .import(WORKSPACE, "helium:Default", links, NewBookmarks::Organize)
+                .unwrap();
+        };
+        let links = [
+            bookmark("https://a.dev/", "A", 1),
+            bookmark("https://b.dev/", "B", 2),
+        ];
+        sync(&mut store, &links);
+        let before = store.conn.total_changes();
+        sync(&mut store, &links);
+        assert_eq!(
+            store.conn.total_changes(),
+            before,
+            "nothing changed, nothing written"
+        );
+
+        sync(
+            &mut store,
+            &[bookmark("https://a.dev/", "Renamed", 1), links[1].clone()],
+        );
+        let found = store
+            .search(&Query::parse("renamed", None, Place::Everything), 10)
+            .unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].url, "https://a.dev/");
+    }
+
+    #[test]
     fn a_browser_feeds_each_workspace_its_own_copy() {
         let mut store = Store::open_in_memory().unwrap();
         let work = store.create_workspace("Work", 1).unwrap();
@@ -313,30 +362,5 @@ mod tests {
             )
             .unwrap();
         assert!(!personal[0].removed_from_browser, "workspaces sync apart");
-    }
-
-    #[test]
-    fn a_kept_link_is_never_set_aside() {
-        let mut store = Store::open_in_memory().unwrap();
-        let added = store.add_link(WORKSPACE, "https://a.dev/", 1).unwrap();
-        let job = store.take_jobs(1, 1).unwrap().remove(0);
-        assert_eq!(job.bookmark.id, added.id);
-        let enrichment = Enrichment {
-            kind: Kind::Article,
-            summary: None,
-            fields: knoa_core::Fields::new(),
-            extras: Vec::new(),
-            tags: Vec::new(),
-            folders: Vec::new(),
-            set_aside: Some("not about work".into()),
-            model: "test".into(),
-        };
-        store.finish_organized(added.id, &enrichment, 2).unwrap();
-        let set_aside = Query {
-            place: Place::SetAside,
-            ..Query::default()
-        };
-        assert_eq!(store.count(&set_aside).unwrap(), 0);
-        assert_eq!(store.count(&Query::default()).unwrap(), 1);
     }
 }

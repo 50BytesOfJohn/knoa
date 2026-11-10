@@ -60,9 +60,9 @@ pub fn watch(
     thread::Builder::new()
         .name("knoa-bookmark-watch".into())
         .spawn(move || debounce(&rx, &watched, &on_change))
-        .map_err(|source| Error::Io {
+        .map_err(|err| Error::Io {
             path: PathBuf::new(),
-            source,
+            err,
         })?;
     Ok(Watcher { _inner: inner })
 }

@@ -13,7 +13,7 @@ use knoa_browser::{Profile, ProfileId};
 use knoa_core::WorkspaceId;
 use knoa_store::NewBookmarks;
 
-use crate::state::library::{BrowsersChanged, Library, lock};
+use crate::state::library::{BrowsersChanged, Library};
 
 const RESCAN_EVERY: Duration = Duration::from_mins(10);
 
@@ -127,13 +127,13 @@ impl BrowserSync {
         let source = id.to_string();
         let workspaces = self.feeds.get(id).cloned().unwrap_or_default();
         let last_checksum = self.checksums.get(id).cloned();
-        let store = self.library.read(cx).store();
+        let database = self.library.read(cx).database();
         let task = cx.background_spawn(async move {
             let file = knoa_browser::read_bookmarks(&path)?;
             if last_checksum.as_deref() == Some(file.checksum.as_str()) {
                 return anyhow::Ok(None);
             }
-            let mut store = lock(&store);
+            let mut store = database.write();
             let mut added = 0;
             for workspace in workspaces {
                 let new = if store.has_source(workspace, &source)? {

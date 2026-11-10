@@ -100,7 +100,7 @@ impl Image {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Bookmark {
     pub id: BookmarkId,
     pub workspace: WorkspaceId,

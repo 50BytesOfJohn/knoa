@@ -3,24 +3,30 @@
 //! executor.
 
 use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use gpui::{AppContext as _, Context, EventEmitter, Task};
 use knoa_core::{Bookmark, BookmarkId, Folder, Kind, Place, Query, Workspace, WorkspaceId};
 use knoa_store::{AddedLink, Counts, Store};
 
-use crate::state::settings::SettingsFile;
+use crate::state::{database::Database, settings::SettingsFile};
 
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
 const RESULT_LIMIT: usize = 20_000;
 
-pub type SharedStore = Arc<Mutex<Store>>;
+/// Background refreshes wait at least this long, so a burst of changes shows as one.
+const MIN_REFRESH_WAIT: Duration = Duration::from_millis(500);
+/// Waiting this many times as long as the last load keeps background reloading to about a
+/// tenth of one thread, however large the library.
+const LOADS_PER_REFRESH_WAIT: u32 = 10;
+/// Any longer and the screen would look stuck while the organizer works.
+const MAX_REFRESH_WAIT: Duration = Duration::from_secs(3);
 
 pub struct Library {
-    store: SharedStore,
+    database: Arc<Database>,
     workspace: WorkspaceId,
     workspaces: Vec<Workspace>,
     place: Place,
@@ -39,6 +45,8 @@ pub struct Library {
     refresh: Option<Task<()>>,
     /// Set while a refresh is waiting out the throttle.
     refresh_pending: bool,
+    /// How long the last load took, which sets the throttle.
+    last_load: Duration,
 }
 
 /// Results changed, so views depending on them should re-render.
@@ -52,12 +60,12 @@ pub struct BrowsersChanged;
 impl EventEmitter<BrowsersChanged> for Library {}
 
 impl Library {
-    pub fn new(store: SharedStore, cx: &mut Context<'_, Library>) -> Library {
+    pub fn new(database: Arc<Database>, cx: &mut Context<'_, Library>) -> Library {
         let workspace = SettingsFile::get(cx)
             .current_workspace
             .map_or(WorkspaceId(1), WorkspaceId);
         let mut library = Library {
-            store,
+            database,
             workspace,
             workspaces: Vec::new(),
             place: Place::Everything,
@@ -72,13 +80,14 @@ impl Library {
             selected_bookmark: None,
             refresh: None,
             refresh_pending: false,
+            last_load: Duration::ZERO,
         };
         library.refresh(cx);
         library
     }
 
-    pub fn store(&self) -> SharedStore {
-        self.store.clone()
+    pub fn database(&self) -> Arc<Database> {
+        self.database.clone()
     }
 
     pub fn workspaces(&self) -> &[Workspace] {
@@ -184,43 +193,59 @@ impl Library {
 
     /// Re-runs the query now. The previous refresh, if still running, is dropped.
     pub fn refresh(&mut self, cx: &mut Context<'_, Library>) {
-        let store = self.store.clone();
+        let database = self.database.clone();
         let query = self.query();
         let (workspace, selected) = (self.workspace, self.selected);
-        let load = cx.background_spawn(async move { load(&store, workspace, &query, selected) });
+        let current = self.results.clone();
+        let load = cx.background_spawn(async move {
+            let started = Instant::now();
+            let loaded = database
+                .read()
+                .snapshot(|store| load(store, workspace, &query, selected));
+            let took = started.elapsed();
+            let loaded = loaded.map(|loaded| Loaded {
+                results: same_or_fresh(current, loaded.results),
+                ..loaded
+            });
+            (loaded, took)
+        });
         self.refresh_pending = false;
         self.refresh = Some(cx.spawn(async move |this, cx| {
-            let loaded = load.await;
-            let _ = this.update(cx, |this, cx| match loaded {
-                Ok(loaded) => this.apply(loaded, cx),
-                Err(err) => tracing::error!("loading the library failed: {err}"),
+            let (loaded, took) = load.await;
+            let _ = this.update(cx, |this, cx| {
+                this.last_load = took;
+                match loaded {
+                    Ok(loaded) => this.apply(loaded, cx),
+                    Err(err) => tracing::error!("loading the library failed: {err}"),
+                }
             });
         }));
     }
 
-    /// Refreshes at most twice a second, for bursts of background changes (organizing,
-    /// imports). User actions call `refresh` directly.
+    /// Refreshes at most every half second, and less often when loading takes long, for
+    /// bursts of background changes (organizing, imports). User actions call `refresh`
+    /// directly.
     pub fn refresh_soon(&mut self, cx: &mut Context<'_, Library>) {
         if self.refresh_pending {
             return;
         }
         self.refresh_pending = true;
+        let wait = refresh_wait(self.last_load);
         self.refresh = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(500))
-                .await;
+            cx.background_executor().timer(wait).await;
             let _ = this.update(cx, Library::refresh);
         }));
     }
 
-    /// Runs a change against the store off the main thread, then refreshes.
+    /// Runs a change against the store off the main thread, then refreshes once it has
+    /// committed, so the refresh's reader sees it.
     pub fn change(
         &mut self,
         cx: &mut Context<'_, Library>,
         change: impl FnOnce(&mut Store) -> knoa_store::Result<()> + Send + 'static,
     ) {
-        let store = self.store.clone();
-        let task = cx.background_spawn(async move { change(&mut lock(&store)) });
+        let database = self.database.clone();
+        let task = cx.background_spawn(async move { change(&mut database.write()) });
         cx.spawn(async move |this, cx| {
             if let Err(err) = task.await {
                 tracing::error!("changing the library failed: {err}");
@@ -236,9 +261,10 @@ impl Library {
         url: String,
         cx: &mut Context<'_, Library>,
     ) -> Task<knoa_store::Result<AddedLink>> {
-        let (store, workspace) = (self.store.clone(), self.workspace);
+        let (database, workspace) = (self.database.clone(), self.workspace);
         let now = jiff::Timestamp::now().as_second();
-        let task = cx.background_spawn(async move { lock(&store).add_link(workspace, &url, now) });
+        let task =
+            cx.background_spawn(async move { database.write().add_link(workspace, &url, now) });
         cx.spawn(async move |this, cx| {
             let added = task.await;
             let _ = this.update(cx, Library::refresh);
@@ -259,7 +285,7 @@ impl Library {
             self.set_workspace(first, cx);
             return;
         }
-        self.results = Arc::new(loaded.results);
+        self.results = loaded.results;
         self.kind_counts = loaded.kind_counts;
         self.counts = loaded.counts;
         self.folders = loaded.folders;
@@ -279,6 +305,18 @@ impl Library {
     }
 }
 
+fn refresh_wait(last_load: Duration) -> Duration {
+    last_load
+        .saturating_mul(LOADS_PER_REFRESH_WAIT)
+        .clamp(MIN_REFRESH_WAIT, MAX_REFRESH_WAIT)
+}
+
+/// The list already shown when nothing in it changed, so the card layout, cached by the
+/// list's address, survives refreshes that only touched counts, folders or tags.
+fn same_or_fresh(current: Arc<Vec<Bookmark>>, fresh: Arc<Vec<Bookmark>>) -> Arc<Vec<Bookmark>> {
+    if current == fresh { current } else { fresh }
+}
+
 fn browser_map(workspaces: &[Workspace]) -> Vec<(WorkspaceId, &[String])> {
     workspaces
         .iter()
@@ -288,7 +326,7 @@ fn browser_map(workspaces: &[Workspace]) -> Vec<(WorkspaceId, &[String])> {
 
 struct Loaded {
     workspaces: Vec<Workspace>,
-    results: Vec<Bookmark>,
+    results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: Vec<Folder>,
@@ -299,19 +337,18 @@ struct Loaded {
 }
 
 fn load(
-    store: &SharedStore,
+    store: &Store,
     workspace: WorkspaceId,
     query: &Query,
     selected_id: Option<BookmarkId>,
 ) -> knoa_store::Result<Loaded> {
-    let store = lock(store);
     let selected = match selected_id {
         Some(id) => store.bookmark(id)?,
         None => None,
     };
     Ok(Loaded {
         workspaces: store.workspaces()?,
-        results: store.search(query, RESULT_LIMIT)?,
+        results: Arc::new(store.search(query, RESULT_LIMIT)?),
         kind_counts: store.kind_counts(query)?,
         counts: store.counts(workspace)?,
         folders: store.folders(workspace)?,
@@ -319,12 +356,4 @@ fn load(
         selected_id,
         selected,
     })
-}
-
-/// A panic while holding the lock leaves the store usable: SQLite transactions roll back
-/// on their own.
-pub fn lock(store: &SharedStore) -> std::sync::MutexGuard<'_, Store> {
-    store
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }

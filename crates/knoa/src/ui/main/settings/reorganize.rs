@@ -11,7 +11,7 @@ use knoa_core::WorkspaceId;
 use super::form;
 use crate::{
     services::organizer::Organizer,
-    state::library::{Library, lock},
+    state::library::Library,
     ui::{
         components::{Tone, button},
         theme::Theme,
@@ -86,9 +86,9 @@ impl Reorganize {
             return;
         }
         self.confirming = None;
-        let (store, scope) = (self.library.read(cx).store(), self.scope);
+        let (database, scope) = (self.library.read(cx).database(), self.scope);
         let task = cx.background_spawn(async move {
-            let mut store = lock(&store);
+            let mut store = database.write();
             let workspaces = match scope {
                 Scope::Workspace(id) => vec![id],
                 Scope::AllWorkspaces => store.workspaces()?.into_iter().map(|w| w.id).collect(),

@@ -231,29 +231,49 @@ impl Store {
             "UPDATE jobs SET attempts = attempts + 1, run_after = ?2 WHERE bookmark_id = ?1",
             params![id.0, run_after],
         )?;
-        tx.execute(
-            "UPDATE bookmarks SET status = 'queued', error = ?2 WHERE id = ?1",
-            params![id.0, error],
-        )?;
+        requeue(&tx, id, error)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Puts a job back on the queue as it was, with the error shown on the bookmark. For
+    /// failures that aren't the bookmark's fault, like a rejected API key: the attempt
+    /// isn't counted, so the job keeps its retries for errors of its own.
+    pub fn put_back_job(&mut self, id: BookmarkId, error: &str) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        requeue(&tx, id, error)?;
         tx.commit()?;
         Ok(())
     }
 
     /// Gives up on a job. The bookmark keeps its title and URL and can be queued again. One
-    /// that only missed its folders is still organized.
-    pub fn fail_job(&mut self, id: BookmarkId, error: &str) -> Result<()> {
+    /// whose job was `folders_only` only missed its folders, so it is still organized.
+    ///
+    /// The caller says what kind of job it was: Trash deletes the job's row even while the
+    /// job runs, so the row can't tell.
+    pub fn fail_job(&mut self, id: BookmarkId, error: &str, folders_only: bool) -> Result<()> {
+        let status = if folders_only { "organized" } else { "failed" };
         let tx = self.conn.transaction()?;
         tx.execute(
-            "UPDATE bookmarks SET error = ?2, status = CASE
-                WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1 AND folders_only = 1)
-                THEN 'organized' ELSE 'failed' END
-             WHERE id = ?1",
-            params![id.0, error],
+            "UPDATE bookmarks SET error = ?2, status = ?3 WHERE id = ?1",
+            params![id.0, error, status],
         )?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
     }
+}
+
+/// Marks the bookmark queued again after its job ended. A bookmark trashed meanwhile lost
+/// its job row, and nothing would ever take it, so it goes back to 'new' instead.
+fn requeue(tx: &rusqlite::Transaction<'_>, id: BookmarkId, error: &str) -> Result<()> {
+    tx.execute(
+        "UPDATE bookmarks SET error = ?2, status = CASE
+            WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1) THEN 'queued' ELSE 'new' END
+         WHERE id = ?1",
+        params![id.0, error],
+    )?;
+    Ok(())
 }
 
 fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {
@@ -271,7 +291,7 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{Enrichment, Fields, Kind};
+    use knoa_core::{Enrichment, Fields, Kind, Status};
 
     use super::*;
     use crate::{
@@ -289,20 +309,10 @@ mod tests {
         store
             .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
             .unwrap();
-        let enrichment = Enrichment {
-            kind: Kind::Article,
-            summary: None,
-            fields: Fields::new(),
-            extras: Vec::new(),
-            tags: Vec::new(),
-            folders: Vec::new(),
-            set_aside: None,
-            model: "test".into(),
-        };
         let [trashed, kept] = <[Job; 2]>::try_from(store.take_jobs(0, 2).unwrap()).unwrap();
         for job in [&trashed, &kept] {
             store
-                .finish_organized(job.bookmark.id, &enrichment, 10)
+                .finish_organized(job.bookmark.id, &enrichment(), 10)
                 .unwrap();
         }
         store.trash(trashed.bookmark.id, 20).unwrap();
@@ -325,7 +335,56 @@ mod tests {
             .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
             .unwrap();
         let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
-        let enrichment = Enrichment {
+        store
+            .finish_organized(job.bookmark.id, &enrichment(), 10)
+            .unwrap();
+
+        assert_eq!(store.queue_folders(WORKSPACE).unwrap(), 1);
+        store.queue(job.bookmark.id).unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+        assert!(!job.folders_only);
+    }
+
+    #[test]
+    fn a_bookmark_trashed_while_organizing_is_not_left_counted_after_a_retry() {
+        let mut store = Store::open_in_memory().unwrap();
+        let links = [bookmark("https://a.dev/", "A", 1)];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+
+        store.trash(job.bookmark.id, 10).unwrap();
+        store.retry_job(job.bookmark.id, "timed out", 40).unwrap();
+
+        assert_eq!(store.counts(WORKSPACE).unwrap().organizing, 0);
+    }
+
+    #[test]
+    fn a_folders_only_job_trashed_and_then_failed_stays_organized() {
+        let mut store = Store::open_in_memory().unwrap();
+        let links = [bookmark("https://a.dev/", "A", 1)];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+        let id = job.bookmark.id;
+        store.finish_organized(id, &enrichment(), 10).unwrap();
+        store.queue_folders(WORKSPACE).unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+
+        store.trash(id, 20).unwrap();
+        store.fail_job(id, "timed out", job.folders_only).unwrap();
+        store.restore(id).unwrap();
+
+        assert_eq!(
+            store.bookmark(id).unwrap().unwrap().status,
+            Status::Organized
+        );
+    }
+
+    fn enrichment() -> Enrichment {
+        Enrichment {
             kind: Kind::Article,
             summary: None,
             fields: Fields::new(),
@@ -334,14 +393,6 @@ mod tests {
             folders: Vec::new(),
             set_aside: None,
             model: "test".into(),
-        };
-        store
-            .finish_organized(job.bookmark.id, &enrichment, 10)
-            .unwrap();
-
-        assert_eq!(store.queue_folders(WORKSPACE).unwrap(), 1);
-        store.queue(job.bookmark.id).unwrap();
-        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
-        assert!(!job.folders_only);
+        }
     }
 }

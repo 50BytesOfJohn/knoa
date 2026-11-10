@@ -66,6 +66,14 @@ SQLite via `rusqlite` (`bundled`), WAL mode, embedded versioned migrations. The 
 `~/Library/Application Support/Knoa/knoa.db`. Thumbnails are cached as files in the app's
 cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 
+The app opens the file twice: one connection writes, and a read-only one serves the UI's
+reads, so loading the library and saving the organizer's results don't wait for each
+other. Reads that must agree run in one read transaction
+([ADR 0015](adr/0015-separate-read-connection.md)).
+
+If startup fails, for example because the database is damaged or was saved by a newer
+Knoa, a native alert shows the reason and the app quits when it is dismissed.
+
 ## Sync
 
 - Reads Chromium-family bookmark files
@@ -89,7 +97,9 @@ cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 ## Enrichment
 
 Each bookmark goes through a durable job queue (retries with backoff, about 4 concurrent
-network requests), so quitting the app loses no work.
+network requests), so quitting the app loses no work. When the provider rejects the key or
+the account is out of credits, the queue pauses and tries one bookmark every 5 minutes; it
+resumes on its own once that one gets through, or when the user sets a new key.
 
 1. **Fetch** the page with `reqwest` (plain HTTP, with timeout and size limit).
 2. **Extract** metadata, in this order:

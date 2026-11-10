@@ -20,3 +20,4 @@ old one.
 | [0012](0012-deleting-bookmarks-through-trash.md) | Deleting bookmarks goes through Trash; no archive | Accepted |
 | [0013](0013-kind-before-fields.md) | Pick the kind first, then extract its fields | Accepted |
 | [0014](0014-releases-and-updates.md) | Releases on GitHub, updates through Sparkle | Accepted |
+| [0015](0015-separate-read-connection.md) | One writer and one read-only reader for the database | Accepted |

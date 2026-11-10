@@ -5,7 +5,9 @@ use jiff::{ToSpan as _, Zoned, civil::Date};
 use knoa_ai::Provider;
 use knoa_core::ModelUsage;
 
-use crate::state::library::{SharedStore, lock};
+use std::sync::Arc;
+
+use crate::state::database::Database;
 
 /// The recent window settings shows next to all time.
 pub const RECENT_DAYS: i32 = 30;
@@ -26,30 +28,31 @@ impl UsageReport {
 /// Stores what `provider`'s requests used since this last ran. The provider is shared by
 /// concurrent jobs, so this may also store requests of jobs still running; each request
 /// is stored once either way.
-pub async fn save(provider: &Provider, store: SharedStore, background: &BackgroundExecutor) {
+pub async fn save(provider: &Provider, database: Arc<Database>, background: &BackgroundExecutor) {
     let usage = provider.take_usage();
     if usage.is_empty() {
         return;
     }
     let (provider, day) = (provider.kind().id(), today().to_string());
     let saved = background
-        .spawn(async move { lock(&store).record_usage(&day, provider, &usage) })
+        .spawn(async move { database.write().record_usage(&day, provider, &usage) })
         .await;
     if let Err(err) = saved {
         tracing::error!("can't save AI usage: {err}");
     }
 }
 
-pub fn load(store: SharedStore, cx: &App) -> Task<knoa_store::Result<UsageReport>> {
+pub fn load(database: Arc<Database>, cx: &App) -> Task<knoa_store::Result<UsageReport>> {
     let since = today()
         .checked_sub((RECENT_DAYS - 1).days())
         .map(|d| d.to_string())
         .ok();
     cx.background_spawn(async move {
-        let store = lock(&store);
-        Ok(UsageReport {
-            recent: store.usage_by_model(since.as_deref())?,
-            all_time: store.usage_by_model(None)?,
+        database.read().snapshot(|store| {
+            Ok(UsageReport {
+                recent: store.usage_by_model(since.as_deref())?,
+                all_time: store.usage_by_model(None)?,
+            })
         })
     })
 }

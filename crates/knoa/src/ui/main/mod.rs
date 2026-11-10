@@ -3,11 +3,13 @@
 mod add_link;
 mod bookmark_menu;
 mod cards;
+mod clipboard;
 mod content;
 mod detail;
 mod edits;
 mod folder_editor;
 mod groups;
+mod keys;
 mod masonry;
 mod navigation;
 mod opening;
@@ -18,16 +20,15 @@ mod sidebar;
 mod trash;
 mod workspaces;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use gpui::{
-    App, AppContext as _, ClipboardItem, Context, Entity, FocusHandle, Focusable as _,
-    InteractiveElement as _, IntoElement, KeyBinding, KeyDownEvent, ParentElement as _, Render,
-    ScrollHandle, Styled as _, Subscription, Task, Window, actions, div,
-    prelude::FluentBuilder as _,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
+    IntoElement, KeyDownEvent, ParentElement as _, Render, ScrollHandle, Styled as _, Subscription,
+    Task, Window, div, prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
+use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
     services::{organizer::Organizer, thumbnails::Thumbnails},
@@ -37,67 +38,15 @@ use crate::{
     },
     ui::theme::Theme,
 };
-use add_link::AddLink;
 use content::LayoutCache;
 use detail::TagEdits;
-use folder_editor::FolderEditor;
-use settings::{Page, SettingsView};
+use keys::{
+    CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft, MoveRight, MoveUp, NewLink,
+    OpenSelected, OpenSelectedInBackground, ToggleDetail, ToggleUpNext,
+};
+pub use keys::{OpenSettings, bind_keys};
+use overlay::Overlay;
 pub use sidebar::traffic_light_position;
-
-actions!(
-    cards,
-    [
-        MoveLeft,
-        MoveRight,
-        MoveUp,
-        MoveDown,
-        OpenSelected,
-        OpenSelectedInBackground,
-        ToggleDetail,
-        ToggleUpNext,
-        CopyLink,
-        DeleteSelected,
-        Dismiss
-    ]
-);
-actions!(knoa, [FocusSearch, OpenSettings, NewLink]);
-
-/// Bindings for the card grid. They live in their own key context so they never fire while
-/// typing in the search field.
-pub fn bind_keys(cx: &mut App) {
-    let cards = Some("Cards");
-    cx.bind_keys([
-        KeyBinding::new("left", MoveLeft, cards),
-        KeyBinding::new("right", MoveRight, cards),
-        KeyBinding::new("up", MoveUp, cards),
-        KeyBinding::new("down", MoveDown, cards),
-        KeyBinding::new("enter", OpenSelected, cards),
-        KeyBinding::new("cmd-o", OpenSelected, cards),
-        KeyBinding::new("cmd-down", OpenSelected, cards),
-        KeyBinding::new("cmd-enter", OpenSelectedInBackground, cards),
-        KeyBinding::new("space", ToggleDetail, cards),
-        KeyBinding::new("l", ToggleUpNext, cards),
-        KeyBinding::new("cmd-c", CopyLink, cards),
-        KeyBinding::new("backspace", DeleteSelected, cards),
-        KeyBinding::new("cmd-backspace", DeleteSelected, cards),
-        KeyBinding::new("escape", Dismiss, cards),
-        KeyBinding::new("escape", Dismiss, Some("Settings")),
-        KeyBinding::new("cmd-f", FocusSearch, None),
-        KeyBinding::new("cmd-k", FocusSearch, None),
-        KeyBinding::new("cmd-,", OpenSettings, None),
-        KeyBinding::new("cmd-n", NewLink, None),
-    ]);
-}
-
-/// What floats over the main screen, if anything.
-pub enum Overlay {
-    Settings(Entity<SettingsView>),
-    ViewOptions,
-    Folder(Entity<FolderEditor>),
-    /// The workspace switcher.
-    Workspaces,
-    AddLink(Entity<AddLink>),
-}
 
 pub struct MainView {
     library: Entity<Library>,
@@ -210,59 +159,6 @@ impl MainView {
         self.cards_focus.focus(window, cx);
     }
 
-    pub fn open_overlay(&mut self, overlay: Overlay, cx: &mut Context<'_, MainView>) {
-        self.overlay = Some(overlay);
-        cx.notify();
-    }
-
-    pub fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        self.overlay = None;
-        self.cards_focus.focus(window, cx);
-        cx.notify();
-    }
-
-    pub fn edit_folder(
-        &mut self,
-        folder: Option<FolderId>,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        let existing = folder.and_then(|id| {
-            self.library
-                .read(cx)
-                .folders()
-                .iter()
-                .find(|f| f.id == id)
-                .cloned()
-        });
-        let library = self.library.clone();
-        let this = cx.entity().downgrade();
-        let editor = cx.new(|cx| FolderEditor::new(existing, library, this, window, cx));
-        self.open_overlay(Overlay::Folder(editor), cx);
-    }
-
-    /// Opens settings on a workspace's page; `None` on the page that creates one.
-    pub fn edit_workspace(
-        &mut self,
-        workspace: Option<WorkspaceId>,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        let page = workspace.map_or(Page::NewWorkspace, Page::Workspace);
-        self.show_settings(page, window, cx);
-    }
-
-    fn show_settings(&mut self, page: Page, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        if let Some(Overlay::Settings(settings)) = &self.overlay {
-            settings.update(cx, |settings, cx| settings.show(page, window, cx));
-            return;
-        }
-        let library = self.library.clone();
-        let this = cx.entity().downgrade();
-        let settings = cx.new(|cx| SettingsView::new(page, library, this, window, cx));
-        self.open_overlay(Overlay::Settings(settings), cx);
-    }
-
     /// Summaries change card heights, so the masonry layout is redone.
     pub fn set_show_summaries(&mut self, on: bool, cx: &mut Context<'_, MainView>) {
         SettingsFile::update(cx, |s| s.show_summaries = on);
@@ -283,22 +179,6 @@ impl MainView {
         self.scroll
             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
         self.close_overlay(window, cx);
-    }
-
-    fn new_link(&mut self, _: &NewLink, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let library = self.library.clone();
-        let this = cx.entity().downgrade();
-        let panel = cx.new(|cx| AddLink::new(library, this, window, cx));
-        self.open_overlay(Overlay::AddLink(panel), cx);
-    }
-
-    fn open_settings(
-        &mut self,
-        _: &OpenSettings,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        self.show_settings(Page::General, window, cx);
     }
 
     fn focus_search(
@@ -362,37 +242,8 @@ impl MainView {
         cx.notify();
     }
 
-    fn copy_link(&mut self, _: &CopyLink, _: &mut Window, cx: &mut Context<'_, MainView>) {
-        if let Some(id) = self.selected {
-            self.copy_link_of(id, cx);
-        }
-    }
-
-    fn copy_link_of(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
-        if let Some(url) = self.url_of(id, cx) {
-            self.copy_to_clipboard(id, url, cx);
-        }
-    }
-
     fn url_of(&self, id: BookmarkId, cx: &App) -> Option<String> {
         self.library.read(cx).bookmark(id).map(|b| b.url.clone())
-    }
-
-    /// Copies a bookmark's link and confirms it on the detail panel's copy button for a
-    /// moment.
-    fn copy_to_clipboard(&mut self, id: BookmarkId, url: String, cx: &mut Context<'_, MainView>) {
-        cx.write_to_clipboard(ClipboardItem::new_string(url));
-        let reset = cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(1500))
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                this.copied = None;
-                cx.notify();
-            });
-        });
-        self.copied = Some((id, reset));
-        cx.notify();
     }
 
     fn toggle_up_next(&mut self, _: &ToggleUpNext, _: &mut Window, cx: &mut Context<'_, MainView>) {

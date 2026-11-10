@@ -4,20 +4,110 @@
 //! and the workspace switcher drops down from its button. Clicking outside closes them.
 
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Pixels, Size, Styled as _, Window, deferred, div,
+    AnyElement, AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
+    MouseButton, ParentElement as _, Pixels, Size, Styled as _, Window, deferred, div,
     prelude::FluentBuilder as _, px, size,
 };
 use gpui_component::switch::Switch;
+use knoa_core::{FolderId, WorkspaceId};
 
 use super::{
-    MainView, Overlay,
+    MainView, NewLink, OpenSettings,
+    add_link::AddLink,
+    folder_editor::FolderEditor,
+    settings::{Page, SettingsView},
     sidebar::{TITLEBAR_HEIGHT, workspace_menu_left},
 };
 use crate::{
     state::settings::SettingsFile,
     ui::theme::{MARGIN, PANEL_RADIUS, Theme},
 };
+
+/// What floats over the main screen, if anything.
+pub enum Overlay {
+    Settings(Entity<SettingsView>),
+    ViewOptions,
+    Folder(Entity<FolderEditor>),
+    /// The workspace switcher.
+    Workspaces,
+    AddLink(Entity<AddLink>),
+}
+
+impl MainView {
+    pub fn open_overlay(&mut self, overlay: Overlay, cx: &mut Context<'_, MainView>) {
+        self.overlay = Some(overlay);
+        cx.notify();
+    }
+
+    pub fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.overlay = None;
+        self.cards_focus.focus(window, cx);
+        cx.notify();
+    }
+
+    pub fn edit_folder(
+        &mut self,
+        folder: Option<FolderId>,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        let existing = folder.and_then(|id| {
+            self.library
+                .read(cx)
+                .folders()
+                .iter()
+                .find(|f| f.id == id)
+                .cloned()
+        });
+        let library = self.library.clone();
+        let this = cx.entity().downgrade();
+        let editor = cx.new(|cx| FolderEditor::new(existing, library, this, window, cx));
+        self.open_overlay(Overlay::Folder(editor), cx);
+    }
+
+    /// Opens settings on a workspace's page; `None` on the page that creates one.
+    pub fn edit_workspace(
+        &mut self,
+        workspace: Option<WorkspaceId>,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        let page = workspace.map_or(Page::NewWorkspace, Page::Workspace);
+        self.show_settings(page, window, cx);
+    }
+
+    fn show_settings(&mut self, page: Page, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        if let Some(Overlay::Settings(settings)) = &self.overlay {
+            settings.update(cx, |settings, cx| settings.show(page, window, cx));
+            return;
+        }
+        let library = self.library.clone();
+        let this = cx.entity().downgrade();
+        let settings = cx.new(|cx| SettingsView::new(page, library, this, window, cx));
+        self.open_overlay(Overlay::Settings(settings), cx);
+    }
+
+    pub(super) fn new_link(
+        &mut self,
+        _: &NewLink,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        let library = self.library.clone();
+        let this = cx.entity().downgrade();
+        let panel = cx.new(|cx| AddLink::new(library, this, window, cx));
+        self.open_overlay(Overlay::AddLink(panel), cx);
+    }
+
+    pub(super) fn open_settings(
+        &mut self,
+        _: &OpenSettings,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        self.show_settings(Page::General, window, cx);
+    }
+}
 
 /// Settings leaves a band of the main screen showing on every side, so it reads as a sheet
 /// over the library rather than a new screen.

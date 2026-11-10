@@ -2,26 +2,30 @@
 //!
 //! Up to `CONCURRENCY` bookmarks are in flight. Network work runs on tokio, database work
 //! on the background executor; this loop only coordinates. Without an AI provider, pages
-//! are still fetched so cards get their image and description.
+//! are still fetched so cards get their image and description. While the provider rejects
+//! the key or has no credits, the queue pauses and tries one job every `PROBE_EVERY`.
 
-use std::{sync::Arc, time::Duration};
+mod context;
+mod job;
+
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use futures::{FutureExt as _, StreamExt as _, channel::mpsc, stream::FuturesUnordered};
-use gpui::{App, AppContext as _, AsyncApp, BackgroundExecutor, Context, Entity, Global, Task};
-use knoa_ai::{BookmarkInput, FilingInput, FolderInput, OrganizeInput, Provider};
-use knoa_core::{BookmarkId, Enrichment, FolderId, Page, TagList, WorkspaceId};
+use gpui::{App, AppContext as _, AsyncApp, Context, Entity, Global, Task};
+use knoa_ai::Provider;
 use knoa_fetch::Fetcher;
 use knoa_store::Job;
-use tokio::runtime::Handle;
 
-use crate::{
-    services::{network::Network, usage},
-    state::library::{Library, SharedStore, lock},
-};
+use self::job::{Outcome, Work, process};
+use crate::state::{database::Database, library::Library};
 
 /// About four network requests at a time, as the architecture plans.
 const CONCURRENCY: usize = 4;
-const MAX_ATTEMPTS: u32 = 5;
+/// How often a paused queue tries one job to see whether the provider works again.
+const PROBE_EVERY: Duration = Duration::from_secs(300);
 
 /// What the AI side of the app is doing, for the sidebar indicator and settings.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +39,9 @@ pub enum AiStatus {
 pub struct Organizer {
     provider: Option<Arc<Provider>>,
     status: AiStatus,
+    /// Set while the provider needs the user: the queue is paused, and at this time one
+    /// job goes out as a probe to see whether it works again.
+    probe_at: Option<Instant>,
     wake: mpsc::UnboundedSender<()>,
     _run: Task<()>,
 }
@@ -42,22 +49,6 @@ pub struct Organizer {
 struct OrganizerGlobal(Entity<Organizer>);
 
 impl Global for OrganizerGlobal {}
-
-/// Everything one job needs, owned so it can move to other threads.
-struct Work {
-    store: SharedStore,
-    fetcher: Arc<Fetcher>,
-    provider: Option<Arc<Provider>>,
-    background: BackgroundExecutor,
-    network: Handle,
-}
-
-enum Outcome {
-    Done,
-    Retry { error: String, after: Duration },
-    Failed(String),
-    NeedsAttention(String),
-}
 
 impl Organizer {
     pub fn init(library: Entity<Library>, fetcher: Arc<Fetcher>, cx: &mut App) {
@@ -68,6 +59,7 @@ impl Organizer {
             Organizer {
                 provider: None,
                 status: AiStatus::Off,
+                probe_at: None,
                 wake,
                 _run: run,
             }
@@ -91,14 +83,52 @@ impl Organizer {
     }
 
     pub fn set_provider(&mut self, provider: Option<Provider>, cx: &mut Context<'_, Organizer>) {
-        self.status = if provider.is_some() {
+        self.provider = provider.map(Arc::new);
+        self.status = self.connected_status();
+        self.probe_at = None;
+        let _ = self.wake.unbounded_send(());
+        cx.notify();
+    }
+
+    fn connected_status(&self) -> AiStatus {
+        if self.provider.is_some() {
             AiStatus::Ready
         } else {
             AiStatus::Off
-        };
-        self.provider = provider.map(Arc::new);
-        let _ = self.wake.unbounded_send(());
-        cx.notify();
+        }
+    }
+
+    /// Decides how many jobs to start now. Taking a probe moves the next probe on, so
+    /// one comes at most every `PROBE_EVERY`, even when the queue turns out empty.
+    fn jobs_to_take_now(&mut self, in_flight: usize) -> usize {
+        let now = Instant::now();
+        let take = jobs_to_take(CONCURRENCY - in_flight, in_flight, self.probe_at, now);
+        if take > 0 && self.probe_at.is_some() {
+            self.probe_at = Some(now + PROBE_EVERY);
+        }
+        take
+    }
+
+    /// Pauses the queue when the provider needs the user, and resumes it when a job
+    /// gets through again (topped-up credits need no new key).
+    fn job_ended(&mut self, outcome: &Outcome, cx: &mut Context<'_, Organizer>) {
+        match outcome {
+            // With AI turned off since the job started, the next run is page-only and needs
+            // nothing from the user.
+            Outcome::NeedsAttention(message) if self.provider.is_some() => {
+                self.status = AiStatus::NeedsAttention(message.clone());
+                self.probe_at = Some(Instant::now() + PROBE_EVERY);
+                cx.notify();
+            }
+            // A folders-only job with no folders to ask about also ends here without
+            // asking the provider; the next real job pauses the queue again.
+            Outcome::Done if self.probe_at.is_some() => {
+                self.probe_at = None;
+                self.status = self.connected_status();
+                cx.notify();
+            }
+            _ => {}
+        }
     }
 }
 
@@ -109,41 +139,33 @@ async fn run(
     mut wake: mpsc::UnboundedReceiver<()>,
     cx: &mut AsyncApp,
 ) {
-    let store = cx.update(|cx| library.read(cx).store());
-    let requeued = cx.background_spawn({
-        let store = store.clone();
-        async move { lock(&store).requeue_interrupted() }
-    });
-    if let Err(err) = requeued.await {
-        tracing::error!("can't requeue interrupted jobs: {err}");
-    }
+    let database = cx.update(|cx| library.read(cx).database());
+    requeue_interrupted(&database, cx).await;
     let mut running = FuturesUnordered::new();
     loop {
-        let free = CONCURRENCY - running.len();
-        if free > 0 {
-            let Ok(work) = this.update(cx, |this, cx| {
-                Arc::new(work_for(this, &store, &fetcher, cx))
-            }) else {
-                return;
-            };
-            let jobs = cx.background_spawn({
-                let store = store.clone();
-                async move { lock(&store).take_jobs(now(), free) }
-            });
-            match jobs.await {
-                Ok(jobs) => running.extend(
-                    jobs.into_iter()
-                        .map(|job| process(job, work.clone()).boxed()),
-                ),
-                Err(err) => tracing::error!("can't read the organizing queue: {err}"),
-            }
+        let Ok((work, take)) = this.update(cx, |this, cx| {
+            let work = Arc::new(Work::new(&database, &fetcher, this.provider.clone(), cx));
+            (work, this.jobs_to_take_now(running.len()))
+        }) else {
+            return;
+        };
+        if take > 0 {
+            let jobs = take_jobs(&database, take, cx).await;
+            running.extend(
+                jobs.into_iter()
+                    .map(|job| process(job, work.clone()).boxed()),
+            );
             if !running.is_empty() {
                 let () = library.update(cx, Library::refresh_soon);
             }
         }
 
         if running.is_empty() {
-            let wait = next_wait(&store, cx).await;
+            let wait = match this.read_with(cx, |this, _| this.probe_at) {
+                Ok(Some(probe_at)) => probe_at.saturating_duration_since(Instant::now()),
+                Ok(None) => next_wait(&database, cx).await,
+                Err(_) => return,
+            };
             futures::select! {
                 _ = wake.next() => {}
                 () = cx.background_executor().timer(wait).fuse() => {}
@@ -153,12 +175,7 @@ async fn run(
 
         futures::select! {
             outcome = running.select_next_some() => {
-                if let Outcome::NeedsAttention(message) = outcome {
-                    let _ = this.update(cx, |this, cx| {
-                        this.status = AiStatus::NeedsAttention(message);
-                        cx.notify();
-                    });
-                }
+                let _ = this.update(cx, |this, cx| this.job_ended(&outcome, cx));
                 let () = library.update(cx, Library::refresh_soon);
             }
             _ = wake.next() => {}
@@ -166,21 +183,39 @@ async fn run(
     }
 }
 
-fn work_for(organizer: &Organizer, store: &SharedStore, fetcher: &Arc<Fetcher>, cx: &App) -> Work {
-    Work {
-        store: store.clone(),
-        fetcher: fetcher.clone(),
-        provider: organizer.provider.clone(),
-        background: cx.background_executor().clone(),
-        network: Network::handle(cx),
+/// Jobs that were running when the app quit go back to the queue.
+async fn requeue_interrupted(database: &Arc<Database>, cx: &AsyncApp) {
+    let database = database.clone();
+    let requeued = cx.background_spawn(async move { database.write().requeue_interrupted() });
+    if let Err(err) = requeued.await {
+        tracing::error!("can't requeue interrupted jobs: {err}");
+    }
+}
+
+async fn take_jobs(database: &Arc<Database>, limit: usize, cx: &AsyncApp) -> Vec<Job> {
+    let database = database.clone();
+    let jobs = cx.background_spawn(async move { database.write().take_jobs(now(), limit) });
+    jobs.await.unwrap_or_else(|err| {
+        tracing::error!("can't read the organizing queue: {err}");
+        Vec::new()
+    })
+}
+
+/// How many jobs to start, with `free` slots and `in_flight` jobs running. While paused,
+/// only one probe at a time and only once its time has come.
+fn jobs_to_take(free: usize, in_flight: usize, probe_at: Option<Instant>, now: Instant) -> usize {
+    match probe_at {
+        None => free,
+        Some(at) if in_flight == 0 && now >= at => 1,
+        Some(_) => 0,
     }
 }
 
 /// How long to sleep when nothing is running: until the next retry, or an hour.
-async fn next_wait(store: &SharedStore, cx: &AsyncApp) -> Duration {
-    let store = store.clone();
+async fn next_wait(database: &Arc<Database>, cx: &AsyncApp) -> Duration {
+    let database = database.clone();
     let next = cx
-        .background_spawn(async move { lock(&store).next_job_at() })
+        .background_spawn(async move { database.write().next_job_at() })
         .await
         .ok()
         .flatten();
@@ -190,274 +225,21 @@ async fn next_wait(store: &SharedStore, cx: &AsyncApp) -> Duration {
     }
 }
 
-async fn process(job: Job, work: Arc<Work>) -> Outcome {
-    let id = job.bookmark.id;
-    let outcome = if job.folders_only {
-        file_one(&job, &work).await
-    } else {
-        organize_one(&job, &work).await
-    };
-    // After every outcome: a job that failed may still have paid for answers.
-    if let Some(provider) = &work.provider {
-        usage::save(provider, work.store.clone(), &work.background).await;
-    }
-    let store = work.store.clone();
-    let saved = work
-        .background
-        .spawn({
-            let attempts = job.attempts;
-            let outcome = match &outcome {
-                Outcome::Done => None,
-                Outcome::Retry { error, after } if attempts + 1 < MAX_ATTEMPTS => {
-                    Some((error.clone(), Some(*after)))
-                }
-                Outcome::NeedsAttention(error) => {
-                    Some((error.clone(), Some(Duration::from_secs(300))))
-                }
-                Outcome::Retry { error, .. } | Outcome::Failed(error) => {
-                    Some((error.clone(), None))
-                }
-            };
-            async move { record_failure(&store, id, outcome) }
-        })
-        .await;
-    if let Err(err) = saved {
-        tracing::error!(?id, "can't update the queue: {err}");
-    }
-    outcome
-}
-
-fn record_failure(
-    store: &SharedStore,
-    id: BookmarkId,
-    failure: Option<(String, Option<Duration>)>,
-) -> knoa_store::Result<()> {
-    let mut store = lock(store);
-    match failure {
-        None => Ok(()),
-        Some((error, Some(after))) => store.retry_job(id, &error, now() + after.as_secs() as i64),
-        Some((error, None)) => {
-            tracing::warn!(?id, "giving up on organizing: {error}");
-            store.fail_job(id, &error)
-        }
-    }
-}
-
-async fn organize_one(job: &Job, work: &Work) -> Outcome {
-    let bookmark = &job.bookmark;
-    let fetcher = work.fetcher.clone();
-    let url = bookmark.url.clone();
-    let page = match work
-        .network
-        .spawn(async move { fetcher.fetch(&url).await })
-        .await
-    {
-        Ok(Ok(page)) => page,
-        Ok(Err(err)) if err.is_transient() => return retry(err.to_string(), job.attempts),
-        // A page that can't be fetched still has a URL and title worth organizing.
-        Ok(Err(err)) => Page {
-            evidence: serde_json::json!({ "quality": "title_only", "note": err.to_string() })
-                .to_string(),
-            ..Page::default()
-        },
-        Err(err) => return Outcome::Failed(format!("fetch task failed: {err}")),
-    };
-    let (store, id, saved_page) = (work.store.clone(), bookmark.id, page.clone());
-    let saved = work
-        .background
-        .spawn(async move { save_page(&store, id, &saved_page) })
-        .await;
-    if let Err(err) = saved {
-        return Outcome::Failed(err.to_string());
-    }
-
-    let Some(provider) = work.provider.clone() else {
-        let store = work.store.clone();
-        let id = bookmark.id;
-        return match work
-            .background
-            .spawn(async move { lock(&store).finish_page_only(id) })
-            .await
-        {
-            Ok(()) => Outcome::Done,
-            Err(err) => Outcome::Failed(err.to_string()),
-        };
-    };
-
-    let store = work.store.clone();
-    let workspace = bookmark.workspace;
-    let context = work
-        .background
-        .spawn(async move { WorkspaceContext::load(&store, workspace) })
-        .await;
-    let context = match context {
-        Ok(context) => context,
-        Err(err) => return Outcome::Failed(err.to_string()),
-    };
-    // A link added by hand has its URL as its title until the page names it.
-    let title = match &page.title {
-        Some(title) if bookmark.title == bookmark.url => title.clone(),
-        _ => bookmark.title.clone(),
-    };
-    let (url, browser_folder) = (bookmark.url.clone(), bookmark.browser_folder.clone());
-    let answer = work
-        .network
-        .spawn(async move {
-            let input = OrganizeInput {
-                bookmark: BookmarkInput {
-                    title: &title,
-                    url: &url,
-                    browser_folder: browser_folder.as_deref(),
-                    evidence: Some(&page.evidence),
-                    page_kind: page.kind,
-                    page_fields: &page.fields,
-                },
-                instructions: &context.instructions,
-                guideline: context.guideline.as_deref(),
-                folders: &context.folders,
-                tag_list: &context.tag_list,
-            };
-            knoa_ai::organize(&*provider, provider.classifier(), &input).await
-        })
-        .await;
-    match answer {
-        Ok(Ok(enrichment)) => save_enrichment(work, bookmark.id, enrichment).await,
-        Ok(Err(err)) => ai_failure(&err, job.attempts),
-        Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
-    }
-}
-
-/// Files an organized bookmark into folders again from its stored kind, summary and tags,
-/// with one classifier request and no page fetch. A provider without a classifier picks
-/// folders in the chat call, so the bookmark gets a full run instead.
-async fn file_one(job: &Job, work: &Work) -> Outcome {
-    let bookmark = &job.bookmark;
-    let Some(provider) = work.provider.clone() else {
-        // AI was turned off after queuing: nothing to ask, and the bookmark stays as it is.
-        return finish_filed(work, bookmark.id, Vec::new()).await;
-    };
-    let (Some(kind), Some(_)) = (bookmark.kind, provider.classifier()) else {
-        return organize_one(job, work).await;
-    };
-    let store = work.store.clone();
-    let workspace = bookmark.workspace;
-    let context = work
-        .background
-        .spawn(async move { WorkspaceContext::load(&store, workspace) })
-        .await;
-    let context = match context {
-        Ok(context) => context,
-        Err(err) => return Outcome::Failed(err.to_string()),
-    };
-    let bookmark = bookmark.clone();
-    let answer = work
-        .network
-        .spawn(async move {
-            let tags: Vec<String> = bookmark.tags.into_iter().map(|(tag, _)| tag).collect();
-            let input = FilingInput {
-                title: &bookmark.title,
-                url: &bookmark.url,
-                browser_folder: bookmark.browser_folder.as_deref(),
-                kind,
-                summary: bookmark.summary.as_deref(),
-                tags: &tags,
-                instructions: &context.instructions,
-                folders: &context.folders,
-            };
-            knoa_ai::file_into_folders(&*provider, &input).await
-        })
-        .await;
-    match answer {
-        Ok(Ok(folders)) => finish_filed(work, job.bookmark.id, folders).await,
-        Ok(Err(err)) => ai_failure(&err, job.attempts),
-        Err(err) => Outcome::Failed(format!("folder task failed: {err}")),
-    }
-}
-
-fn ai_failure(err: &knoa_ai::Error, attempts: u32) -> Outcome {
-    if err.needs_user() {
-        Outcome::NeedsAttention(err.to_string())
-    } else if err.is_transient() {
-        retry(err.to_string(), attempts)
-    } else {
-        Outcome::Failed(err.to_string())
-    }
-}
-
-/// What the bookmark's workspace tells the AI: its instructions, guideline, tag list and
-/// the folders it may file into.
-struct WorkspaceContext {
-    instructions: String,
-    guideline: Option<String>,
-    tag_list: TagList,
-    folders: Vec<FolderInput>,
-}
-
-impl WorkspaceContext {
-    fn load(store: &SharedStore, id: WorkspaceId) -> knoa_store::Result<WorkspaceContext> {
-        let store = lock(store);
-        let workspace = store.workspace(id)?;
-        let folders = store
-            .folders(id)?
-            .into_iter()
-            .filter(|f| f.auto_assign)
-            .map(|f| FolderInput {
-                id: f.id,
-                name: f.name,
-                description: f.description,
-            })
-            .collect();
-        Ok(WorkspaceContext {
-            instructions: workspace
-                .as_ref()
-                .map(|w| w.instructions.clone())
-                .unwrap_or_default(),
-            guideline: workspace
-                .as_ref()
-                .and_then(|w| w.screening.active_guideline())
-                .map(str::to_owned),
-            tag_list: workspace.map(|w| w.tag_list).unwrap_or_default(),
-            folders,
-        })
-    }
-}
-
-fn save_page(store: &SharedStore, id: BookmarkId, page: &Page) -> knoa_store::Result<()> {
-    lock(store).save_page(id, page, now())
-}
-
-async fn save_enrichment(work: &Work, id: BookmarkId, enrichment: Enrichment) -> Outcome {
-    let store = work.store.clone();
-    match work
-        .background
-        .spawn(async move { lock(&store).finish_organized(id, &enrichment, now()) })
-        .await
-    {
-        Ok(()) => Outcome::Done,
-        Err(err) => Outcome::Failed(err.to_string()),
-    }
-}
-
-async fn finish_filed(work: &Work, id: BookmarkId, folders: Vec<(FolderId, f32)>) -> Outcome {
-    let store = work.store.clone();
-    match work
-        .background
-        .spawn(async move { lock(&store).finish_filed(id, &folders) })
-        .await
-    {
-        Ok(()) => Outcome::Done,
-        Err(err) => Outcome::Failed(err.to_string()),
-    }
-}
-
-/// Exponential backoff: 30 s, 1 min, 2 min, 4 min.
-fn retry(error: String, attempts: u32) -> Outcome {
-    Outcome::Retry {
-        error,
-        after: Duration::from_secs(30 << attempts.min(6)),
-    }
-}
-
 pub fn now() -> i64 {
     jiff::Timestamp::now().as_second()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paused_queue_sends_one_probe_at_a_time_and_only_when_due() {
+        let now = Instant::now();
+        let later = now + PROBE_EVERY;
+        assert_eq!(jobs_to_take(4, 0, Some(later), now), 0);
+        assert_eq!(jobs_to_take(4, 0, Some(now), now), 1);
+        assert_eq!(jobs_to_take(3, 1, Some(now), now), 0);
+        assert_eq!(jobs_to_take(3, 1, None, now), 3);
+    }
 }
