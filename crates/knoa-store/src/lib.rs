@@ -24,16 +24,30 @@ pub use import::{AddedLink, ImportReport, NewBookmarks};
 pub use jobs::Job;
 pub use read::Counts;
 
+// The wrapped errors are in the message and deliberately not the `source()`: an error chain
+// shown as `{:#}` would print them twice, and rusqlite's own source would add a third copy.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("database error: {0}")]
-    Sqlite(#[from] rusqlite::Error),
+    Sqlite(rusqlite::Error),
     #[error("stored JSON is invalid: {0}")]
-    Json(#[from] serde_json::Error),
+    Json(serde_json::Error),
     #[error(
         "the library was saved by a newer version of Knoa (schema {found}, this version knows up to {supported}); update Knoa to open it"
     )]
     NewerDatabase { found: usize, supported: usize },
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Error {
+        Error::Sqlite(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Error {
+        Error::Json(err)
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

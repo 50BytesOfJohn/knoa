@@ -47,13 +47,13 @@ struct Node {
 
 /// Reads every web bookmark in the file, with its folder path ("Bookmarks Bar/Recipes").
 pub fn read_bookmarks(path: &Path) -> Result<BookmarksFile, Error> {
-    let text = std::fs::read_to_string(path).map_err(|source| Error::Io {
+    let text = std::fs::read_to_string(path).map_err(|err| Error::Io {
         path: path.to_owned(),
-        source,
+        err,
     })?;
-    let file: File = serde_json::from_str(&text).map_err(|source| Error::Parse {
+    let file: File = serde_json::from_str(&text).map_err(|err| Error::Parse {
         path: path.to_owned(),
-        source,
+        err,
     })?;
     let mut bookmarks = Vec::new();
     for root in [file.roots.bookmark_bar, file.roots.other, file.roots.synced]

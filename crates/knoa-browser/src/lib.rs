@@ -16,17 +16,19 @@ pub use browser::{
 pub use open::{Activation, open_in_default, open_in_profile};
 pub use watch::{Watcher, watch};
 
+// `err` is in the message, so it is not named `source`: thiserror would make it the
+// error's source too, and an error chain shown as `{:#}` would print it twice.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("can't read {path}: {source}")]
+    #[error("can't read {path}: {err}")]
     Io {
         path: std::path::PathBuf,
-        source: std::io::Error,
+        err: std::io::Error,
     },
-    #[error("{path} is not a bookmarks file: {source}")]
+    #[error("{path} is not a bookmarks file: {err}")]
     Parse {
         path: std::path::PathBuf,
-        source: serde_json::Error,
+        err: serde_json::Error,
     },
     #[error("profile {0} no longer exists")]
     MissingProfile(ProfileId),
