@@ -71,6 +71,9 @@ reads, so loading the library and saving the organizer's results don't wait for 
 other. Reads that must agree run in one read transaction
 ([ADR 0015](adr/0015-separate-read-connection.md)).
 
+If startup fails, for example because the database is damaged or was saved by a newer
+Knoa, a native alert shows the reason and the app quits when it is dismissed.
+
 ## Sync
 
 - Reads Chromium-family bookmark files

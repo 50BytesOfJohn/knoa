@@ -4,6 +4,7 @@ mod app;
 mod menus;
 mod paths;
 mod services;
+mod startup_error;
 mod state;
 mod ui;
 
@@ -15,8 +16,7 @@ fn main() {
         .with_assets(gpui_kit_assets::AllAssets)
         .run(|cx| {
             if let Err(err) = app::init(cx) {
-                tracing::error!("failed to start: {err:#}");
-                cx.quit();
+                startup_error::report(&err, cx);
             }
         });
 }
