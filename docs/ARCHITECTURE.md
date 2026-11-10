@@ -89,7 +89,9 @@ cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 ## Enrichment
 
 Each bookmark goes through a durable job queue (retries with backoff, about 4 concurrent
-network requests), so quitting the app loses no work.
+network requests), so quitting the app loses no work. When the provider rejects the key or
+the account is out of credits, the queue pauses and tries one bookmark every 5 minutes; it
+resumes on its own once that one gets through, or when the user sets a new key.
 
 1. **Fetch** the page with `reqwest` (plain HTTP, with timeout and size limit).
 2. **Extract** metadata, in this order:

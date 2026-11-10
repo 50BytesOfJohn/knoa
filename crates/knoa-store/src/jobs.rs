@@ -231,10 +231,17 @@ impl Store {
             "UPDATE jobs SET attempts = attempts + 1, run_after = ?2 WHERE bookmark_id = ?1",
             params![id.0, run_after],
         )?;
-        tx.execute(
-            "UPDATE bookmarks SET status = 'queued', error = ?2 WHERE id = ?1",
-            params![id.0, error],
-        )?;
+        requeue(&tx, id, error)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Puts a job back on the queue as it was, with the error shown on the bookmark. For
+    /// failures that aren't the bookmark's fault, like a rejected API key: the attempt
+    /// isn't counted, so the job keeps its retries for errors of its own.
+    pub fn put_back_job(&mut self, id: BookmarkId, error: &str) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        requeue(&tx, id, error)?;
         tx.commit()?;
         Ok(())
     }
@@ -254,6 +261,18 @@ impl Store {
         tx.commit()?;
         Ok(())
     }
+}
+
+/// Marks the bookmark queued again after its job ended. A bookmark trashed meanwhile lost
+/// its job row, and nothing would ever take it, so it goes back to 'new' instead.
+fn requeue(tx: &rusqlite::Transaction<'_>, id: BookmarkId, error: &str) -> Result<()> {
+    tx.execute(
+        "UPDATE bookmarks SET error = ?2, status = CASE
+            WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1) THEN 'queued' ELSE 'new' END
+         WHERE id = ?1",
+        params![id.0, error],
+    )?;
+    Ok(())
 }
 
 fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {
@@ -343,5 +362,20 @@ mod tests {
         store.queue(job.bookmark.id).unwrap();
         let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
         assert!(!job.folders_only);
+    }
+
+    #[test]
+    fn a_bookmark_trashed_while_organizing_is_not_left_counted_after_a_retry() {
+        let mut store = Store::open_in_memory().unwrap();
+        let links = [bookmark("https://a.dev/", "A", 1)];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let [job] = <[Job; 1]>::try_from(store.take_jobs(0, 1).unwrap()).unwrap();
+
+        store.trash(job.bookmark.id, 10).unwrap();
+        store.retry_job(job.bookmark.id, "timed out", 40).unwrap();
+
+        assert_eq!(store.counts(WORKSPACE).unwrap().organizing, 0);
     }
 }
