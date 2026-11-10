@@ -2,7 +2,10 @@
 //! results, sidebar counts, folders and tags. Every database call runs on the background
 //! executor.
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use gpui::{AppContext as _, Context, EventEmitter, Task};
 use knoa_core::{Bookmark, BookmarkId, Folder, Kind, Place, Query, Workspace, WorkspaceId};
@@ -13,6 +16,14 @@ use crate::state::{database::Database, settings::SettingsFile};
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
 const RESULT_LIMIT: usize = 20_000;
+
+/// Background refreshes wait at least this long, so a burst of changes shows as one.
+const MIN_REFRESH_WAIT: Duration = Duration::from_millis(500);
+/// Waiting this many times as long as the last load keeps background reloading to about a
+/// tenth of one thread, however large the library.
+const LOADS_PER_REFRESH_WAIT: u32 = 10;
+/// Any longer and the screen would look stuck while the organizer works.
+const MAX_REFRESH_WAIT: Duration = Duration::from_secs(3);
 
 pub struct Library {
     database: Arc<Database>,
@@ -34,6 +45,8 @@ pub struct Library {
     refresh: Option<Task<()>>,
     /// Set while a refresh is waiting out the throttle.
     refresh_pending: bool,
+    /// How long the last load took, which sets the throttle.
+    last_load: Duration,
 }
 
 /// Results changed, so views depending on them should re-render.
@@ -67,6 +80,7 @@ impl Library {
             selected_bookmark: None,
             refresh: None,
             refresh_pending: false,
+            last_load: Duration::ZERO,
         };
         library.refresh(cx);
         library
@@ -182,32 +196,43 @@ impl Library {
         let database = self.database.clone();
         let query = self.query();
         let (workspace, selected) = (self.workspace, self.selected);
+        let current = self.results.clone();
         let load = cx.background_spawn(async move {
-            database
+            let started = Instant::now();
+            let loaded = database
                 .read()
-                .snapshot(|store| load(store, workspace, &query, selected))
+                .snapshot(|store| load(store, workspace, &query, selected));
+            let took = started.elapsed();
+            let loaded = loaded.map(|loaded| Loaded {
+                results: same_or_fresh(current, loaded.results),
+                ..loaded
+            });
+            (loaded, took)
         });
         self.refresh_pending = false;
         self.refresh = Some(cx.spawn(async move |this, cx| {
-            let loaded = load.await;
-            let _ = this.update(cx, |this, cx| match loaded {
-                Ok(loaded) => this.apply(loaded, cx),
-                Err(err) => tracing::error!("loading the library failed: {err}"),
+            let (loaded, took) = load.await;
+            let _ = this.update(cx, |this, cx| {
+                this.last_load = took;
+                match loaded {
+                    Ok(loaded) => this.apply(loaded, cx),
+                    Err(err) => tracing::error!("loading the library failed: {err}"),
+                }
             });
         }));
     }
 
-    /// Refreshes at most twice a second, for bursts of background changes (organizing,
-    /// imports). User actions call `refresh` directly.
+    /// Refreshes at most every half second, and less often when loading takes long, for
+    /// bursts of background changes (organizing, imports). User actions call `refresh`
+    /// directly.
     pub fn refresh_soon(&mut self, cx: &mut Context<'_, Library>) {
         if self.refresh_pending {
             return;
         }
         self.refresh_pending = true;
+        let wait = refresh_wait(self.last_load);
         self.refresh = Some(cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(500))
-                .await;
+            cx.background_executor().timer(wait).await;
             let _ = this.update(cx, Library::refresh);
         }));
     }
@@ -260,7 +285,7 @@ impl Library {
             self.set_workspace(first, cx);
             return;
         }
-        self.results = Arc::new(loaded.results);
+        self.results = loaded.results;
         self.kind_counts = loaded.kind_counts;
         self.counts = loaded.counts;
         self.folders = loaded.folders;
@@ -280,6 +305,18 @@ impl Library {
     }
 }
 
+fn refresh_wait(last_load: Duration) -> Duration {
+    last_load
+        .saturating_mul(LOADS_PER_REFRESH_WAIT)
+        .clamp(MIN_REFRESH_WAIT, MAX_REFRESH_WAIT)
+}
+
+/// The list already shown when nothing in it changed, so the card layout, cached by the
+/// list's address, survives refreshes that only touched counts, folders or tags.
+fn same_or_fresh(current: Arc<Vec<Bookmark>>, fresh: Arc<Vec<Bookmark>>) -> Arc<Vec<Bookmark>> {
+    if current == fresh { current } else { fresh }
+}
+
 fn browser_map(workspaces: &[Workspace]) -> Vec<(WorkspaceId, &[String])> {
     workspaces
         .iter()
@@ -289,7 +326,7 @@ fn browser_map(workspaces: &[Workspace]) -> Vec<(WorkspaceId, &[String])> {
 
 struct Loaded {
     workspaces: Vec<Workspace>,
-    results: Vec<Bookmark>,
+    results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: Vec<Folder>,
@@ -311,7 +348,7 @@ fn load(
     };
     Ok(Loaded {
         workspaces: store.workspaces()?,
-        results: store.search(query, RESULT_LIMIT)?,
+        results: Arc::new(store.search(query, RESULT_LIMIT)?),
         kind_counts: store.kind_counts(query)?,
         counts: store.counts(workspace)?,
         folders: store.folders(workspace)?,

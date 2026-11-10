@@ -7,6 +7,7 @@ use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
+use jiff::{Zoned, civil::Date};
 use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId, Place};
 
@@ -38,10 +39,24 @@ const MIN_COLUMN_WIDTH: f32 = 190.;
 /// The layout for the current results, recomputed only when its inputs change.
 #[derive(Default)]
 pub struct LayoutCache {
-    key: Option<(usize, u32, usize, bool, bool, u32)>,
+    key: Option<LayoutKey>,
     pub groups: Vec<Group>,
     pub layout: Layout,
     pub results: Arc<Vec<Bookmark>>,
+}
+
+#[derive(PartialEq)]
+struct LayoutKey {
+    /// The result list's address: the library keeps the same list while its rows don't
+    /// change.
+    results: usize,
+    width: u32,
+    columns: usize,
+    show_summaries: bool,
+    top: u32,
+    /// The local date when grouping by date, so the first frame of a new day moves
+    /// yesterday's "Today" along. `None` for relevance order, which has no dates.
+    today: Option<Date>,
 }
 
 /// The horizontal span between the sidebar and the detail panel (or the window edge).
@@ -181,20 +196,21 @@ impl MainView {
         let columns = preferred
             .min(((width + GAP) / (MIN_COLUMN_WIDTH + GAP)).floor() as usize)
             .max(1);
-        let key = (
-            Arc::as_ptr(&results) as usize,
-            width.round() as u32,
+        let now = by_date.then(Zoned::now);
+        let key = LayoutKey {
+            results: Arc::as_ptr(&results) as usize,
+            width: width.round() as u32,
             columns,
             show_summaries,
-            by_date,
-            top.to_bits(),
-        );
-        if self.layout.key == Some(key) {
+            top: top.to_bits(),
+            today: now.as_ref().map(Zoned::date),
+        };
+        if self.layout.key.as_ref() == Some(&key) {
             return;
         }
-        let groups = if by_date {
+        let groups = if let Some(now) = &now {
             let added: Vec<i64> = results.iter().map(|b| b.added_at).collect();
-            groups::by_date(&added, &jiff::Zoned::now())
+            groups::by_date(&added, now)
         } else {
             groups::single("Best matches", results.len())
         };
