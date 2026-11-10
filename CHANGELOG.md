@@ -3,6 +3,22 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.1.4](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.4) - 2026-11-10
+
+### Added
+
+- Add tags from the detail panel, with undo on removal ([#19](https://github.com/50BytesOfJohn/knoa/pull/19))
+- Add a bookmark menu on right-click and in the detail panel ([#21](https://github.com/50BytesOfJohn/knoa/pull/21))
+
+### Changed
+
+- Organize bookmarks again after changing folders ([#13](https://github.com/50BytesOfJohn/knoa/pull/13))
+- Organize again into folders only ([#15](https://github.com/50BytesOfJohn/knoa/pull/15))
+- Run make dev as a debug app bundle ([#16](https://github.com/50BytesOfJohn/knoa/pull/16))
+- Give the panels more room and rounder corners ([#17](https://github.com/50BytesOfJohn/knoa/pull/17))
+- Keep the detail panel open after filing a bookmark ([#18](https://github.com/50BytesOfJohn/knoa/pull/18))
+- Let each workspace keep a tag list for the AI ([#20](https://github.com/50BytesOfJohn/knoa/pull/20))
+- Harden sync, fetching, the AI queue and the database ([#22](https://github.com/50BytesOfJohn/knoa/pull/22))
 ## [0.1.3](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.3) - 2026-11-06
 
 ### Added
