@@ -7,13 +7,13 @@ use gpui::{App, BackgroundExecutor};
 use knoa_ai::{BookmarkInput, FilingInput, OrganizeInput, Provider};
 use knoa_core::{BookmarkId, Enrichment, FolderId, Page};
 use knoa_fetch::Fetcher;
-use knoa_store::Job;
+use knoa_store::{Job, Store};
 use tokio::runtime::Handle;
 
 use super::{context::WorkspaceContext, now};
 use crate::{
     services::{network::Network, usage},
-    state::library::{SharedStore, lock},
+    state::database::Database,
 };
 
 const MAX_ATTEMPTS: u32 = 5;
@@ -22,7 +22,7 @@ const MAX_RETRY_AFTER: Duration = Duration::from_secs(3600);
 
 /// Everything one job needs, owned so it can move to other threads.
 pub(super) struct Work {
-    store: SharedStore,
+    database: Arc<Database>,
     fetcher: Arc<Fetcher>,
     provider: Option<Arc<Provider>>,
     background: BackgroundExecutor,
@@ -38,13 +38,13 @@ pub(super) enum Outcome {
 
 impl Work {
     pub(super) fn new(
-        store: &SharedStore,
+        database: &Arc<Database>,
         fetcher: &Arc<Fetcher>,
         provider: Option<Arc<Provider>>,
         cx: &App,
     ) -> Work {
         Work {
-            store: store.clone(),
+            database: database.clone(),
             fetcher: fetcher.clone(),
             provider,
             background: cx.background_executor().clone(),
@@ -62,13 +62,13 @@ pub(super) async fn process(job: Job, work: Arc<Work>) -> Outcome {
     };
     // After every outcome: a job that failed may still have paid for answers.
     if let Some(provider) = &work.provider {
-        usage::save(provider, work.store.clone(), &work.background).await;
+        usage::save(provider, work.database.clone(), &work.background).await;
     }
-    let store = work.store.clone();
+    let database = work.database.clone();
     let next = next_step(&outcome, job.attempts);
     let saved = work
         .background
-        .spawn(async move { record(&store, id, next) })
+        .spawn(async move { record(&mut database.write(), id, next) })
         .await;
     if let Err(err) = saved {
         tracing::error!(?id, "can't update the queue: {err}");
@@ -96,8 +96,7 @@ fn next_step(outcome: &Outcome, attempts: u32) -> NextStep {
     }
 }
 
-fn record(store: &SharedStore, id: BookmarkId, next: NextStep) -> knoa_store::Result<()> {
-    let mut store = lock(store);
+fn record(store: &mut Store, id: BookmarkId, next: NextStep) -> knoa_store::Result<()> {
     match next {
         NextStep::Finished => Ok(()),
         NextStep::RetryAfter(error, after) => {
@@ -130,21 +129,21 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         },
         Err(err) => return Outcome::Failed(format!("fetch task failed: {err}")),
     };
-    let (store, id, saved_page) = (work.store.clone(), bookmark.id, page.clone());
+    let (database, id, saved_page) = (work.database.clone(), bookmark.id, page.clone());
     let saved = work
         .background
-        .spawn(async move { save_page(&store, id, &saved_page) })
+        .spawn(async move { database.write().save_page(id, &saved_page, now()) })
         .await;
     if let Err(err) = saved {
         return Outcome::Failed(err.to_string());
     }
 
     let Some(provider) = work.provider.clone() else {
-        let store = work.store.clone();
+        let database = work.database.clone();
         let id = bookmark.id;
         return match work
             .background
-            .spawn(async move { lock(&store).finish_page_only(id) })
+            .spawn(async move { database.write().finish_page_only(id) })
             .await
         {
             Ok(()) => Outcome::Done,
@@ -152,11 +151,11 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         };
     };
 
-    let store = work.store.clone();
+    let database = work.database.clone();
     let workspace = bookmark.workspace;
     let context = work
         .background
-        .spawn(async move { WorkspaceContext::load(&store, workspace) })
+        .spawn(async move { WorkspaceContext::load(&database, workspace) })
         .await;
     let context = match context {
         Ok(context) => context,
@@ -207,11 +206,11 @@ async fn file_one(job: &Job, work: &Work) -> Outcome {
     let (Some(kind), Some(_)) = (bookmark.kind, provider.classifier()) else {
         return organize_one(job, work).await;
     };
-    let store = work.store.clone();
+    let database = work.database.clone();
     let workspace = bookmark.workspace;
     let context = work
         .background
-        .spawn(async move { WorkspaceContext::load(&store, workspace) })
+        .spawn(async move { WorkspaceContext::load(&database, workspace) })
         .await;
     let context = match context {
         Ok(context) => context,
@@ -260,15 +259,11 @@ fn ai_failure(err: &knoa_ai::Error, attempts: u32) -> Outcome {
     }
 }
 
-fn save_page(store: &SharedStore, id: BookmarkId, page: &Page) -> knoa_store::Result<()> {
-    lock(store).save_page(id, page, now())
-}
-
 async fn save_enrichment(work: &Work, id: BookmarkId, enrichment: Enrichment) -> Outcome {
-    let store = work.store.clone();
+    let database = work.database.clone();
     match work
         .background
-        .spawn(async move { lock(&store).finish_organized(id, &enrichment, now()) })
+        .spawn(async move { database.write().finish_organized(id, &enrichment, now()) })
         .await
     {
         Ok(()) => Outcome::Done,
@@ -277,10 +272,10 @@ async fn save_enrichment(work: &Work, id: BookmarkId, enrichment: Enrichment) ->
 }
 
 async fn finish_filed(work: &Work, id: BookmarkId, folders: Vec<(FolderId, f32)>) -> Outcome {
-    let store = work.store.clone();
+    let database = work.database.clone();
     match work
         .background
-        .spawn(async move { lock(&store).finish_filed(id, &folders) })
+        .spawn(async move { database.write().finish_filed(id, &folders) })
         .await
     {
         Ok(()) => Outcome::Done,

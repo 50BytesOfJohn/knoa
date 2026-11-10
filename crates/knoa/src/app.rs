@@ -1,6 +1,6 @@
 //! Application bootstrap: state, services, actions, menus and the main window.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use anyhow::Context as _;
 use gpui::{
@@ -14,6 +14,7 @@ use crate::{
         thumbnails::Thumbnails, updates::Updates,
     },
     state::{
+        database::Database,
         library::Library,
         settings::{self, SettingsFile},
     },
@@ -31,10 +32,11 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     Credentials::init(paths.dev_credentials(), cx);
     Network::init(cx)?;
 
-    let mut store = knoa_store::Store::open(&paths.database())
+    let database = Database::open(&paths.database())
         .with_context(|| format!("opening {}", paths.database().display()))?;
-    settings::adopt_legacy(&mut store, cx).context("moving settings into the workspace")?;
-    let library = cx.new(|cx| Library::new(Arc::new(Mutex::new(store)), cx));
+    settings::adopt_legacy(&mut database.write(), cx)
+        .context("moving settings into the workspace")?;
+    let library = cx.new(|cx| Library::new(Arc::new(database), cx));
     housekeeping::run(&library, paths.thumbnails(), cx);
     sync::init(&library, cx);
     let fetcher = Arc::new(knoa_fetch::Fetcher::new(paths.thumbnails())?);

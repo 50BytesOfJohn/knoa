@@ -20,7 +20,7 @@ use knoa_fetch::Fetcher;
 use knoa_store::Job;
 
 use self::job::{Outcome, Work, process};
-use crate::state::library::{Library, SharedStore, lock};
+use crate::state::{database::Database, library::Library};
 
 /// About four network requests at a time, as the architecture plans.
 const CONCURRENCY: usize = 4;
@@ -139,18 +139,18 @@ async fn run(
     mut wake: mpsc::UnboundedReceiver<()>,
     cx: &mut AsyncApp,
 ) {
-    let store = cx.update(|cx| library.read(cx).store());
-    requeue_interrupted(&store, cx).await;
+    let database = cx.update(|cx| library.read(cx).database());
+    requeue_interrupted(&database, cx).await;
     let mut running = FuturesUnordered::new();
     loop {
         let Ok((work, take)) = this.update(cx, |this, cx| {
-            let work = Arc::new(Work::new(&store, &fetcher, this.provider.clone(), cx));
+            let work = Arc::new(Work::new(&database, &fetcher, this.provider.clone(), cx));
             (work, this.jobs_to_take_now(running.len()))
         }) else {
             return;
         };
         if take > 0 {
-            let jobs = take_jobs(&store, take, cx).await;
+            let jobs = take_jobs(&database, take, cx).await;
             running.extend(
                 jobs.into_iter()
                     .map(|job| process(job, work.clone()).boxed()),
@@ -163,7 +163,7 @@ async fn run(
         if running.is_empty() {
             let wait = match this.read_with(cx, |this, _| this.probe_at) {
                 Ok(Some(probe_at)) => probe_at.saturating_duration_since(Instant::now()),
-                Ok(None) => next_wait(&store, cx).await,
+                Ok(None) => next_wait(&database, cx).await,
                 Err(_) => return,
             };
             futures::select! {
@@ -184,17 +184,17 @@ async fn run(
 }
 
 /// Jobs that were running when the app quit go back to the queue.
-async fn requeue_interrupted(store: &SharedStore, cx: &AsyncApp) {
-    let store = store.clone();
-    let requeued = cx.background_spawn(async move { lock(&store).requeue_interrupted() });
+async fn requeue_interrupted(database: &Arc<Database>, cx: &AsyncApp) {
+    let database = database.clone();
+    let requeued = cx.background_spawn(async move { database.write().requeue_interrupted() });
     if let Err(err) = requeued.await {
         tracing::error!("can't requeue interrupted jobs: {err}");
     }
 }
 
-async fn take_jobs(store: &SharedStore, limit: usize, cx: &AsyncApp) -> Vec<Job> {
-    let store = store.clone();
-    let jobs = cx.background_spawn(async move { lock(&store).take_jobs(now(), limit) });
+async fn take_jobs(database: &Arc<Database>, limit: usize, cx: &AsyncApp) -> Vec<Job> {
+    let database = database.clone();
+    let jobs = cx.background_spawn(async move { database.write().take_jobs(now(), limit) });
     jobs.await.unwrap_or_else(|err| {
         tracing::error!("can't read the organizing queue: {err}");
         Vec::new()
@@ -212,10 +212,10 @@ fn jobs_to_take(free: usize, in_flight: usize, probe_at: Option<Instant>, now: I
 }
 
 /// How long to sleep when nothing is running: until the next retry, or an hour.
-async fn next_wait(store: &SharedStore, cx: &AsyncApp) -> Duration {
-    let store = store.clone();
+async fn next_wait(database: &Arc<Database>, cx: &AsyncApp) -> Duration {
+    let database = database.clone();
     let next = cx
-        .background_spawn(async move { lock(&store).next_job_at() })
+        .background_spawn(async move { database.write().next_job_at() })
         .await
         .ok()
         .flatten();

@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
     services::organizer::{AiStatus, Organizer},
-    state::library::{Library, lock},
+    state::library::Library,
     ui::{
         components::{Tone, button, workspace_mark},
         theme::Theme,
@@ -198,9 +198,9 @@ impl WorkspacePage {
             return;
         }
         let mut workspace = self.workspace(WorkspaceId(0), cx);
-        let store = self.library.read(cx).store();
+        let database = self.library.read(cx).database();
         let task = cx.background_spawn(async move {
-            let mut store = lock(&store);
+            let mut store = database.write();
             workspace.id = store.create_workspace(&workspace.name, workspace.color)?;
             store.update_workspace(&workspace)?;
             knoa_store::Result::Ok(workspace.id)

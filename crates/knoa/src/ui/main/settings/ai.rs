@@ -80,7 +80,7 @@ impl AiPage {
     }
 
     fn load_usage(&mut self, cx: &mut Context<'_, AiPage>) {
-        let load = usage_service::load(self.library.read(cx).store(), cx);
+        let load = usage_service::load(self.library.read(cx).database(), cx);
         self.loading_usage = Some(cx.spawn(async move |this, cx| {
             let report = load.await;
             let _ = this.update(cx, |this, cx| match report {

@@ -2,25 +2,20 @@
 //! results, sidebar counts, folders and tags. Every database call runs on the background
 //! executor.
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use gpui::{AppContext as _, Context, EventEmitter, Task};
 use knoa_core::{Bookmark, BookmarkId, Folder, Kind, Place, Query, Workspace, WorkspaceId};
 use knoa_store::{AddedLink, Counts, Store};
 
-use crate::state::settings::SettingsFile;
+use crate::state::{database::Database, settings::SettingsFile};
 
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
 const RESULT_LIMIT: usize = 20_000;
 
-pub type SharedStore = Arc<Mutex<Store>>;
-
 pub struct Library {
-    store: SharedStore,
+    database: Arc<Database>,
     workspace: WorkspaceId,
     workspaces: Vec<Workspace>,
     place: Place,
@@ -52,12 +47,12 @@ pub struct BrowsersChanged;
 impl EventEmitter<BrowsersChanged> for Library {}
 
 impl Library {
-    pub fn new(store: SharedStore, cx: &mut Context<'_, Library>) -> Library {
+    pub fn new(database: Arc<Database>, cx: &mut Context<'_, Library>) -> Library {
         let workspace = SettingsFile::get(cx)
             .current_workspace
             .map_or(WorkspaceId(1), WorkspaceId);
         let mut library = Library {
-            store,
+            database,
             workspace,
             workspaces: Vec::new(),
             place: Place::Everything,
@@ -77,8 +72,8 @@ impl Library {
         library
     }
 
-    pub fn store(&self) -> SharedStore {
-        self.store.clone()
+    pub fn database(&self) -> Arc<Database> {
+        self.database.clone()
     }
 
     pub fn workspaces(&self) -> &[Workspace] {
@@ -184,10 +179,14 @@ impl Library {
 
     /// Re-runs the query now. The previous refresh, if still running, is dropped.
     pub fn refresh(&mut self, cx: &mut Context<'_, Library>) {
-        let store = self.store.clone();
+        let database = self.database.clone();
         let query = self.query();
         let (workspace, selected) = (self.workspace, self.selected);
-        let load = cx.background_spawn(async move { load(&store, workspace, &query, selected) });
+        let load = cx.background_spawn(async move {
+            database
+                .read()
+                .snapshot(|store| load(store, workspace, &query, selected))
+        });
         self.refresh_pending = false;
         self.refresh = Some(cx.spawn(async move |this, cx| {
             let loaded = load.await;
@@ -213,14 +212,15 @@ impl Library {
         }));
     }
 
-    /// Runs a change against the store off the main thread, then refreshes.
+    /// Runs a change against the store off the main thread, then refreshes once it has
+    /// committed, so the refresh's reader sees it.
     pub fn change(
         &mut self,
         cx: &mut Context<'_, Library>,
         change: impl FnOnce(&mut Store) -> knoa_store::Result<()> + Send + 'static,
     ) {
-        let store = self.store.clone();
-        let task = cx.background_spawn(async move { change(&mut lock(&store)) });
+        let database = self.database.clone();
+        let task = cx.background_spawn(async move { change(&mut database.write()) });
         cx.spawn(async move |this, cx| {
             if let Err(err) = task.await {
                 tracing::error!("changing the library failed: {err}");
@@ -236,9 +236,10 @@ impl Library {
         url: String,
         cx: &mut Context<'_, Library>,
     ) -> Task<knoa_store::Result<AddedLink>> {
-        let (store, workspace) = (self.store.clone(), self.workspace);
+        let (database, workspace) = (self.database.clone(), self.workspace);
         let now = jiff::Timestamp::now().as_second();
-        let task = cx.background_spawn(async move { lock(&store).add_link(workspace, &url, now) });
+        let task =
+            cx.background_spawn(async move { database.write().add_link(workspace, &url, now) });
         cx.spawn(async move |this, cx| {
             let added = task.await;
             let _ = this.update(cx, Library::refresh);
@@ -299,12 +300,11 @@ struct Loaded {
 }
 
 fn load(
-    store: &SharedStore,
+    store: &Store,
     workspace: WorkspaceId,
     query: &Query,
     selected_id: Option<BookmarkId>,
 ) -> knoa_store::Result<Loaded> {
-    let store = lock(store);
     let selected = match selected_id {
         Some(id) => store.bookmark(id)?,
         None => None,
@@ -319,12 +319,4 @@ fn load(
         selected_id,
         selected,
     })
-}
-
-/// A panic while holding the lock leaves the store usable: SQLite transactions roll back
-/// on their own.
-pub fn lock(store: &SharedStore) -> std::sync::MutexGuard<'_, Store> {
-    store
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }

@@ -66,6 +66,11 @@ SQLite via `rusqlite` (`bundled`), WAL mode, embedded versioned migrations. The 
 `~/Library/Application Support/Knoa/knoa.db`. Thumbnails are cached as files in the app's
 cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 
+The app opens the file twice: one connection writes, and a read-only one serves the UI's
+reads, so loading the library and saving the organizer's results don't wait for each
+other. Reads that must agree run in one read transaction
+([ADR 0015](adr/0015-separate-read-connection.md)).
+
 ## Sync
 
 - Reads Chromium-family bookmark files

@@ -2,8 +2,9 @@
 
 use knoa_ai::FolderInput;
 use knoa_core::{TagList, WorkspaceId};
+use knoa_store::Store;
 
-use crate::state::library::{SharedStore, lock};
+use crate::state::database::Database;
 
 /// The workspace's instructions, guideline, tag list and the folders it may file into.
 pub(super) struct WorkspaceContext {
@@ -15,10 +16,15 @@ pub(super) struct WorkspaceContext {
 
 impl WorkspaceContext {
     pub(super) fn load(
-        store: &SharedStore,
+        database: &Database,
         id: WorkspaceId,
     ) -> knoa_store::Result<WorkspaceContext> {
-        let store = lock(store);
+        database
+            .read()
+            .snapshot(|store| WorkspaceContext::read(store, id))
+    }
+
+    fn read(store: &Store, id: WorkspaceId) -> knoa_store::Result<WorkspaceContext> {
         let workspace = store.workspace(id)?;
         let folders = store
             .folders(id)?
