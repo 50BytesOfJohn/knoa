@@ -1,0 +1,205 @@
+//! Cloud mode: signing in to a Knoa account, keeping the library in sync with it, and
+//! handing organizing to the cloud when the account has Pro.
+//!
+//! Network work runs on tokio and database work on the background executor; the sync
+//! loop in `engine` only coordinates, like the organizer's. Signed out, or in a build
+//! without a cloud, none of this runs and the app is Local mode as always.
+
+mod config;
+mod connection;
+mod engine;
+mod link;
+mod thumbnails;
+
+use std::sync::Arc;
+
+use futures::channel::mpsc::UnboundedSender;
+use gpui::{App, AppContext as _, Context, Entity, Global, Subscription, Task};
+use knoa_core::protocol::{Account, Organizer as Who};
+use knoa_fetch::Fetcher;
+use knoa_sync::Api;
+
+pub use self::config::CloudConfig;
+use crate::{
+    services::organizer::Organizer,
+    state::{
+        library::{Library, LibraryChanged},
+        settings::SettingsFile,
+    },
+};
+
+pub struct Cloud {
+    config: Option<CloudConfig>,
+    library: Entity<Library>,
+    fetcher: Arc<Fetcher>,
+    http: reqwest::Client,
+    phase: Phase,
+    sync: SyncStatus,
+    last_synced: Option<jiff::Timestamp>,
+    /// Something the user should know that isn't an error of the sync itself, like the
+    /// plan's limit refusing new bookmarks.
+    notice: Option<String>,
+    /// Why the last sign-in didn't work, until the next one starts.
+    problem: Option<String>,
+    /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
+    session_events: Option<Task<()>>,
+    _library_changes: Subscription,
+}
+
+/// Where signing in stands.
+pub enum Phase {
+    SignedOut,
+    /// Waiting for the browser. Dropping the task stops listening for it.
+    SigningIn(Task<()>),
+    /// Signed in, but this library is linked to another account. Nothing syncs until the
+    /// user decides.
+    OtherAccount(Connection),
+    SignedIn(Connection),
+}
+
+/// A signed-in account and the work that keeps it in sync. Dropping it stops all of it.
+pub struct Connection {
+    api: Arc<Api>,
+    account: Option<Account>,
+    wake: UnboundedSender<Wake>,
+    socket: tokio::task::AbortHandle,
+    _tasks: Vec<Task<()>>,
+}
+
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.socket.abort();
+    }
+}
+
+/// What woke the sync loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Wake {
+    /// Something changed in the library here.
+    Push,
+    /// Something changed on the server.
+    Pull,
+    /// The account changed, like a new subscription.
+    Account,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncStatus {
+    Starting,
+    UpToDate,
+    Syncing(usize),
+    Offline,
+    Error(String),
+}
+
+struct CloudGlobal(Entity<Cloud>);
+
+impl Global for CloudGlobal {}
+
+impl Cloud {
+    pub fn init(
+        library: Entity<Library>,
+        fetcher: Arc<Fetcher>,
+        cx: &mut App,
+    ) -> anyhow::Result<()> {
+        let http = knoa_sync::http_client()?;
+        let cloud = cx.new(|cx| {
+            let changes = cx.subscribe(&library, |this: &mut Cloud, _, _: &LibraryChanged, _| {
+                this.wake(Wake::Push);
+            });
+            Cloud {
+                config: CloudConfig::load(),
+                library,
+                fetcher,
+                http,
+                phase: Phase::SignedOut,
+                sync: SyncStatus::Starting,
+                last_synced: None,
+                notice: None,
+                problem: None,
+                session_events: None,
+                _library_changes: changes,
+            }
+        });
+        cx.set_global(CloudGlobal(cloud.clone()));
+        cloud.update(cx, Cloud::restore);
+        Ok(())
+    }
+
+    pub fn entity(cx: &App) -> Entity<Cloud> {
+        cx.global::<CloudGlobal>().0.clone()
+    }
+
+    /// `None` in a build that has no cloud to sign in to.
+    pub fn config(&self) -> Option<&CloudConfig> {
+        self.config.as_ref()
+    }
+
+    pub fn phase(&self) -> &Phase {
+        &self.phase
+    }
+
+    /// The signed-in account, once the server has said who it is.
+    pub fn account(&self) -> Option<&Account> {
+        match &self.phase {
+            Phase::SignedIn(connection) | Phase::OtherAccount(connection) => {
+                connection.account.as_ref()
+            }
+            Phase::SignedOut | Phase::SigningIn(_) => None,
+        }
+    }
+
+    pub fn sync(&self) -> &SyncStatus {
+        &self.sync
+    }
+
+    pub fn last_synced(&self) -> Option<jiff::Timestamp> {
+        self.last_synced
+    }
+
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
+    }
+
+    pub fn problem(&self) -> Option<&str> {
+        self.problem.as_deref()
+    }
+
+    fn wake(&self, wake: Wake) {
+        if let Phase::SignedIn(connection) = &self.phase {
+            let _ = connection.wake.unbounded_send(wake);
+        }
+    }
+
+    /// The server said who the account is and what it has.
+    fn set_account(&mut self, account: Account, cx: &mut Context<'_, Cloud>) {
+        let cloud_organizes = account.organizer == Who::Cloud;
+        SettingsFile::update(cx, |s| s.account = Some(account.clone()));
+        if let Phase::SignedIn(connection) | Phase::OtherAccount(connection) = &mut self.phase {
+            connection.account = Some(account);
+        }
+        set_cloud_organizes(cloud_organizes, cx);
+        cx.notify();
+    }
+
+    fn set_sync(&mut self, sync: SyncStatus, cx: &mut Context<'_, Cloud>) {
+        if sync == SyncStatus::UpToDate {
+            self.last_synced = Some(jiff::Timestamp::now());
+        }
+        if self.sync != sync || sync == SyncStatus::UpToDate {
+            self.sync = sync;
+            cx.notify();
+        }
+    }
+
+    fn set_notice(&mut self, notice: String, cx: &mut Context<'_, Cloud>) {
+        if self.notice.as_ref() != Some(&notice) {
+            self.notice = Some(notice);
+            cx.notify();
+        }
+    }
+}
+
+fn set_cloud_organizes(cloud: bool, cx: &mut App) {
+    Organizer::entity(cx).update(cx, |organizer, cx| organizer.set_cloud(cloud, cx));
+}

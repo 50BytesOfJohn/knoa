@@ -67,8 +67,8 @@ impl Mood {
         match status {
             AiStatus::Off => Mood::Asleep,
             AiStatus::NeedsAttention(_) => Mood::Worried,
-            AiStatus::Ready if organizing > 0 => Mood::Organizing,
-            AiStatus::Ready => Mood::Idle,
+            AiStatus::Ready | AiStatus::Cloud if organizing > 0 => Mood::Organizing,
+            AiStatus::Ready | AiStatus::Cloud => Mood::Idle,
         }
     }
 

@@ -1,6 +1,7 @@
 //! Settings: one sheet over the main window, with its own sidebar of pages. App-wide pages
-//! (General, Appearance, AI) come first, then one page per workspace.
+//! (General, Appearance, AI, Account) come first, then one page per workspace.
 
+mod account;
 mod ai;
 mod appearance;
 mod form;
@@ -22,6 +23,7 @@ use crate::{
     state::library::{Library, LibraryChanged},
     ui::{components::icon, theme::Theme},
 };
+use account::AccountPage;
 use ai::AiPage;
 use workspace::{WorkspacePage, WorkspacePageEvent};
 
@@ -33,6 +35,7 @@ pub enum Page {
     General,
     Appearance,
     Ai,
+    Account,
     Workspace(WorkspaceId),
     NewWorkspace,
 }
@@ -43,6 +46,7 @@ pub struct SettingsView {
     main: WeakEntity<MainView>,
     focus: FocusHandle,
     ai: Entity<AiPage>,
+    account: Entity<AccountPage>,
     /// The page of the workspace shown, while one is.
     workspace: Option<Entity<WorkspacePage>>,
     _subscriptions: Vec<Subscription>,
@@ -57,6 +61,7 @@ impl SettingsView {
         cx: &mut Context<'_, SettingsView>,
     ) -> SettingsView {
         let ai = cx.new(|cx| AiPage::new(library.clone(), window, cx));
+        let account = cx.new(AccountPage::new);
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         // However the sheet closes (Esc, a click outside, the close button), edits not yet
@@ -74,6 +79,7 @@ impl SettingsView {
             main,
             focus,
             ai,
+            account,
             workspace: None,
             _subscriptions: subscriptions,
         };
@@ -196,6 +202,7 @@ impl SettingsView {
             (Page::General, _) => general::page(cx).into_any_element(),
             (Page::Appearance, _) => appearance::page(cx).into_any_element(),
             (Page::Ai, _) => self.ai.clone().into_any_element(),
+            (Page::Account, _) => self.account.clone().into_any_element(),
             (Page::Workspace(_) | Page::NewWorkspace, Some(page)) => {
                 page.clone().into_any_element()
             }

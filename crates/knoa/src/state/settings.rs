@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
-use knoa_core::Ink;
+use knoa_core::{Ink, protocol::Account};
 use knoa_store::Store;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,9 @@ pub struct Settings {
     pub show_up_next: bool,
     pub show_summaries: bool,
     pub window: Option<WindowFrame>,
+    /// The signed-in cloud account as last seen, so the app knows who organizes before
+    /// the server answers. The token itself is with the credentials.
+    pub account: Option<Account>,
     #[serde(flatten, skip_serializing)]
     pub legacy: Legacy,
 }
@@ -64,6 +67,7 @@ impl Default for Settings {
             show_up_next: true,
             show_summaries: true,
             window: None,
+            account: None,
             legacy: Legacy::default(),
         }
     }

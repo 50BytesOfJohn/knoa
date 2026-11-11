@@ -157,6 +157,16 @@ impl Render for AiPage {
             AiStatus::Ready | AiStatus::NeedsAttention(_) => page
                 .child(self.provider_group(&status, &theme, cx))
                 .child(self.backlog_group(&theme, cx)),
+            AiStatus::Cloud => page
+                .child(form::group(
+                    "Provider",
+                    vec![form::note(
+                        "With Pro, Knoa organizes your bookmarks in the cloud. A key you connected stays on this Mac for when you're not signed in.",
+                        theme.muted,
+                    )],
+                    &theme,
+                ))
+                .child(self.backlog_group(&theme, cx)),
         };
         // Usage from before a disconnect still counts, so it stays visible while AI is off.
         let connected = SettingsFile::get(cx).ai.as_ref().map(|c| c.kind);
@@ -240,9 +250,14 @@ impl AiPage {
             form::note(format!("Everything in {name} is organized."), theme.muted)
         } else {
             let cost = not_organized as f64 * DOLLARS_PER_BOOKMARK;
+            let about = if *Organizer::entity(cx).read(cx).status() == AiStatus::Cloud {
+                "Included in Pro, within its monthly allowance.".to_owned()
+            } else {
+                format!("About ${cost:.2} to do them all.")
+            };
             form::row(
                 &format!("{not_organized} bookmarks in {name} aren't organized yet"),
-                Some(&format!("About ${cost:.2} to do them all.")),
+                Some(&about),
                 button("organize-all", "Organize", Tone::Primary, cx)
                     .on_click(cx.listener(|this, _, _, cx| this.organize_existing(cx))),
                 theme,
