@@ -1,6 +1,8 @@
 //! The one-shot listener the browser is redirected to: `http://127.0.0.1:<port>/callback`
 //! on a port the system picks (RFC 8252, section 7.3).
 
+use std::time::Duration;
+
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
@@ -11,6 +13,9 @@ use crate::{Error, Result};
 
 /// A request head longer than this isn't the browser coming back from sign-in.
 const MAX_REQUEST: usize = 16 * 1024;
+/// The browser sends its request at once; a connection that stalls must not hold up the
+/// real callback behind it.
+const READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 const SIGNED_IN: &str = "You're signed in. You can close this tab and return to Knoa.";
 const NOT_SIGNED_IN: &str = "Signing in didn't finish. Return to Knoa and try again.";
@@ -32,15 +37,26 @@ impl Loopback {
     }
 
     /// Answers requests until the callback arrives, and returns its code. Anything else
-    /// the browser asks for, like a favicon, gets a 404.
+    /// the browser asks for, like a favicon, gets a 404. Any local process can connect, so
+    /// a malformed request or a callback without this sign-in's state is turned away
+    /// without ending the sign-in.
     pub async fn wait(self, state: &str) -> Result<String> {
         loop {
             let (mut stream, _) = self.listener.accept().await?;
-            let Some(target) = read_target(&mut stream).await else {
+            let Ok(target) = tokio::time::timeout(READ_TIMEOUT, read_target(&mut stream)).await
+            else {
+                continue;
+            };
+            let Some(target) = target else {
+                respond(&mut stream, "400 Bad Request", "Bad request.").await;
                 continue;
             };
             match parse_callback(&target, state) {
                 Callback::Other => respond(&mut stream, "404 Not Found", "Not found.").await,
+                Callback::Foreign => {
+                    tracing::warn!("ignored a sign-in callback with another state");
+                    respond(&mut stream, "400 Bad Request", NOT_SIGNED_IN).await;
+                }
                 Callback::Code(code) => {
                     respond(&mut stream, "200 OK", SIGNED_IN).await;
                     return Ok(code);
@@ -58,6 +74,8 @@ impl Loopback {
 enum Callback {
     /// Not the redirect: some other path.
     Other,
+    /// A redirect without this sign-in's state: not ours to trust, whatever else it says.
+    Foreign,
     Code(String),
     Failed(String),
 }
@@ -75,9 +93,8 @@ fn parse_callback(target: &str, state: &str) -> Callback {
             .find(|(key, _)| key == name)
             .map(|(_, value)| value.into_owned())
     };
-    // A redirect that doesn't carry our state isn't ours to trust, whatever else it says.
     if param("state").as_deref() != Some(state) {
-        return Callback::Failed("the browser came back with a different sign-in".into());
+        return Callback::Foreign;
     }
     if let Some(error) = param("error") {
         let description = param("error_description").unwrap_or_default();
@@ -134,14 +151,32 @@ mod tests {
             parse_callback("/callback?code=abc&state=s1", "s1"),
             Callback::Code("abc".into())
         );
-        assert!(matches!(
+        assert_eq!(
             parse_callback("/callback?code=abc&state=other", "s1"),
-            Callback::Failed(_)
-        ));
+            Callback::Foreign
+        );
         assert!(matches!(
             parse_callback("/callback?error=access_denied&state=s1", "s1"),
             Callback::Failed(why) if why.contains("access_denied")
         ));
         assert_eq!(parse_callback("/favicon.ico", "s1"), Callback::Other);
+    }
+
+    #[tokio::test]
+    async fn a_callback_from_another_sign_in_does_not_end_this_one() {
+        let loopback = Loopback::bind().await.unwrap();
+        let port = loopback.port;
+        let waiting = tokio::spawn(async move { loopback.wait("s1").await });
+        for target in [
+            "/callback?code=evil&state=other",
+            "/callback?code=abc&state=s1",
+        ] {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+            let request = format!("GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+            stream.write_all(request.as_bytes()).await.unwrap();
+            let mut answer = String::new();
+            stream.read_to_string(&mut answer).await.unwrap();
+        }
+        assert_eq!(waiting.await.unwrap().unwrap(), "abc");
     }
 }
