@@ -26,6 +26,7 @@ pub use add_link::AddedLink;
 pub use import::{ImportReport, NewBookmarks};
 pub use jobs::Job;
 pub use read::Counts;
+pub use sync::{CloudJob, ThumbnailDownload, ThumbnailUpload};
 
 // The wrapped errors are in the message and deliberately not the `source()`: an error chain
 // shown as `{:#}` would print them twice, and rusqlite's own source would add a third copy.

@@ -5,6 +5,7 @@
 //! change is recorded, so Local mode is the app as it always was.
 
 mod apply;
+mod device;
 mod ids;
 mod link;
 mod outbox;
@@ -14,7 +15,9 @@ mod rows;
 use knoa_core::protocol::Mutation;
 use rusqlite::{Connection, OptionalExtension as _};
 
+pub use device::{CloudJob, ThumbnailDownload, ThumbnailUpload};
 pub(crate) use recorder::Recorder;
+pub(crate) use rows::page_text;
 
 use crate::{Result, Store};
 

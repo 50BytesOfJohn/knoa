@@ -25,6 +25,13 @@ impl Fetcher {
         }
         Ok(page)
     }
+
+    /// Downloads a preview image on its own, like a thumbnail another device stored on the
+    /// server, into the thumbnail cache. `None` when it isn't a usable preview.
+    pub async fn download_image(&self, url: &url::Url) -> Option<Image> {
+        let preview = crate::image::download(&self.http, url).await?;
+        store(&preview, &self.image_cache).await
+    }
 }
 
 /// Writes `preview` into `cache_dir`, keyed by its URL.

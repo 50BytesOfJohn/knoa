@@ -144,6 +144,8 @@ impl Store {
         let tx = self.conn.transaction()?;
         let recorder = Recorder::ai(&tx)?;
         let image = page.image.as_ref();
+        // A page fetched again usually reads the same; the server has that text already.
+        let old_text = crate::sync::page_text(&tx, id.0)?;
         recorder.on_bookmark(id.0, || {
             tx.execute(
             "UPDATE bookmarks SET page_text = ?2, page_evidence = ?3, fetched_at = ?4,
@@ -170,7 +172,9 @@ impl Store {
             )?;
             Ok(())
         })?;
-        recorder.text(id.0)?;
+        if old_text.as_deref() != Some(page.text.as_str()) {
+            recorder.text(id.0)?;
+        }
         search::reindex(&tx, id.0)?;
         tx.commit()?;
         Ok(())
