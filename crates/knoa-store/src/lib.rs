@@ -11,6 +11,7 @@ mod jobs;
 mod read;
 mod schema;
 mod search;
+mod sync;
 mod tag_list;
 mod tags;
 mod trash;
@@ -38,6 +39,12 @@ pub enum Error {
         "the library was saved by a newer version of Knoa (schema {found}, this version knows up to {supported}); update Knoa to open it"
     )]
     NewerDatabase { found: usize, supported: usize },
+    #[error("the library is linked to another account ({linked}); unlink it first")]
+    OtherAccount { linked: String },
+    #[error("the library isn't linked to an account")]
+    NotLinked,
+    #[error("sync id {0:?} isn't a UUID")]
+    InvalidSyncId(String),
 }
 
 impl From<rusqlite::Error> for Error {
@@ -104,10 +111,56 @@ impl Store {
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use knoa_core::{NewBookmark, WorkspaceId};
+    use knoa_core::{
+        NewBookmark, WorkspaceId,
+        protocol::{Change, Mutation},
+    };
+    use serde_json::{Value, json};
+
+    use crate::Store;
 
     /// The workspace every database starts with.
     pub const WORKSPACE: WorkspaceId = WorkspaceId(1);
+
+    /// The id the account knows `WORKSPACE` by, once linked.
+    pub const WORKSPACE_KEY: &str = "6f1c2a3e-8b4d-4e5f-9a6b-7c8d9e0f1a2b";
+
+    /// A store linked to an account whose only row is a workspace that `WORKSPACE` adopts.
+    pub fn linked(store: &mut Store) {
+        let personal = change(json!({
+            "entity": "workspace", "key": WORKSPACE_KEY, "version": 1, "deleted": false,
+            "data": workspace_row(WORKSPACE_KEY, "Personal"),
+        }));
+        store.link("user-1", &[personal], 1).unwrap();
+    }
+
+    pub fn change(json: Value) -> Change {
+        serde_json::from_value(json).unwrap()
+    }
+
+    pub fn workspace_row(id: &str, name: &str) -> Value {
+        json!({ "id": id, "name": name, "color": 0, "position": 1, "instructions": "",
+                "screening": false, "guideline": "", "only_listed_tags": false, "tag_list": [] })
+    }
+
+    pub fn bookmark_row(id: &str, workspace: &str, url: &str, title: &str) -> Value {
+        json!({ "id": id, "workspace_id": workspace, "url": url, "title": title, "site": "a.dev",
+                "added_at": 5, "up_next": false, "kept": false, "deleted_at": null,
+                "browser_folder": null, "status": "new", "kind": null, "summary": null,
+                "fields": {}, "extras": [], "set_aside": null, "model": null,
+                "organized_at": null, "error": null, "image_key": null, "image_width": null,
+                "image_height": null })
+    }
+
+    /// Everything waiting to be pushed, as JSON for compact assertions.
+    pub fn pushed(store: &Store) -> Vec<Value> {
+        store
+            .pending(1000)
+            .unwrap()
+            .iter()
+            .map(|mutation: &Mutation| serde_json::to_value(mutation).unwrap())
+            .collect()
+    }
 
     pub fn bookmark(url: &str, title: &str, added_at: i64) -> NewBookmark {
         NewBookmark {

@@ -8,7 +8,7 @@ use knoa_core::{
 };
 use rusqlite::{OptionalExtension as _, Row, params_from_iter};
 
-use crate::{Result, Store, search::Filter, search::kind_from_column};
+use crate::{Result, Store, search::Filter, search::kind_from_column, sync::Recorder};
 
 /// Badge numbers for the sidebar's places.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -109,11 +109,11 @@ impl Store {
 
     /// Adds a bookmark to, or removes it from, Up next. Only the user does this.
     pub fn set_up_next(&mut self, id: BookmarkId, up_next: bool) -> Result<()> {
-        self.conn.execute(
+        self.edit_bookmark(
+            id,
             "UPDATE bookmarks SET up_next = ?2 WHERE id = ?1",
             rusqlite::params![id.0, up_next],
-        )?;
-        Ok(())
+        )
     }
 
     /// Points a bookmark at a freshly fetched thumbnail. The old file is left to the
@@ -144,10 +144,26 @@ impl Store {
 
     /// Keeps a bookmark the AI set aside. The guideline never sets it aside again.
     pub fn keep(&mut self, id: BookmarkId) -> Result<()> {
-        self.conn.execute(
+        self.edit_bookmark(
+            id,
             "UPDATE bookmarks SET kept = 1, set_aside = NULL WHERE id = ?1",
             [id.0],
-        )?;
+        )
+    }
+
+    /// Runs a one-statement edit the user made to bookmark `id`.
+    fn edit_bookmark(
+        &mut self,
+        id: BookmarkId,
+        sql: &str,
+        params: impl rusqlite::Params,
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        Recorder::user(&tx)?.on_bookmark(id.0, || {
+            tx.execute(sql, params)?;
+            Ok(())
+        })?;
+        tx.commit()?;
         Ok(())
     }
 }

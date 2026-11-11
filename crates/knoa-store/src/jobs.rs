@@ -6,7 +6,7 @@
 use knoa_core::{Bookmark, BookmarkId, Enrichment, FolderId, Page, WorkspaceId};
 use rusqlite::{OptionalExtension as _, params};
 
-use crate::{Result, Store, search};
+use crate::{Result, Store, search, sync::Recorder};
 
 /// A bookmark taken from the queue.
 #[derive(Debug, Clone)]
@@ -119,14 +119,20 @@ impl Store {
             .flatten())
     }
 
-    /// Jobs that were running when the app quit go back to the queue.
+    /// Jobs that were running when the app quit go back to the queue. In a linked library
+    /// a queued bookmark without a job is waiting for the cloud organizer, so it stays.
     pub fn requeue_interrupted(&mut self) -> Result<()> {
+        let stuck = if self.is_linked()? {
+            "('organizing')"
+        } else {
+            "('organizing', 'queued')"
+        };
         self.conn.execute(
             "UPDATE bookmarks SET status = 'queued' WHERE status = 'organizing' AND id IN (SELECT bookmark_id FROM jobs)",
             [],
         )?;
         self.conn.execute(
-            "UPDATE bookmarks SET status = 'new' WHERE status IN ('organizing', 'queued') AND id NOT IN (SELECT bookmark_id FROM jobs)",
+            &format!("UPDATE bookmarks SET status = 'new' WHERE status IN {stuck} AND id NOT IN (SELECT bookmark_id FROM jobs)"),
             [],
         )?;
         Ok(())
@@ -136,8 +142,10 @@ impl Store {
     /// summary until the AI provides its own, and the title of a link added by hand.
     pub fn save_page(&mut self, id: BookmarkId, page: &Page, now: i64) -> Result<()> {
         let tx = self.conn.transaction()?;
+        let recorder = Recorder::ai(&tx)?;
         let image = page.image.as_ref();
-        tx.execute(
+        recorder.on_bookmark(id.0, || {
+            tx.execute(
             "UPDATE bookmarks SET page_text = ?2, page_evidence = ?3, fetched_at = ?4,
                 image_path = coalesce(?5, image_path), image_width = coalesce(?6, image_width),
                 image_height = coalesce(?7, image_height),
@@ -159,7 +167,10 @@ impl Store {
                 serde_json::to_string(&page.fields)?,
                 page.title,
             ],
-        )?;
+            )?;
+            Ok(())
+        })?;
+        recorder.text(id.0)?;
         search::reindex(&tx, id.0)?;
         tx.commit()?;
         Ok(())
@@ -174,7 +185,9 @@ impl Store {
         now: i64,
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
-        let updated = tx.execute(
+        let recorder = Recorder::ai(&tx)?;
+        let updated = recorder.on_bookmark(id.0, || {
+            Ok(tx.execute(
             "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
                 status = 'organized', organized_at = ?7, error = NULL,
                 set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END WHERE id = ?1",
@@ -188,12 +201,13 @@ impl Store {
                 now,
                 enrichment.set_aside,
             ],
-        )?;
+            )?)
+        })?;
         if updated == 0 {
             return Ok(());
         }
-        Store::replace_ai_tags(&tx, id, &enrichment.tags)?;
-        Store::add_ai_folders(&tx, id, &enrichment.folders)?;
+        Store::replace_ai_tags(&tx, &recorder, id, &enrichment.tags)?;
+        Store::add_ai_folders(&tx, &recorder, id, &enrichment.folders)?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         search::reindex(&tx, id.0)?;
         tx.commit()?;
@@ -204,11 +218,15 @@ impl Store {
     /// Everything else it has stays as it was.
     pub fn finish_filed(&mut self, id: BookmarkId, folders: &[(FolderId, f32)]) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "UPDATE bookmarks SET status = 'organized', error = NULL WHERE id = ?1",
-            [id.0],
-        )?;
-        Store::add_ai_folders(&tx, id, folders)?;
+        let recorder = Recorder::ai(&tx)?;
+        recorder.on_bookmark(id.0, || {
+            tx.execute(
+                "UPDATE bookmarks SET status = 'organized', error = NULL WHERE id = ?1",
+                [id.0],
+            )?;
+            Ok(())
+        })?;
+        Store::add_ai_folders(&tx, &recorder, id, folders)?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -218,7 +236,10 @@ impl Store {
     /// own metadata is all it gets. It stays "not organized".
     pub fn finish_page_only(&mut self, id: BookmarkId) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute("UPDATE bookmarks SET status = 'new' WHERE id = ?1", [id.0])?;
+        Recorder::ai(&tx)?.on_bookmark(id.0, || {
+            tx.execute("UPDATE bookmarks SET status = 'new' WHERE id = ?1", [id.0])?;
+            Ok(())
+        })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -254,10 +275,13 @@ impl Store {
     pub fn fail_job(&mut self, id: BookmarkId, error: &str, folders_only: bool) -> Result<()> {
         let status = if folders_only { "organized" } else { "failed" };
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "UPDATE bookmarks SET error = ?2, status = ?3 WHERE id = ?1",
-            params![id.0, error, status],
-        )?;
+        Recorder::ai(&tx)?.on_bookmark(id.0, || {
+            tx.execute(
+                "UPDATE bookmarks SET error = ?2, status = ?3 WHERE id = ?1",
+                params![id.0, error, status],
+            )?;
+            Ok(())
+        })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -267,13 +291,15 @@ impl Store {
 /// Marks the bookmark queued again after its job ended. A bookmark trashed meanwhile lost
 /// its job row, and nothing would ever take it, so it goes back to 'new' instead.
 fn requeue(tx: &rusqlite::Transaction<'_>, id: BookmarkId, error: &str) -> Result<()> {
-    tx.execute(
-        "UPDATE bookmarks SET error = ?2, status = CASE
-            WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1) THEN 'queued' ELSE 'new' END
-         WHERE id = ?1",
-        params![id.0, error],
-    )?;
-    Ok(())
+    Recorder::ai(tx)?.on_bookmark(id.0, || {
+        tx.execute(
+            "UPDATE bookmarks SET error = ?2, status = CASE
+                WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1) THEN 'queued' ELSE 'new' END
+             WHERE id = ?1",
+            params![id.0, error],
+        )?;
+        Ok(())
+    })
 }
 
 fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {

@@ -1,9 +1,9 @@
 //! Workspaces, the browser profiles each one syncs, and their tag lists.
 
 use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceId};
-use rusqlite::{Transaction, params};
+use rusqlite::{Connection, Transaction, params};
 
-use crate::{Result, Store, folders::stored_ink, tag_list};
+use crate::{Result, Store, folders::stored_ink, sync::Recorder, tag_list};
 
 impl Store {
     /// All workspaces in switcher order. There is always at least one.
@@ -55,16 +55,22 @@ impl Store {
 
     /// Creates a workspace that syncs nothing until the user picks browsers for it.
     pub fn create_workspace(&mut self, name: &str, color: Ink) -> Result<WorkspaceId> {
-        self.conn.execute(
+        let tx = self.conn.transaction()?;
+        tx.execute(
             "INSERT INTO workspaces (name, color, position)
              VALUES (?1, ?2, (SELECT coalesce(max(position), 0) + 1 FROM workspaces))",
             params![name, color.index()],
         )?;
-        Ok(WorkspaceId(self.conn.last_insert_rowid()))
+        let id = tx.last_insert_rowid();
+        Recorder::user(&tx)?.created_workspace(id)?;
+        tx.commit()?;
+        Ok(WorkspaceId(id))
     }
 
     pub fn update_workspace(&mut self, workspace: &Workspace) -> Result<()> {
         let tx = self.conn.transaction()?;
+        let recorder = Recorder::user(&tx)?;
+        let before = recorder.workspace_before(workspace.id.0)?;
         tx.execute(
             "UPDATE workspaces SET name = ?2, color = ?3, instructions = ?4, screening = ?5,
                 guideline = ?6, opens_in = ?7, only_listed_tags = ?8 WHERE id = ?1",
@@ -81,6 +87,7 @@ impl Store {
         )?;
         set_browsers(&tx, workspace.id, &workspace.browsers)?;
         tag_list::replace(&tx, workspace.id, &workspace.tag_list.tags)?;
+        recorder.workspace_changed(workspace.id.0, before)?;
         tx.commit()?;
         Ok(())
     }
@@ -92,15 +99,22 @@ impl Store {
         if count <= 1 {
             return Ok(false);
         }
-        // The full-text index is a virtual table, outside the foreign-key cascade.
-        tx.execute(
-            "DELETE FROM bookmarks_fts WHERE rowid IN (SELECT id FROM bookmarks WHERE workspace_id = ?1)",
-            [id.0],
-        )?;
-        tx.execute("DELETE FROM workspaces WHERE id = ?1", [id.0])?;
+        Recorder::user(&tx)?.deleting_workspace(id.0)?;
+        delete(&tx, id.0)?;
         tx.commit()?;
         Ok(true)
     }
+}
+
+/// Deletes a workspace with everything in it.
+pub(crate) fn delete(conn: &Connection, id: i64) -> Result<()> {
+    // The full-text index is a virtual table, outside the foreign-key cascade.
+    conn.execute(
+        "DELETE FROM bookmarks_fts WHERE rowid IN (SELECT id FROM bookmarks WHERE workspace_id = ?1)",
+        [id],
+    )?;
+    conn.execute("DELETE FROM workspaces WHERE id = ?1", [id])?;
+    Ok(())
 }
 
 fn set_browsers(tx: &Transaction<'_>, id: WorkspaceId, browsers: &[String]) -> Result<()> {

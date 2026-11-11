@@ -4,9 +4,9 @@ use knoa_core::{
     ListedTag, MAX_LISTED_TAGS, MAX_TAG_CHARS, MAX_TAG_DESCRIPTION_CHARS, WorkspaceId,
     normalize_tag,
 };
-use rusqlite::{Connection, Transaction, params};
+use rusqlite::{Connection, params};
 
-use crate::{Result, Store};
+use crate::{Result, Store, sync::Recorder};
 
 impl Store {
     /// Adds a tag to the workspace's list. A full list, or a tag already listed, is left
@@ -19,7 +19,10 @@ impl Store {
         let tx = self.conn.transaction()?;
         let listed = load(&tx, workspace)?;
         if listed.len() < MAX_LISTED_TAGS && !listed.iter().any(|t| t.name == tag) {
+            let recorder = Recorder::user(&tx)?;
+            let before = recorder.workspace_before(workspace.0)?;
             insert(&tx, workspace, &tag, "")?;
+            recorder.workspace_changed(workspace.0, before)?;
         }
         tx.commit()?;
         Ok(())
@@ -29,6 +32,8 @@ impl Store {
     /// add its own tags again, so a disabled switch never shows on.
     pub fn unlist_tag(&mut self, workspace: WorkspaceId, tag: &str) -> Result<()> {
         let tx = self.conn.transaction()?;
+        let recorder = Recorder::user(&tx)?;
+        let before = recorder.workspace_before(workspace.0)?;
         tx.execute(
             "DELETE FROM workspace_tags WHERE workspace_id = ?1 AND tag = ?2",
             params![workspace.0, normalize_tag(tag)],
@@ -38,6 +43,7 @@ impl Store {
              AND NOT EXISTS (SELECT 1 FROM workspace_tags WHERE workspace_id = ?1)",
             [workspace.0],
         )?;
+        recorder.workspace_changed(workspace.0, before)?;
         tx.commit()?;
         Ok(())
     }
@@ -59,11 +65,7 @@ pub(crate) fn load(conn: &Connection, workspace: WorkspaceId) -> Result<Vec<List
 
 /// Replaces the list, spelling each tag as tags are spelled everywhere and keeping it
 /// within its limits.
-pub(crate) fn replace(
-    tx: &Transaction<'_>,
-    workspace: WorkspaceId,
-    tags: &[ListedTag],
-) -> Result<()> {
+pub(crate) fn replace(tx: &Connection, workspace: WorkspaceId, tags: &[ListedTag]) -> Result<()> {
     tx.execute(
         "DELETE FROM workspace_tags WHERE workspace_id = ?1",
         [workspace.0],

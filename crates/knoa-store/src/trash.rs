@@ -6,20 +6,23 @@
 use std::collections::HashSet;
 
 use knoa_core::{BookmarkId, TRASH_SECONDS, WorkspaceId};
-use rusqlite::{OptionalExtension as _, Transaction, params};
+use rusqlite::{Connection, OptionalExtension as _, Transaction, params};
 
-use crate::{Result, Store};
+use crate::{Result, Store, sync::Recorder};
 
 impl Store {
     /// Moves a bookmark to Trash and takes it off the organizing queue.
     pub fn trash(&mut self, id: BookmarkId, now: i64) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "UPDATE bookmarks SET deleted_at = ?2,
-                status = CASE WHEN status = 'queued' THEN 'new' ELSE status END
-             WHERE id = ?1",
-            params![id.0, now],
-        )?;
+        Recorder::user(&tx)?.on_bookmark(id.0, || {
+            tx.execute(
+                "UPDATE bookmarks SET deleted_at = ?2,
+                    status = CASE WHEN status = 'queued' THEN 'new' ELSE status END
+                 WHERE id = ?1",
+                params![id.0, now],
+            )?;
+            Ok(())
+        })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -27,10 +30,15 @@ impl Store {
 
     /// Takes a bookmark out of Trash, back to where it was.
     pub fn restore(&mut self, id: BookmarkId) -> Result<()> {
-        self.conn.execute(
-            "UPDATE bookmarks SET deleted_at = NULL WHERE id = ?1",
-            [id.0],
-        )?;
+        let tx = self.conn.transaction()?;
+        Recorder::user(&tx)?.on_bookmark(id.0, || {
+            tx.execute(
+                "UPDATE bookmarks SET deleted_at = NULL WHERE id = ?1",
+                [id.0],
+            )?;
+            Ok(())
+        })?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -53,25 +61,43 @@ impl Store {
     /// Deletes the bookmarks matching `condition`, which takes one parameter.
     fn purge(&mut self, condition: &str, param: i64) -> Result<usize> {
         let tx = self.conn.transaction()?;
-        tx.execute(
-            &format!(
-                "INSERT OR REPLACE INTO deleted_urls (workspace_id, url, source, browser_guid)
-                 SELECT workspace_id, url, source, browser_guid FROM bookmarks
-                 WHERE {condition} AND source IS NOT NULL AND removed_from_browser = 0"
-            ),
-            [param],
-        )?;
-        // The full-text index is a virtual table, outside the foreign-key cascade.
-        tx.execute(
-            &format!(
-                "DELETE FROM bookmarks_fts WHERE rowid IN (SELECT id FROM bookmarks WHERE {condition})"
-            ),
-            [param],
-        )?;
-        let deleted = tx.execute(&format!("DELETE FROM bookmarks WHERE {condition}"), [param])?;
+        let recorder = Recorder::user(&tx)?;
+        if recorder.is_linked() {
+            let ids: Vec<i64> = {
+                let sql = format!("SELECT id FROM bookmarks WHERE {condition}");
+                let mut stmt = tx.prepare(&sql)?;
+                stmt.query_map([param], |row| row.get(0))?
+                    .collect::<rusqlite::Result<_>>()?
+            };
+            for id in ids {
+                recorder.deleting_bookmark(id)?;
+            }
+        }
+        let deleted = delete_for_good(&tx, condition, param)?;
         tx.commit()?;
         Ok(deleted)
     }
+}
+
+/// Deletes the bookmarks matching `condition`, which takes one parameter. Those the
+/// browser still has are remembered, so the next import doesn't bring them back.
+pub(crate) fn delete_for_good(conn: &Connection, condition: &str, param: i64) -> Result<usize> {
+    conn.execute(
+        &format!(
+            "INSERT OR REPLACE INTO deleted_urls (workspace_id, url, source, browser_guid)
+             SELECT workspace_id, url, source, browser_guid FROM bookmarks
+             WHERE {condition} AND source IS NOT NULL AND removed_from_browser = 0"
+        ),
+        [param],
+    )?;
+    // The full-text index is a virtual table, outside the foreign-key cascade.
+    conn.execute(
+        &format!(
+            "DELETE FROM bookmarks_fts WHERE rowid IN (SELECT id FROM bookmarks WHERE {condition})"
+        ),
+        [param],
+    )?;
+    Ok(conn.execute(&format!("DELETE FROM bookmarks WHERE {condition}"), [param])?)
 }
 
 /// Whether a browser bookmark is a new one for a URL the user deleted: the same profile has

@@ -3,7 +3,7 @@
 use knoa_core::{BookmarkId, Folder, FolderColor, FolderIcon, FolderId, Hue, Ink, WorkspaceId};
 use rusqlite::params;
 
-use crate::{Result, Store, search};
+use crate::{Result, Store, search, sync::Recorder};
 
 impl Store {
     /// A workspace's folders in sidebar order, with how many bookmarks each holds.
@@ -41,7 +41,8 @@ impl Store {
         icon: Option<FolderIcon>,
     ) -> Result<FolderId> {
         let (ink, hue) = color_columns(color);
-        self.conn.execute(
+        let tx = self.conn.transaction()?;
+        tx.execute(
             "INSERT INTO folders (workspace_id, name, description, auto_assign, color, hue, icon, position)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT coalesce(max(position), 0) + 1 FROM folders))",
             params![
@@ -54,12 +55,18 @@ impl Store {
                 icon.map(FolderIcon::name),
             ],
         )?;
-        Ok(FolderId(self.conn.last_insert_rowid()))
+        let id = tx.last_insert_rowid();
+        Recorder::user(&tx)?.created_folder(id)?;
+        tx.commit()?;
+        Ok(FolderId(id))
     }
 
     pub fn update_folder(&mut self, folder: &Folder) -> Result<()> {
         let (ink, hue) = color_columns(folder.color);
-        self.conn.execute(
+        let tx = self.conn.transaction()?;
+        let recorder = Recorder::user(&tx)?;
+        let before = recorder.folder_before(folder.id.0)?;
+        tx.execute(
             "UPDATE folders SET name = ?2, description = ?3, auto_assign = ?4, color = ?5, hue = ?6,
                 icon = ?7 WHERE id = ?1",
             params![
@@ -72,13 +79,17 @@ impl Store {
                 folder.icon.map(FolderIcon::name),
             ],
         )?;
+        recorder.folder_changed(folder.id.0, before)?;
+        tx.commit()?;
         Ok(())
     }
 
     /// Deletes the folder. Its bookmarks stay in the library.
     pub fn delete_folder(&mut self, id: FolderId) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM folders WHERE id = ?1", [id.0])?;
+        let tx = self.conn.transaction()?;
+        Recorder::user(&tx)?.deleting_folder(id.0)?;
+        tx.execute("DELETE FROM folders WHERE id = ?1", [id.0])?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -93,6 +104,7 @@ impl Store {
              ON CONFLICT DO UPDATE SET origin = 'user', probability = NULL",
             params![bookmark.0, folder.0],
         )?;
+        Recorder::user(&tx)?.folder_link(bookmark.0, folder.0)?;
         tx.commit()?;
         Ok(())
     }
@@ -109,6 +121,7 @@ impl Store {
             "INSERT OR IGNORE INTO folder_exclusions VALUES (?1, ?2)",
             params![bookmark.0, folder.0],
         )?;
+        Recorder::user(&tx)?.folder_link(bookmark.0, folder.0)?;
         search::reindex(&tx, bookmark.0)?;
         tx.commit()?;
         Ok(())
@@ -118,11 +131,12 @@ impl Store {
     /// workspaces. Never removes a link.
     pub(crate) fn add_ai_folders(
         tx: &rusqlite::Transaction<'_>,
+        recorder: &Recorder<'_>,
         bookmark: BookmarkId,
         folders: &[(FolderId, f32)],
     ) -> Result<()> {
         for (folder, probability) in folders {
-            tx.execute(
+            let added = tx.execute(
                 "INSERT INTO bookmark_folders (bookmark_id, folder_id, origin, probability)
                  SELECT ?1, ?2, 'ai', ?3
                  WHERE EXISTS (SELECT 1 FROM folders f JOIN bookmarks b ON b.workspace_id = f.workspace_id
@@ -131,6 +145,9 @@ impl Store {
                  ON CONFLICT DO NOTHING",
                 params![bookmark.0, folder.0, probability],
             )?;
+            if added > 0 {
+                recorder.folder_link(bookmark.0, folder.0)?;
+            }
         }
         Ok(())
     }

@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use knoa_core::{NewBookmark, WorkspaceId, site_of};
 use rusqlite::{OptionalExtension as _, params};
 
-use crate::{Result, Store, search, trash};
+use crate::{Result, Store, search, sync::Recorder, trash};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImportReport {
@@ -36,15 +36,17 @@ impl Store {
         new: NewBookmarks,
     ) -> Result<ImportReport> {
         let tx = self.conn.transaction()?;
+        let recorder = Recorder::user(&tx)?;
         let mut report = ImportReport::default();
         let mut seen = HashSet::new();
         for bookmark in bookmarks {
             if !seen.insert(bookmark.url.as_str()) {
                 continue;
             }
-            match upsert(&tx, workspace, source, bookmark, new)? {
+            match upsert(&tx, &recorder, workspace, source, bookmark, new)? {
                 Upserted::Added(id) => {
                     report.added += 1;
+                    recorder.created_bookmark(id)?;
                     search::reindex(&tx, id)?;
                 }
                 Upserted::Updated(id) => search::reindex(&tx, id)?,
@@ -92,13 +94,14 @@ struct Stored {
 
 fn upsert(
     tx: &rusqlite::Transaction<'_>,
+    recorder: &Recorder<'_>,
     workspace: WorkspaceId,
     source: &str,
     bookmark: &NewBookmark,
     new: NewBookmarks,
 ) -> Result<Upserted> {
     if let Some(stored) = stored(tx, workspace, &bookmark.url)? {
-        return update(tx, &stored, source, bookmark);
+        return recorder.on_bookmark(stored.id, || update(tx, &stored, source, bookmark));
     }
     let guid = bookmark.browser_guid.as_deref();
     if let Some((old_source, old_guid)) = trash::deleted_url(tx, workspace, &bookmark.url)? {
