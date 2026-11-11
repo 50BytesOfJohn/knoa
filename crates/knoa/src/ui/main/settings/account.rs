@@ -191,12 +191,13 @@ impl AccountPage {
 
 fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
     let (usage, limits) = (account.usage, account.limits);
-    let mut about = format!("{} of {} bookmarks", usage.bookmarks, limits.bookmarks);
-    if account.plan == Plan::Pro {
-        about.push_str(&format!(
-            ", {} of {} organized this month",
+    let bookmarks = format!("{} of {} bookmarks", usage.bookmarks, limits.bookmarks);
+    let about = match account.plan {
+        Plan::Free => bookmarks,
+        Plan::Pro => format!(
+            "{bookmarks}, {} of {} organized this month",
             usage.organized_this_month, limits.organized_per_month
-        ));
-    }
+        ),
+    };
     form::row("Usage", Some(&about), gpui::Empty, theme)
 }

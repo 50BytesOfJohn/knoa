@@ -27,6 +27,7 @@ impl MainView {
         organizing: usize,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
+        let sync_mark = self.sync_mark(cx);
         let theme = Theme::get(cx);
         let status = self.organizer.read(cx).status().clone();
         let mood = Mood::of(&status, organizing);
@@ -66,7 +67,7 @@ impl MainView {
                 s.child(div().text_xs().text_color(color).child(label))
             })
             .child(div().flex_1())
-            .children(self.sync_mark(cx))
+            .children(sync_mark)
             .child(
                 div()
                     .id("settings")
@@ -87,7 +88,7 @@ impl MainView {
 
 impl MainView {
     /// A quiet cloud while all is well, so a sync problem is noticed without a banner.
-    fn sync_mark(&self, cx: &mut Context<'_, MainView>) -> Option<impl IntoElement> {
+    fn sync_mark(&self, cx: &mut Context<'_, MainView>) -> Option<gpui::AnyElement> {
         let theme = Theme::get(cx);
         let cloud = Cloud::entity(cx);
         let cloud = cloud.read(cx);
@@ -122,7 +123,8 @@ impl MainView {
                 .tooltip(tip(tooltip, None, theme))
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.show_settings(Page::Account, window, cx);
-                })),
+                }))
+                .into_any_element(),
         )
     }
 }

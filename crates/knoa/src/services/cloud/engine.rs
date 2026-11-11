@@ -21,11 +21,11 @@ use crate::{
 };
 
 /// A pull now and then, in case the socket missed a change.
-const BACKSTOP: Duration = Duration::from_secs(5 * 60);
+const BACKSTOP: Duration = Duration::from_mins(5);
 /// Local changes come in bursts (typing tags, an import); push them together.
 const DEBOUNCE: Duration = Duration::from_secs(1);
 const MIN_RETRY: Duration = Duration::from_secs(15);
-const MAX_RETRY: Duration = Duration::from_secs(5 * 60);
+const MAX_RETRY: Duration = Duration::from_mins(5);
 
 /// Why a round stopped early.
 pub(super) enum Failure {

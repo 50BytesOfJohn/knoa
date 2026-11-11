@@ -50,7 +50,7 @@ pub struct Cloud {
 pub enum Phase {
     SignedOut,
     /// Waiting for the browser. Dropping the task stops listening for it.
-    SigningIn(Task<()>),
+    SigningIn(#[expect(dead_code, reason = "held so the sign-in runs until dropped")] Task<()>),
     /// Signed in, but this library is linked to another account. Nothing syncs until the
     /// user decides.
     OtherAccount(Connection),
