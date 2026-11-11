@@ -98,7 +98,7 @@ impl MainView {
         let (name, color, tooltip) = if matches!(cloud.phase(), Phase::OtherAccount(_)) {
             ("cloud-alert", theme.danger, "Sync is waiting for you")
         } else if cloud.notice().is_some() {
-            ("cloud-alert", theme.danger, "Not everything could sync")
+            ("cloud-alert", theme.danger, "Your plan's limit is reached")
         } else {
             match cloud.sync() {
                 SyncStatus::Starting | SyncStatus::Syncing(_) => {

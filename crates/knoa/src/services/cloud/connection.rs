@@ -29,13 +29,21 @@ impl Cloud {
         }
         let read = Credentials::read(config.credential_url(), cx);
         cx.spawn(async move |this, cx| {
-            let token = read.await.unwrap_or_else(|err| {
-                tracing::error!("can't read the cloud sign-in: {err:#}");
-                None
-            });
-            let _ = this.update(cx, |this, cx| match token {
-                Some(token) => this.connect(token, None, cached, cx),
-                None => this.forget_account(cx),
+            let read = read.await;
+            let _ = this.update(cx, |this, cx| match read {
+                Ok(Some(token)) => this.connect(token, None, cached, cx),
+                Ok(None) => {
+                    this.forget_account(cx);
+                    if scripted_sign_in() {
+                        this.sign_in(cx);
+                    }
+                }
+                // Signed out for this launch only: a Keychain that didn't answer is no
+                // reason to delete the sign-in it holds.
+                Err(err) => {
+                    tracing::error!("can't read the cloud sign-in: {err:#}");
+                    set_cloud_organizes(false, cx);
+                }
             });
         })
         .detach();
@@ -108,11 +116,19 @@ impl Cloud {
         .detach();
     }
 
-    /// The sync loop found the library linked to another account.
-    pub(super) fn found_other_account(&mut self, cx: &mut Context<'_, Cloud>) {
+    /// The sync loop found the library linked to another account than `account`, which
+    /// the Account page names while the user decides.
+    pub(super) fn found_other_account(
+        &mut self,
+        account: knoa_core::protocol::Account,
+        cx: &mut Context<'_, Cloud>,
+    ) {
         let phase = std::mem::replace(&mut self.phase, Phase::SignedOut);
         self.phase = match phase {
-            Phase::SignedIn(connection) => Phase::OtherAccount(connection),
+            Phase::SignedIn(mut connection) => {
+                connection.account = Some(account);
+                Phase::OtherAccount(connection)
+            }
             other => other,
         };
         set_cloud_organizes(false, cx);
@@ -203,7 +219,7 @@ impl Cloud {
         self.session_events = None;
         self.sync = SyncStatus::Starting;
         self.last_synced = None;
-        self.notice = None;
+        self.quota_notice = None;
     }
 }
 
@@ -217,7 +233,9 @@ async fn wait_for_browser(
     if cfg!(debug_assertions) {
         tracing::info!("sign-in page: {url}");
     }
-    cx.update(|cx| cx.open_url(&url));
+    if !scripted_sign_in() {
+        cx.update(|cx| cx.open_url(&url));
+    }
     let finish = cx.update(|cx| Network::spawn(cx, async move { sign_in.finish(&http).await }));
     // Dropped with the sign-in task on Cancel: stop listening for the browser too.
     let abort = AbortOnDrop(finish.abort_handle());
@@ -227,6 +245,13 @@ async fn wait_for_browser(
     };
     drop(abort);
     tokens
+}
+
+/// Debug builds only: `KNOA_SCRIPTED_SIGN_IN=1` starts signing in at launch and leaves
+/// opening the logged page to whoever runs the test, so sign-in can be checked end to end
+/// without clicking through the app or the default browser.
+fn scripted_sign_in() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("KNOA_SCRIPTED_SIGN_IN").is_some()
 }
 
 struct AbortOnDrop(tokio::task::AbortHandle);

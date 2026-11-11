@@ -36,9 +36,8 @@ pub struct Cloud {
     phase: Phase,
     sync: SyncStatus,
     last_synced: Option<jiff::Timestamp>,
-    /// Something the user should know that isn't an error of the sync itself, like the
-    /// plan's limit refusing new bookmarks.
-    notice: Option<String>,
+    /// The plan's bookmark limit refused changes in the last push.
+    quota_notice: Option<String>,
     /// Why the last sign-in didn't work, until the next one starts.
     problem: Option<String>,
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
@@ -92,6 +91,9 @@ pub enum SyncStatus {
     Error(String),
 }
 
+const ALLOWANCE_USED_UP: &str =
+    "This month's organizing allowance is used up. New bookmarks wait until next month.";
+
 struct CloudGlobal(Entity<Cloud>);
 
 impl Global for CloudGlobal {}
@@ -115,7 +117,7 @@ impl Cloud {
                 phase: Phase::SignedOut,
                 sync: SyncStatus::Starting,
                 last_synced: None,
-                notice: None,
+                quota_notice: None,
                 problem: None,
                 session_events: None,
                 _library_changes: changes,
@@ -157,8 +159,21 @@ impl Cloud {
         self.last_synced
     }
 
+    /// Something the user should know that isn't an error of the sync itself: the plan's
+    /// limits holding back changes or organizing.
     pub fn notice(&self) -> Option<&str> {
-        self.notice.as_deref()
+        self.quota_notice
+            .as_deref()
+            .or_else(|| self.allowance_used_up().then_some(ALLOWANCE_USED_UP))
+    }
+
+    /// Read from the account rather than remembered, so it goes away by itself with the
+    /// next month or an upgrade.
+    fn allowance_used_up(&self) -> bool {
+        self.account().is_some_and(|account| {
+            account.organizer == Who::Cloud
+                && account.usage.organized_this_month >= account.limits.organized_per_month
+        })
     }
 
     pub fn problem(&self) -> Option<&str> {
@@ -171,15 +186,19 @@ impl Cloud {
         }
     }
 
-    /// The server said who the account is and what it has.
+    /// The server said who the account is and what it has. Asked on every pull, so this
+    /// only writes and redraws when something changed.
     fn set_account(&mut self, account: Account, cx: &mut Context<'_, Cloud>) {
-        let cloud_organizes = account.organizer == Who::Cloud;
-        SettingsFile::update(cx, |s| s.account = Some(account.clone()));
-        if let Phase::SignedIn(connection) | Phase::OtherAccount(connection) = &mut self.phase {
-            connection.account = Some(account);
+        set_cloud_organizes(account.organizer == Who::Cloud, cx);
+        if SettingsFile::get(cx).account.as_ref() != Some(&account) {
+            SettingsFile::update(cx, |s| s.account = Some(account.clone()));
         }
-        set_cloud_organizes(cloud_organizes, cx);
-        cx.notify();
+        if let Phase::SignedIn(connection) | Phase::OtherAccount(connection) = &mut self.phase
+            && connection.account.as_ref() != Some(&account)
+        {
+            connection.account = Some(account);
+            cx.notify();
+        }
     }
 
     fn set_sync(&mut self, sync: SyncStatus, cx: &mut Context<'_, Cloud>) {
@@ -192,9 +211,9 @@ impl Cloud {
         }
     }
 
-    fn set_notice(&mut self, notice: String, cx: &mut Context<'_, Cloud>) {
-        if self.notice.as_ref() != Some(&notice) {
-            self.notice = Some(notice);
+    fn set_quota_notice(&mut self, notice: Option<String>, cx: &mut Context<'_, Cloud>) {
+        if self.quota_notice != notice {
+            self.quota_notice = notice;
             cx.notify();
         }
     }

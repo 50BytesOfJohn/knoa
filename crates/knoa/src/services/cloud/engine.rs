@@ -55,11 +55,15 @@ struct Wanted {
 }
 
 impl Wanted {
+    /// A pull also asks for the account again, which keeps usage on the Account page
+    /// current and notices a plan's allowance running out.
     fn add(&mut self, wake: Wake) {
         match wake {
             Wake::Push => {}
-            Wake::Pull => self.pull = true,
-            Wake::Account => self.account = true,
+            Wake::Pull | Wake::Account => {
+                self.pull = true;
+                self.account = true;
+            }
         }
     }
 }
@@ -105,8 +109,10 @@ pub(super) async fn run(
                 wanted = Wanted::default();
                 SyncStatus::UpToDate
             }
-            Ok(Round::OtherAccount) => {
-                let _ = engine.this.update(cx, Cloud::found_other_account);
+            Ok(Round::OtherAccount(account)) => {
+                let _ = engine
+                    .this
+                    .update(cx, |this, cx| this.found_other_account(account, cx));
                 return;
             }
             Err(Failure::Stopped | Failure::Sync(knoa_sync::Error::SignedOut)) => return,
@@ -144,7 +150,7 @@ async fn wait(
             Some(woken) => wanted.add(woken),
             None => return false,
         },
-        () = cx.background_executor().timer(timeout).fuse() => wanted.pull = true,
+        () = cx.background_executor().timer(timeout).fuse() => wanted.add(Wake::Pull),
     }
     cx.background_executor().timer(DEBOUNCE).await;
     while let Ok(woken) = wake.try_recv() {
@@ -173,7 +179,8 @@ fn status_of(failure: &Failure) -> SyncStatus {
 
 enum Round {
     Done,
-    OtherAccount,
+    /// The library is linked to another account than this one.
+    OtherAccount(Account),
 }
 
 impl Engine {
@@ -186,7 +193,7 @@ impl Engine {
         if wanted.account || self.account.is_none() {
             let account = self.fetch_account(cx).await?;
             if link::ensure(self, &account, cx).await? == link::Linked::OtherAccount {
-                return Ok(Round::OtherAccount);
+                return Ok(Round::OtherAccount(account));
             }
             self.this
                 .update(cx, |this, cx| this.set_account(account.clone(), cx))
@@ -208,11 +215,14 @@ impl Engine {
         Ok(Round::Done)
     }
 
-    /// `/v1/me`, with the email from Clerk when the API doesn't know it yet.
+    /// `/v1/me`, with the email from Clerk when the API doesn't know it yet. Asked once
+    /// per connection, though the account is fetched on every pull.
     async fn fetch_account(&self, cx: &AsyncApp) -> Result<Account, Failure> {
         let api = self.api.clone();
+        let known_email = self.account.as_ref().and_then(|a| a.email.clone());
         net(cx, async move {
             let mut account = api.me().await?;
+            account.email = account.email.or(known_email);
             if account.email.is_none() {
                 let session = api.session();
                 let token = session.access_token().await?;
@@ -244,9 +254,7 @@ impl Engine {
                     }
                 }
             }
-            if quota > 0 {
-                self.quota_reached(quota, cx)?;
-            }
+            self.quota_refused(quota, cx)?;
             // Every answer is final, whatever it says.
             let mids: Vec<String> = response.results.into_iter().map(|r| r.mid).collect();
             self.store(cx, move |store| store.acknowledge(&mids))
@@ -254,14 +262,20 @@ impl Engine {
         }
     }
 
-    fn quota_reached(&self, refused: usize, cx: &mut AsyncApp) -> Result<(), Failure> {
-        let limit = self.account.as_ref().map_or(0, |a| a.limits.bookmarks);
-        let notice = format!(
-            "Your plan holds {limit} bookmarks, so {refused} changes stayed on this Mac. Upgrade to sync them."
-        );
-        tracing::warn!("{notice}");
+    /// Says how many new bookmarks the plan's limit kept off the server, or clears that
+    /// once a push gets through without any.
+    fn quota_refused(&self, refused: usize, cx: &mut AsyncApp) -> Result<(), Failure> {
+        let notice = (refused > 0).then(|| {
+            let limit = self.account.as_ref().map_or(0, |a| a.limits.bookmarks);
+            format!(
+                "Your plan holds {limit} bookmarks, so {refused} new bookmarks stayed on this Mac only."
+            )
+        });
+        if let Some(notice) = &notice {
+            tracing::warn!("{notice}");
+        }
         self.this
-            .update(cx, |this, cx| this.set_notice(notice, cx))
+            .update(cx, |this, cx| this.set_quota_notice(notice, cx))
             .map_err(|_| Failure::Stopped)
     }
 
@@ -305,13 +319,6 @@ impl Engine {
             folders_only,
             "organizing in the cloud"
         );
-        if (response.queued as usize) < bookmarks.len() && !folders_only {
-            let notice =
-                "This month's organizing allowance is used up. The rest waits until next month.";
-            self.this
-                .update(cx, |this, cx| this.set_notice(notice.into(), cx))
-                .map_err(|_| Failure::Stopped)?;
-        }
         self.store(cx, move |store| store.hand_to_cloud(&bookmarks))
             .await
     }

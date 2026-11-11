@@ -191,13 +191,31 @@ impl AccountPage {
 
 fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
     let (usage, limits) = (account.usage, account.limits);
-    let bookmarks = format!("{} of {} bookmarks", usage.bookmarks, limits.bookmarks);
+    let bookmarks = format!(
+        "{} of {} bookmarks",
+        grouped(usage.bookmarks),
+        grouped(limits.bookmarks)
+    );
     let about = match account.plan {
         Plan::Free => bookmarks,
         Plan::Pro => format!(
             "{bookmarks}, {} of {} organized this month",
-            usage.organized_this_month, limits.organized_per_month
+            grouped(usage.organized_this_month),
+            grouped(limits.organized_per_month)
         ),
     };
     form::row("Usage", Some(&about), gpui::Empty, theme)
+}
+
+/// `100000` as `100,000`.
+fn grouped(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, digit) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
 }
