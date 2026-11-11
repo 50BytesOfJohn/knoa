@@ -1,6 +1,7 @@
 //! Knoa: an intelligent, AI-organized bookmark library for the desktop.
 
 mod app;
+mod assets;
 mod menus;
 mod paths;
 mod services;
@@ -13,7 +14,7 @@ fn main() {
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting Knoa");
 
     gpui_platform::application()
-        .with_assets(gpui_kit_assets::AllAssets)
+        .with_assets(assets::Assets)
         .run(|cx| {
             if let Err(err) = app::init(cx) {
                 startup_error::report(&err, cx);

@@ -18,7 +18,7 @@ pub use bookmark::{
 };
 pub use enrichment::{Enrichment, Page};
 pub use field::{FieldDef, FieldType, Fields, format_duration};
-pub use folder::{Folder, FolderColor, FolderId, FolderLink};
+pub use folder::{Folder, FolderColor, FolderIcon, FolderId, FolderLink, Hue, Ink};
 pub use kind::{Kind, KindDef};
 pub use query::{Comparison, FieldFilter, Place, Query};
 pub use tag::{

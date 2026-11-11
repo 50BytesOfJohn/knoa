@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
+use knoa_core::Ink;
 use knoa_store::Store;
 use serde::{Deserialize, Serialize};
 
@@ -112,7 +113,7 @@ pub fn adopt_legacy(store: &mut Store, cx: &mut App) -> knoa_store::Result<()> {
     if let Some(mut workspace) = store.workspaces()?.into_iter().next() {
         if let Some(old) = legacy.workspace {
             workspace.name = old.name;
-            workspace.color = old.color;
+            workspace.color = old_palette_ink(old.color);
         }
         workspace.browsers = legacy.browsers;
         workspace.instructions = legacy.instructions;
@@ -124,6 +125,13 @@ pub fn adopt_legacy(store: &mut Store, cx: &mut App) -> knoa_store::Result<()> {
     }
     SettingsFile::update(cx, |s| s.legacy = Legacy::default());
     Ok(())
+}
+
+/// The ink nearest a color from the palette of eight these settings were saved with, the
+/// same mapping the database's migration to twelve inks applies.
+fn old_palette_ink(slot: u8) -> Ink {
+    let slot = usize::from(slot % 8);
+    Ink::nth(if slot < 3 { slot } else { slot + 1 })
 }
 
 /// Writes to a temporary file and renames it, so a crash never leaves half a file.

@@ -208,6 +208,18 @@ CREATE TABLE workspace_tags (
 -- The AI may add only listed tags.
 ALTER TABLE workspaces ADD COLUMN only_listed_tags INTEGER NOT NULL DEFAULT 0;
 ",
+    r"
+-- A hue of the user's own, in degrees; NULL for one of the theme's inks in `color`.
+ALTER TABLE folders ADD COLUMN hue INTEGER;
+-- A glyph shown instead of the folder shape, by name; NULL for the shape.
+ALTER TABLE folders ADD COLUMN icon TEXT;
+
+-- The palette grew from 8 colors to 12 inks, with Pine new at index 3. The old slots
+-- become the inks nearest them: those before Pine keep their index, the rest move up one.
+-- Old indexes were read modulo 8.
+UPDATE folders SET color = CASE WHEN color % 8 < 3 THEN color % 8 ELSE color % 8 + 1 END;
+UPDATE workspaces SET color = CASE WHEN color % 8 < 3 THEN color % 8 ELSE color % 8 + 1 END;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -236,6 +248,8 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use knoa_core::Ink;
+
     use super::*;
 
     #[test]
@@ -261,6 +275,35 @@ mod tests {
         assert_eq!(count("SELECT count(*) FROM bookmark_folders"), 1);
         assert_eq!(count("SELECT count(*) FROM bookmark_tags"), 1);
         assert_eq!(count("SELECT count(*) FROM jobs"), 1);
+    }
+
+    #[test]
+    fn folders_and_workspaces_keep_their_color_in_the_larger_palette() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        // The schema just before the palette grew.
+        let before = 7;
+        for sql in &MIGRATIONS[..before] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", before).unwrap();
+        // Old slot 6 is Violet now. 12 was read as slot 12 % 8 = 4, which is Sky now.
+        conn.execute_batch(
+            "UPDATE workspaces SET color = 6 WHERE id = 1;
+             INSERT INTO folders (id, name, position, color) VALUES (3, 'Reading', 1, 12);",
+        )
+        .unwrap();
+
+        migrate(&mut conn).unwrap();
+
+        let color = |sql: &str| -> usize { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(
+            color("SELECT color FROM workspaces WHERE id = 1"),
+            Ink::Violet.index()
+        );
+        assert_eq!(
+            color("SELECT color FROM folders WHERE id = 3"),
+            Ink::Sky.index()
+        );
     }
 
     #[test]

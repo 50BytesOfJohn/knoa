@@ -7,22 +7,24 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 use gpui_component::tooltip::Tooltip;
-use knoa_core::Place;
+use knoa_core::{FolderIcon, Ink, Place};
 
 mod footer;
 
 use super::{MainView, NewLink, Overlay};
 use crate::ui::{
-    components::{icon, workspace_mark},
+    components::{Finish, folder_mark, icon, workspace_mark},
     mascot::ai_mark,
     theme::{MARGIN, PANEL_RADIUS, ROW_HEIGHT, ROW_RADIUS, SIDEBAR_WIDTH, Theme},
 };
 
-/// What leads a place's row: a Lucide icon, or the AI's dot for places about the AI.
+/// What leads a place's row: a Lucide icon, the AI's dot for places about the AI, or a
+/// folder's own mark.
 #[derive(Clone, Copy)]
 enum PlaceMark {
     Icon(&'static str),
     Ai,
+    Folder(Option<FolderIcon>),
 }
 
 /// The sidebar's top row, shared with the traffic lights.
@@ -92,12 +94,12 @@ impl MainView {
         let mut folder_list = div().flex().flex_col().gap_0p5().px(ROW_INSET);
         for (index, folder) in folders.iter().enumerate() {
             let shortcut = (index < 9).then(|| format!("⌘{}", index + 1));
-            let color = theme.folder_color(folder.color.0);
+            let color = theme.folder_color(folder.color);
             let row = self.place_row(
                 Place::Folder(folder.id),
                 current,
                 &folder.name,
-                PlaceMark::Icon("folder"),
+                PlaceMark::Folder(folder.icon),
                 folder.count,
                 Some((color, shortcut)),
                 cx,
@@ -240,7 +242,7 @@ impl MainView {
     fn workspace_button(
         &self,
         name: &str,
-        color: u8,
+        color: Ink,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
@@ -329,6 +331,14 @@ impl MainView {
             .child(match mark {
                 PlaceMark::Icon(name) => icon(name, px(15.), icon_color).into_any_element(),
                 PlaceMark::Ai => ai_mark(px(15.), theme.ai).into_any_element(),
+                PlaceMark::Folder(glyph) => {
+                    let finish = if selected {
+                        Finish::Tinted
+                    } else {
+                        Finish::Line
+                    };
+                    folder_mark(glyph, icon_color, px(15.), finish).into_any_element()
+                }
             })
             .child(div().flex_1().truncate().child(label.to_owned()))
             .when_some(folder.and_then(|(_, key)| key), |s, key| {

@@ -1,15 +1,19 @@
-//! Creating and editing a folder: name, what belongs in it, auto-assign and colour.
+//! Creating and editing a folder: name, what belongs in it, auto-assign, icon and colour.
+
+mod color_picker;
+mod icon_picker;
 
 use gpui::{
-    AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window,
-    div, prelude::FluentBuilder as _, px,
+    AppContext as _, Context, Entity, FontWeight, IntoElement, ParentElement as _, Render,
+    StatefulInteractiveElement as _, Styled as _, Subscription, WeakEntity, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use gpui_component::{
     input::{Input, InputState, Textarea, TextareaState},
+    slider::SliderState,
     switch::Switch,
 };
-use knoa_core::{Folder, FolderColor, FolderId};
+use knoa_core::{Folder, FolderColor, FolderIcon, FolderId, Ink};
 
 use super::MainView;
 use crate::{
@@ -25,9 +29,13 @@ pub struct FolderEditor {
     name: Entity<InputState>,
     description: Entity<TextareaState>,
     auto_assign: bool,
-    color: u8,
+    color: FolderColor,
+    icon: Option<FolderIcon>,
+    /// The custom hue, kept while an ink is picked so going back to it restores it.
+    hue: Entity<SliderState>,
     library: Entity<Library>,
     main: WeakEntity<MainView>,
+    _hue_changes: Subscription,
 }
 
 impl FolderEditor {
@@ -52,10 +60,15 @@ impl FolderEditor {
             });
         }
         name.update(cx, |input, cx| input.focus(window, cx));
-        let next_color = library.read(cx).folders().len() as u8;
+        let next_ink = FolderColor::Ink(Ink::nth(library.read(cx).folders().len()));
+        let color = existing.as_ref().map_or(next_ink, |f| f.color);
+        let hue = color_picker::hue_state(color, cx);
         FolderEditor {
             auto_assign: existing.as_ref().is_none_or(|f| f.auto_assign),
-            color: existing.as_ref().map_or(next_color % 8, |f| f.color.0),
+            color,
+            icon: existing.as_ref().and_then(|f| f.icon),
+            _hue_changes: color_picker::follow_hue(&hue, cx),
+            hue,
             existing,
             name,
             description,
@@ -70,7 +83,7 @@ impl FolderEditor {
             return;
         }
         let description = self.description.read(cx).value().trim().to_owned();
-        let (color, auto_assign) = (FolderColor(self.color), self.auto_assign);
+        let (color, icon, auto_assign) = (self.color, self.icon, self.auto_assign);
         match &self.existing {
             Some(folder) => {
                 let folder = Folder {
@@ -78,6 +91,7 @@ impl FolderEditor {
                     description,
                     auto_assign,
                     color,
+                    icon,
                     ..folder.clone()
                 };
                 self.library.update(cx, |library, cx| {
@@ -88,7 +102,7 @@ impl FolderEditor {
                 let workspace = library.workspace_id();
                 library.change(cx, move |store| {
                     store
-                        .create_folder(workspace, &name, &description, auto_assign, color)
+                        .create_folder(workspace, &name, &description, auto_assign, color, icon)
                         .map(drop)
                 });
             }),
@@ -113,23 +127,6 @@ impl FolderEditor {
 impl Render for FolderEditor {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let mut swatches = div().flex().gap_2();
-        for index in 0..8u8 {
-            let selected = index == self.color;
-            swatches = swatches.child(
-                div()
-                    .id(("swatch", usize::from(index)))
-                    .size(px(22.))
-                    .rounded_full()
-                    .bg(theme.folder_color(index))
-                    .cursor_pointer()
-                    .when(selected, |s| s.border_2().border_color(theme.text))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.color = index;
-                        cx.notify();
-                    })),
-            );
-        }
         let title = if self.existing.is_some() {
             "Edit folder"
         } else {
@@ -178,7 +175,8 @@ impl Render for FolderEditor {
                             })),
                     ),
             )
-            .child(swatches)
+            .child(self.icon_picker(&theme, cx))
+            .child(self.color_picker(&theme, cx))
             .child(
                 div()
                     .flex()

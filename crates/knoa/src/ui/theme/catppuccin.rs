@@ -1,6 +1,9 @@
-//! Catppuccin's four flavors, from catppuccin/palette. Mauve is the accent, as in most ports.
+//! Catppuccin's four flavors, from catppuccin/palette. Mauve is the accent, as in most ports,
+//! and pink is the Rose ink.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, below, card_hover_shadow, rgb};
+use super::{
+    BRAND_RED, Theme, ai_soft, ai_text, below, card_hover_shadow, cocoa, inks, pine, rgb, slate,
+};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![
@@ -72,10 +75,16 @@ fn theme(id: &'static str, name: &'static str, f: &Flavor) -> Theme {
         code_card,
         code_text,
         danger: rgb(danger),
-        folders: [
-            f.yellow, f.green, f.teal, f.sky, f.sapphire, f.blue, f.lavender, f.mauve,
-        ]
-        .map(rgb),
+        folders: inks(
+            [
+                f.yellow, f.green, f.teal, f.sky, f.sapphire, f.blue, f.lavender, f.mauve,
+            ]
+            .map(rgb),
+            pine(rgb(f.green), rgb(f.teal), f.dark),
+            rgb(f.pink),
+            cocoa(rgb(f.yellow), f.dark),
+            slate(rgb(f.blue), f.dark),
+        ),
     }
 }
 

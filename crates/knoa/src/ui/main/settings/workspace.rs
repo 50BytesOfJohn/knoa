@@ -17,7 +17,7 @@ use gpui::{
 };
 use gpui_component::input::{InputEvent, InputState, TextareaState};
 use knoa_browser::{Browser, Profile};
-use knoa_core::{Screening, TagList, Workspace, WorkspaceId};
+use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceId};
 
 use super::{
     form,
@@ -48,7 +48,7 @@ pub struct WorkspacePage {
     guideline: Entity<TextareaState>,
     screening: bool,
     tag_list: Entity<TagListEditor>,
-    color: u8,
+    color: Ink,
     browsers: Vec<String>,
     opens_in: Option<String>,
     profiles: Vec<Profile>,
@@ -70,7 +70,7 @@ impl WorkspacePage {
         cx: &mut Context<'_, WorkspacePage>,
     ) -> WorkspacePage {
         let is_new = existing.is_none();
-        let next_color = library.read(cx).workspaces().len() as u8 % 8;
+        let next_color = Ink::nth(library.read(cx).workspaces().len());
         let workspace = existing.unwrap_or_else(|| blank_workspace(next_color));
         let name = cx.new(|cx| {
             let mut input = InputState::new(window, cx).placeholder("Work, Personal…");
@@ -298,7 +298,7 @@ fn new_reorganize(
     cx.new(|_| Reorganize::new(Scope::Workspace(id), library))
 }
 
-fn blank_workspace(color: u8) -> Workspace {
+fn blank_workspace(color: Ink) -> Workspace {
     Workspace {
         id: WorkspaceId(0),
         name: String::new(),

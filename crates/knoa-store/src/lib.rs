@@ -122,6 +122,8 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
+    use knoa_core::Ink;
+
     use super::*;
 
     #[test]
@@ -131,11 +133,11 @@ mod tests {
         let mut writer = Store::open(&path).unwrap();
         let mut reader = Store::open_read_only(&path).unwrap();
 
-        let id = writer.create_workspace("Work", 2).unwrap();
+        let id = writer.create_workspace("Work", Ink::Moss).unwrap();
         let seen = reader.workspaces().unwrap();
         assert!(seen.iter().any(|w| w.id == id && w.name == "Work"));
 
-        assert!(reader.create_workspace("Sneaky", 0).is_err());
+        assert!(reader.create_workspace("Sneaky", Ink::Ochre).is_err());
         assert_eq!(writer.workspaces().unwrap().len(), seen.len());
     }
 }

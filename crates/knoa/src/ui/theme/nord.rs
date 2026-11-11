@@ -1,8 +1,11 @@
 //! Nord, from nordtheme/nord: Polar Night for surfaces, Snow Storm for text, Frost for
 //! the accent and Aurora for the rest. Aurora's red and orange are left out, so its
-//! purple marks danger.
+//! purple marks danger and is the Rose ink. Polar Night's lightest grey is Slate.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, below, between, card_hover_shadow, mix, rgb};
+use super::{
+    BRAND_RED, Theme, ai_soft, ai_text, below, between, card_hover_shadow, cocoa, inks, mix, pine,
+    rgb,
+};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![nord()]
@@ -38,15 +41,22 @@ fn nord() -> Theme {
         code_card: below(nord0),
         code_text: nord4,
         danger: nord15,
-        folders: [
-            nord13,
-            between(nord13, nord14),
-            nord14,
-            nord7,
-            nord8,
-            nord9,
-            nord10,
-            between(nord10, nord15),
-        ],
+        folders: inks(
+            [
+                nord13,
+                between(nord13, nord14),
+                nord14,
+                nord7,
+                nord8,
+                nord9,
+                nord10,
+                between(nord10, nord15),
+            ],
+            pine(nord14, nord7, true),
+            nord15,
+            cocoa(nord13, true),
+            // nord3 itself nearly vanishes on the panel, as with `faint`.
+            mix(nord3, nord4, 0.5),
+        ),
     }
 }

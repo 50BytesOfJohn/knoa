@@ -59,7 +59,7 @@ impl MainView {
         link: Option<FolderLink>,
         theme: &Theme,
     ) -> Stateful<Div> {
-        let color = theme.folder_color(folder.color.0);
+        let color = theme.folder_color(folder.color);
         let (id, folder_id, library) = (bookmark.id, folder.id, self.library.clone());
         let by_ai = link.as_ref().is_some_and(|l| l.origin == Origin::Ai);
         let unsure = link
@@ -92,7 +92,7 @@ impl MainView {
     }
 
     fn unfiled_chip(&self, bookmark: &Bookmark, folder: &Folder, theme: &Theme) -> Stateful<Div> {
-        let color = theme.folder_color(folder.color.0);
+        let color = theme.folder_color(folder.color);
         let (id, folder_id, library) = (bookmark.id, folder.id, self.library.clone());
         let hover = theme.soft;
         pill(("folder", folder.id.0 as usize))

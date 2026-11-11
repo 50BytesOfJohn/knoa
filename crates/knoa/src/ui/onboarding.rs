@@ -12,6 +12,7 @@ use gpui::{
 use gpui_component::input::{InputState, TextareaState};
 use knoa_ai::ProviderKind;
 use knoa_browser::{Browser, Profile};
+use knoa_core::Ink;
 
 use crate::{
     services::ai,
@@ -66,7 +67,7 @@ pub struct Onboarding {
     key: Entity<InputState>,
     key_check: KeyCheck,
     name: Entity<InputState>,
-    color: u8,
+    color: Ink,
     instructions: Entity<TextareaState>,
 }
 
@@ -118,7 +119,7 @@ impl Onboarding {
             key,
             key_check: KeyCheck::Idle,
             name,
-            color: workspace.map_or(0, |w| w.color),
+            color: workspace.map_or(Ink::default(), |w| w.color),
             instructions,
         }
     }

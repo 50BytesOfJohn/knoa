@@ -5,7 +5,8 @@
 //! Besides Knoa's own themes there are ports of popular editor themes, one module per
 //! family, built from each family's published palette. Red means only the brand and the
 //! AI in every theme, so a port takes its danger and folder colors from the family's
-//! other hues.
+//! other hues. Where a family has no quiet green, brown or grey-blue for the Pine, Cocoa
+//! and Slate inks, they are its own green, yellow and blue dulled to the shade of Knoa's.
 
 mod catppuccin;
 mod dracula;
@@ -20,6 +21,7 @@ mod solarized;
 mod tokyo_night;
 
 use gpui::{App, Global, Hsla, Pixels, hsla, px};
+use knoa_core::{FolderColor, Hue, Ink};
 
 pub const DEFAULT_THEME: &str = "paper";
 
@@ -71,8 +73,10 @@ pub struct Theme {
     pub code_card: Hsla,
     pub code_text: Hsla,
     pub danger: Hsla,
-    /// No reds or oranges: a folder dot must never pass for the AI's.
-    pub folders: [Hsla; 8],
+    /// The inks, in [`Ink`] order, for folders, workspaces and site marks. No reds or
+    /// oranges: a folder must never pass for the AI's mark. A free hue takes its shade
+    /// from the inks nearest it, and [`Hue`] keeps it out of that range too.
+    pub folders: [Hsla; Ink::COUNT],
 }
 
 impl Global for Theme {}
@@ -109,8 +113,46 @@ impl Theme {
             .unwrap_or_else(knoa::paper)
     }
 
-    pub fn folder_color(&self, index: u8) -> Hsla {
-        self.folders[usize::from(index) % self.folders.len()]
+    pub fn ink(&self, ink: Ink) -> Hsla {
+        self.folders[ink.index()]
+    }
+
+    pub fn folder_color(&self, color: FolderColor) -> Hsla {
+        match color {
+            FolderColor::Ink(ink) => self.ink(ink),
+            FolderColor::Hue(hue) => self.hue(hue),
+        }
+    }
+
+    /// A hue in the shade of the vivid inks on either side of it, blended by how close
+    /// it sits to each, so a custom color matches the swatches beside it. Inks are picked
+    /// with a different lightness per hue, since equal HSL lightness doesn't look equal
+    /// across hues, so no single shade could match them all. Past the first or last ink
+    /// it takes that ink's shade.
+    pub fn hue(&self, hue: Hue) -> Hsla {
+        let hue = f32::from(hue.degrees()) / 360.;
+        let mut anchors: Vec<Hsla> = Ink::ALL
+            .into_iter()
+            .filter(|ink| !ink.is_quiet())
+            .map(|ink| self.ink(ink))
+            .collect();
+        // Ported themes' inks are mixes, not always in hue order.
+        anchors.sort_by(|a, b| a.h.total_cmp(&b.h));
+        let (below, above) = match anchors.iter().position(|ink| ink.h >= hue) {
+            Some(0) => (anchors[0], anchors[0]),
+            Some(next) => (anchors[next - 1], anchors[next]),
+            None => (anchors[anchors.len() - 1], anchors[anchors.len() - 1]),
+        };
+        // `position` found the first ink at or past `hue`, so the span is never zero
+        // unless both are the same ink.
+        let span = above.h - below.h;
+        let t = if span > 0. {
+            (hue - below.h) / span
+        } else {
+            0.
+        };
+        let blend = |from: f32, to: f32| from + (to - from) * t;
+        hsla(hue, blend(below.s, above.s), blend(below.l, above.l), 1.)
     }
 
     /// Makes `id` the current theme, here and in gpui-component.
@@ -168,13 +210,14 @@ fn mix(base: Hsla, over: Hsla, amount: f32) -> Hsla {
     base.blend(over.opacity(amount))
 }
 
-/// Halfway between two palette colors, for families with fewer than eight folder hues.
+/// Halfway between two palette colors, for families short of folder hues.
 fn between(a: Hsla, b: Hsla) -> Hsla {
     mix(a, b, 0.5)
 }
 
 /// Eight folder colors from five hues: each hue and the midpoint to the next, ending
-/// halfway to the last. For families with too few hues once red and orange are out.
+/// halfway to the last. For families with too few hues once red and orange are out. They
+/// fill every ink but Pine, Rose, Cocoa and Slate.
 fn spread(hues: [Hsla; 5]) -> [Hsla; 8] {
     std::array::from_fn(|slot| {
         let hue = hues[slot / 2];
@@ -184,6 +227,41 @@ fn spread(hues: [Hsla; 5]) -> [Hsla; 8] {
             between(hue, hues[slot / 2 + 1])
         }
     })
+}
+
+/// The inks from a family's eight folder colors, which run Ochre to Plum without Pine,
+/// and the four it picks for the rest.
+fn inks(eight: [Hsla; 8], pine: Hsla, rose: Hsla, cocoa: Hsla, slate: Hsla) -> [Hsla; Ink::COUNT] {
+    let [ochre, olive, moss, teal, sky, cobalt, violet, plum] = eight;
+    [
+        ochre, olive, moss, pine, teal, sky, cobalt, violet, plum, rose, cocoa, slate,
+    ]
+}
+
+/// Pine from a family's green and teal, for families with no quiet green. Mixing only
+/// moves between a palette's colors and none of them is this muted, so it takes their hue
+/// and Knoa's own Pine's saturation and lightness.
+fn pine(green: Hsla, teal: Hsla, dark: bool) -> Hsla {
+    let (saturation, lightness) = if dark { (0.3, 0.52) } else { (0.4, 0.31) };
+    hsla(between(green, teal).h, saturation, lightness, 1.)
+}
+
+/// Cocoa from a family's yellow, like [`pine`]. Turned a little toward red, since a
+/// family's orange, the natural brown, is kept for the AI.
+fn cocoa(yellow: Hsla, dark: bool) -> Hsla {
+    let (saturation, lightness) = if dark { (0.3, 0.6) } else { (0.31, 0.41) };
+    hsla(
+        (yellow.h - 12. / 360.).rem_euclid(1.),
+        saturation,
+        lightness,
+        1.,
+    )
+}
+
+/// Slate from a family's blue, like [`pine`].
+fn slate(blue: Hsla, dark: bool) -> Hsla {
+    let (saturation, lightness) = if dark { (0.15, 0.64) } else { (0.12, 0.43) };
+    hsla(blue.h, saturation, lightness, 1.)
 }
 
 /// The brand red's text shade, the same in every theme of a mode.
@@ -213,6 +291,8 @@ fn card_hover_shadow(dark: bool) -> Hsla {
 mod tests {
     use std::collections::HashSet;
 
+    use knoa_core::{Hue, Ink};
+
     use super::Theme;
 
     // Settings keep the theme by id, so a repeated id would quietly open the wrong theme.
@@ -221,5 +301,20 @@ mod tests {
         let themes = Theme::all();
         let ids: HashSet<_> = themes.iter().map(|t| t.id).collect();
         assert_eq!(ids.len(), themes.len());
+    }
+
+    #[test]
+    fn a_custom_hue_at_an_inks_hue_takes_that_inks_shade() {
+        let paper = Theme::by_id("paper");
+        let cobalt = paper.ink(Ink::Cobalt);
+        let custom = paper.hue(Hue::clamped(cobalt.h * 360.));
+        assert!(
+            (custom.s - cobalt.s).abs() < 0.01,
+            "{custom:?} vs {cobalt:?}"
+        );
+        assert!(
+            (custom.l - cobalt.l).abs() < 0.01,
+            "{custom:?} vs {cobalt:?}"
+        );
     }
 }

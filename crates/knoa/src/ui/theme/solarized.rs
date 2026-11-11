@@ -1,9 +1,13 @@
 //! Solarized, light and dark, from altercation/solarized. Both share one set of accents
-//! and swap the base tones, as Solarized intends. Magenta marks danger.
+//! and swap the base tones, as Solarized intends. Magenta marks danger and is the Rose
+//! ink.
 
 use gpui::Hsla;
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, below, card_hover_shadow, mix, rgb, spread};
+use super::{
+    BRAND_RED, Theme, ai_soft, ai_text, below, card_hover_shadow, cocoa, inks, mix, pine, rgb,
+    slate, spread,
+};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![light(), dark()]
@@ -47,7 +51,7 @@ fn dark() -> Theme {
         code_card: below(rgb(BASE03)),
         code_text: rgb(BASE1),
         danger: rgb(MAGENTA),
-        folders: folders(),
+        folders: folders(true),
     }
 }
 
@@ -75,11 +79,20 @@ fn light() -> Theme {
         code_card: rgb(BASE03),
         code_text: rgb(BASE1),
         danger: rgb(MAGENTA),
-        folders: folders(),
+        folders: folders(false),
     }
 }
 
-/// Yellow, green, cyan, blue and violet, with the steps between them.
-fn folders() -> [Hsla; 8] {
-    spread([0x00b5_8900, 0x0085_9900, 0x002a_a198, BLUE, 0x006c_71c4].map(rgb))
+/// Yellow, green, cyan, blue and violet, with the steps between them. The accents are
+/// shared, so only the quiet inks differ between modes.
+fn folders(dark: bool) -> [Hsla; 12] {
+    let hues = [0x00b5_8900, 0x0085_9900, 0x002a_a198, BLUE, 0x006c_71c4].map(rgb);
+    let [yellow, green, cyan, blue, _] = hues;
+    inks(
+        spread(hues),
+        pine(green, cyan, dark),
+        rgb(MAGENTA),
+        cocoa(yellow, dark),
+        slate(blue, dark),
+    )
 }

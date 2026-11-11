@@ -5,10 +5,11 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use gpui_component::input::Input;
+use knoa_core::Ink;
 
 use super::{WorkspacePage, browsers::synced_from, form};
 use crate::ui::{
-    components::{Tone, button, workspace_mark},
+    components::{Tone, button, tip, workspace_mark},
     theme::Theme,
 };
 
@@ -58,11 +59,11 @@ impl WorkspacePage {
 
     pub(super) fn identity_group(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
         let mut swatches = div().flex().gap_2();
-        for index in 0..8u8 {
-            let selected = index == self.color;
+        for ink in Ink::ALL {
+            let selected = ink == self.color;
             swatches = swatches.child(
                 div()
-                    .id(("workspace-color", usize::from(index)))
+                    .id(("workspace-color", ink.index()))
                     .size(px(22.))
                     .rounded(px(7.))
                     .border_2()
@@ -73,14 +74,10 @@ impl WorkspacePage {
                     })
                     .p(px(2.))
                     .cursor_pointer()
-                    .child(
-                        div()
-                            .size_full()
-                            .rounded(px(4.))
-                            .bg(theme.folder_color(index)),
-                    )
+                    .child(div().size_full().rounded(px(4.)).bg(theme.ink(ink)))
+                    .tooltip(tip(ink.label(), None, theme))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.color = index;
+                        this.color = ink;
                         this.changed(cx);
                     })),
             );

@@ -239,7 +239,7 @@ fn mark_removed(
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{BookmarkId, Place, Query};
+    use knoa_core::{BookmarkId, Ink, Place, Query};
 
     use super::*;
     use crate::test_support::{WORKSPACE, bookmark};
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn a_browser_feeds_each_workspace_its_own_copy() {
         let mut store = Store::open_in_memory().unwrap();
-        let work = store.create_workspace("Work", 1).unwrap();
+        let work = store.create_workspace("Work", Ink::Olive).unwrap();
         let links = [bookmark("https://a.dev/", "A", 1)];
         for workspace in [WORKSPACE, work] {
             store
