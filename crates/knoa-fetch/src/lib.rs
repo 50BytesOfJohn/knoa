@@ -1,17 +1,22 @@
 //! Fetching a bookmarked page and turning it into evidence: metadata, exact fields from
 //! structured data and site APIs, readable text and a cached preview image.
 //!
-//! Plain async code on tokio, with no GPUI dependency (ADR 0006).
+//! Plain async code on tokio, with no GPUI dependency (ADR 0006). It also builds for
+//! WebAssembly, for the cloud organizer's Worker, which keeps preview images itself.
 
 mod access;
+#[cfg(not(target_arch = "wasm32"))]
+mod cache;
 mod html;
 mod http;
 mod image;
 mod jsonld;
 mod sites;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+pub use image::Preview;
 use knoa_core::{Fields, Kind, Page};
 use serde::Serialize;
 use serde_json::Value;
@@ -28,7 +33,7 @@ pub enum Error {
 impl Error {
     /// Network trouble that may go away; worth a retry later.
     pub fn is_transient(&self) -> bool {
-        matches!(self, Error::Http(err) if err.is_timeout() || err.is_connect() || err.is_request())
+        matches!(self, Error::Http(err) if err.is_timeout() || http::is_connect(err) || err.is_request())
     }
 }
 
@@ -78,67 +83,85 @@ struct Evidence<'a> {
 
 pub struct Fetcher {
     http: http::Http,
+    #[cfg(not(target_arch = "wasm32"))]
     image_cache: PathBuf,
 }
 
+/// A fetched page and its preview image, before the image is stored anywhere.
+pub struct Fetched {
+    /// Its `image` is unset: that is where the stored preview goes.
+    pub page: Page,
+    pub preview: Option<Preview>,
+}
+
+impl From<Page> for Fetched {
+    fn from(page: Page) -> Fetched {
+        Fetched {
+            page,
+            preview: None,
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 impl Fetcher {
-    pub fn new(image_cache: PathBuf) -> Result<Fetcher, Error> {
+    pub fn new() -> Result<Fetcher, Error> {
         Ok(Fetcher {
             http: http::Http::new()?,
-            image_cache,
         })
     }
+}
 
+impl Fetcher {
     /// Fetches `url` and extracts everything Knoa can learn without the AI.
     ///
     /// Unreadable pages are not errors: they come back as title-only evidence with a note
     /// saying why, which is what the AI needs to infer the bookmark from its URL and title.
-    pub async fn fetch(&self, url: &str) -> Result<Page, Error> {
+    pub async fn fetch_with_preview(&self, url: &str) -> Result<Fetched, Error> {
         let url = Url::parse(url).map_err(|_| Error::BadUrl)?;
         if access::is_private(&url) {
-            return Ok(title_only(&url, "private network address, not fetched"));
+            return Ok(title_only(&url, "private network address, not fetched").into());
         }
         let site = sites::extract(&self.http, &url).await.unwrap_or_default();
         let response = self.http.page(&url).await?;
         if !response.status.is_success() {
             let note = format!("the site answered HTTP {}", response.status.as_u16());
-            let mut page = self.page_from_site(&url, site).await;
-            page.evidence = evidence_json(&Evidence {
+            let mut fetched = self.page_from_site(&url, site).await;
+            fetched.page.evidence = evidence_json(&Evidence {
                 note: Some(&note),
-                ..bare(&url, Quality::TitleOnly, &page.fields)
+                ..bare(&url, Quality::TitleOnly, &fetched.page.fields)
             });
-            return Ok(page);
+            return Ok(fetched);
         }
         if response.content_type.starts_with("image/") {
-            let image = image::download(&self.http, &url, &self.image_cache).await;
+            let preview = image::download(&self.http, &url).await;
             let fields = Fields::new();
             let evidence = evidence_json(&Evidence {
                 note: Some("the link is an image file"),
                 ..bare(&url, Quality::Partial, &fields)
             });
-            return Ok(Page {
-                image,
+            let page = Page {
                 kind: Some(Kind::Image),
                 evidence,
                 ..Page::default()
-            });
+            };
+            return Ok(Fetched { page, preview });
         }
         if !response.content_type.contains("html") {
             let note = format!("a {} file, no text extracted", response.content_type);
             let fields = Fields::new();
-            return Ok(Page {
+            let page = Page {
                 evidence: evidence_json(&Evidence {
                     note: Some(&note),
                     ..bare(&url, Quality::TitleOnly, &fields)
                 }),
                 ..Page::default()
-            });
+            };
+            return Ok(page.into());
         }
 
         let body = String::from_utf8_lossy(&response.body).into_owned();
-        let meta = tokio::task::spawn_blocking(move || html::parse(&body))
-            .await
-            .unwrap_or_default();
+        let meta = parse_html(body).await;
         Ok(self.page_from_html(&url, &response.url, meta, site).await)
     }
 
@@ -148,7 +171,7 @@ impl Fetcher {
         landed: &Url,
         meta: html::HtmlMeta,
         site: sites::SiteFacts,
-    ) -> Page {
+    ) -> Fetched {
         let json_ld = jsonld::compact(&meta.json_ld);
         let (mut kind, mut fields) = jsonld::structured(&json_ld).unzip();
         if site.kind.is_some() {
@@ -181,8 +204,8 @@ impl Fetcher {
             .or(meta.image)
             .filter(|_| readable)
             .and_then(|src| landed.join(&src).ok());
-        let image = match image_url {
-            Some(src) => image::download(&self.http, &src, &self.image_cache).await,
+        let preview = match image_url {
+            Some(src) => image::download(&self.http, &src).await,
             None => None,
         };
         let prompt_text: String = if readable {
@@ -203,9 +226,9 @@ impl Fetcher {
             text: &prompt_text,
             ..bare(url, quality, &fields)
         });
-        Page {
+        let page = Page {
             title: meta.title.clone().or_else(|| site.title.clone()),
-            image,
+            image: None,
             text: if readable {
                 meta.text.chars().take(SEARCH_TEXT_CHARS).collect()
             } else {
@@ -215,24 +238,40 @@ impl Fetcher {
             kind,
             fields,
             evidence,
-        }
+        };
+        Fetched { page, preview }
     }
 
     /// The page itself was refused, but a site API may still know the bookmark.
-    async fn page_from_site(&self, url: &Url, site: sites::SiteFacts) -> Page {
-        let image = match site.image.and_then(|src| url.join(&src).ok()) {
-            Some(src) => image::download(&self.http, &src, &self.image_cache).await,
+    async fn page_from_site(&self, url: &Url, site: sites::SiteFacts) -> Fetched {
+        let preview = match site.image.and_then(|src| url.join(&src).ok()) {
+            Some(src) => image::download(&self.http, &src).await,
             None => None,
         };
-        Page {
+        let page = Page {
             title: site.title,
-            image,
             description: site.description,
             kind: site.kind,
             fields: site.fields,
             ..Page::default()
-        }
+        };
+        Fetched { page, preview }
     }
+}
+
+/// Parsing a big page takes a while, so the desktop keeps it off the network threads.
+#[cfg(not(target_arch = "wasm32"))]
+async fn parse_html(body: String) -> html::HtmlMeta {
+    tokio::task::spawn_blocking(move || html::parse(&body))
+        .await
+        .unwrap_or_default()
+}
+
+/// A Worker has only the one thread.
+#[cfg(target_arch = "wasm32")]
+#[expect(clippy::unused_async, reason = "awaited like the desktop's version")]
+async fn parse_html(body: String) -> html::HtmlMeta {
+    html::parse(&body)
 }
 
 fn bare<'a>(url: &'a Url, quality: Quality, fields: &'a Fields) -> Evidence<'a> {
