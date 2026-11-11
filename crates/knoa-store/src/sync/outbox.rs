@@ -56,8 +56,12 @@ fn append(
     Ok(())
 }
 
-/// The oldest `limit` mutations, in the order they were made.
-pub(crate) fn pending(conn: &Connection, limit: usize) -> Result<Vec<Mutation>> {
+/// Room for a mutation's envelope around its data: ids, entity, op, actor, punctuation.
+const ENVELOPE_BYTES: usize = 256;
+
+/// The oldest mutations, in the order they were made: at most `limit`, and no more than
+/// about `max_bytes` of JSON, though never none while anything is waiting.
+pub(crate) fn pending(conn: &Connection, limit: usize, max_bytes: usize) -> Result<Vec<Mutation>> {
     let mut stmt = conn.prepare_cached(
         "SELECT mid, entity, key, op, actor, data FROM outbox ORDER BY seq LIMIT ?1",
     )?;
@@ -74,14 +78,20 @@ pub(crate) fn pending(conn: &Connection, limit: usize) -> Result<Vec<Mutation>> 
             data,
         ))
     })?;
-    rows.map(|row| {
+    let mut batch = Vec::new();
+    let mut bytes = ENVELOPE_BYTES;
+    for row in rows {
         let (mut mutation, data) = row?;
+        bytes += ENVELOPE_BYTES + data.as_ref().map_or(0, String::len);
+        if !batch.is_empty() && bytes > max_bytes {
+            break;
+        }
         if let Some(data) = data {
             mutation["data"] = serde_json::from_str(&data)?;
         }
-        Ok(serde_json::from_value(mutation)?)
-    })
-    .collect()
+        batch.push(serde_json::from_value(mutation)?);
+    }
+    Ok(batch)
 }
 
 pub(crate) fn acknowledge(conn: &Connection, mids: &[String]) -> Result<()> {
@@ -126,4 +136,24 @@ pub(crate) fn forget(conn: &Connection, entity: Entity, key: &str) -> Result<()>
         params![entity.slug(), key],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Store;
+
+    #[test]
+    fn a_push_stops_at_its_byte_budget_but_never_comes_out_empty() {
+        let store = Store::open_in_memory().unwrap();
+        for key in ["a", "b", "c"] {
+            let mut data = Map::new();
+            data.insert("bookmark_id".into(), Value::from(key));
+            data.insert("text".into(), Value::from("x".repeat(1000)));
+            put(&store.conn, Entity::BookmarkText, key, Origin::User, &data).unwrap();
+        }
+
+        assert_eq!(pending(&store.conn, 10, 3000).unwrap().len(), 2);
+        assert_eq!(pending(&store.conn, 10, 10).unwrap().len(), 1);
+    }
 }

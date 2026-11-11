@@ -156,7 +156,7 @@ pub(crate) mod test_support {
     /// Everything waiting to be pushed, as JSON for compact assertions.
     pub fn pushed(store: &Store) -> Vec<Value> {
         store
-            .pending(1000)
+            .next_push()
             .unwrap()
             .iter()
             .map(|mutation: &Mutation| serde_json::to_value(mutation).unwrap())

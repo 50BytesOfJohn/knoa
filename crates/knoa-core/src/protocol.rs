@@ -23,6 +23,8 @@ use uuid::Uuid;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_PUSH: usize = 500;
+/// The largest push request body, as UTF-8 JSON; a larger one is answered 413.
+pub const MAX_PUSH_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_PULL: usize = 1000;
 pub const SOCKET_PROTOCOL: &str = "knoa.v1";
 pub const SOCKET_TOKEN_PREFIX: &str = "bearer.";

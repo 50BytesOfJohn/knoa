@@ -179,7 +179,7 @@ mod tests {
     /// As if the server took everything waiting.
     fn push_all(store: &mut Store) {
         let mids: Vec<String> = store
-            .pending(100)
+            .next_push()
             .unwrap()
             .into_iter()
             .map(|m| m.mid)

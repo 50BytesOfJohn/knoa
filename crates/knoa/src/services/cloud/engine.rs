@@ -2,13 +2,13 @@
 //! the work, pull what changed, and move thumbnails. It runs after local changes, when
 //! the socket pokes, and every few minutes in case a poke was missed.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use futures::{FutureExt as _, StreamExt as _, channel::mpsc::UnboundedReceiver};
 use gpui::{AppContext as _, AsyncApp, Entity, WeakEntity};
 use knoa_core::protocol::{
-    Account, MAX_PUSH, MutationStatus, OrganizeRequest, OrganizeScope, Organizer as Who,
-    RejectReason,
+    Account, MAX_PUSH, MutationResult, MutationStatus, OrganizeRequest, OrganizeScope,
+    Organizer as Who, RejectReason,
 };
 use knoa_fetch::Fetcher;
 use knoa_store::Store;
@@ -31,6 +31,8 @@ const MAX_RETRY: Duration = Duration::from_mins(5);
 pub(super) enum Failure {
     Sync(knoa_sync::Error),
     Store(knoa_store::Error),
+    /// The server's answer to a push named none of the changes sent.
+    Unanswered,
     /// The entity is gone: the account signed out.
     Stopped,
 }
@@ -173,8 +175,16 @@ fn status_of(failure: &Failure) -> SyncStatus {
             tracing::error!("cloud sync can't use the library: {err}");
             SyncStatus::Error(err.to_string())
         }
+        Failure::Unanswered => {
+            tracing::warn!("cloud sync failed: the server answered none of the changes sent");
+            SyncStatus::Error("The server didn't take the latest changes.".into())
+        }
         Failure::Stopped => SyncStatus::Starting,
     }
+}
+
+fn is_too_large(err: &knoa_sync::Error) -> bool {
+    matches!(err, knoa_sync::Error::Server { status: 413, .. })
 }
 
 enum Round {
@@ -235,31 +245,63 @@ impl Engine {
         .await
     }
 
-    /// Sends the outbox, `MAX_PUSH` at a time, until it is empty.
+    /// Sends the outbox, a batch at a time, until it is empty.
     async fn push(&self, cx: &mut AsyncApp) -> Result<(), Failure> {
         loop {
-            let batch = self.store(cx, |store| store.pending(MAX_PUSH)).await?;
+            let batch = self.store(cx, |store| store.next_push()).await?;
             if batch.is_empty() {
                 return Ok(());
             }
             self.status(SyncStatus::Syncing(batch.len()), cx)?;
+            let sent: HashSet<String> = batch.iter().map(|m| m.mid.clone()).collect();
             let api = self.api.clone();
-            let response = net(cx, async move { api.push(batch).await }).await?;
-            let mut quota = 0;
-            for result in &response.results {
-                if result.status == MutationStatus::Rejected {
-                    match result.reason {
-                        Some(RejectReason::Quota) => quota += 1,
-                        reason => tracing::warn!(mid = result.mid, ?reason, "push rejected"),
-                    }
+            let answered = match net(cx, async move { api.push(batch).await }).await {
+                Ok(response) => self.read_answers(&sent, response.results, cx)?,
+                // Alone and still too large, the change can never get through.
+                Err(Failure::Sync(err)) if is_too_large(&err) && sent.len() == 1 => {
+                    tracing::warn!(?sent, "dropped a change too large for the server");
+                    sent.into_iter().collect()
                 }
+                Err(failure) => return Err(failure),
+            };
+            // Acknowledging nothing would send the same batch again right away, forever.
+            if answered.is_empty() {
+                return Err(Failure::Unanswered);
             }
-            self.quota_refused(quota, cx)?;
             // Every answer is final, whatever it says.
-            let mids: Vec<String> = response.results.into_iter().map(|r| r.mid).collect();
-            self.store(cx, move |store| store.acknowledge(&mids))
+            self.store(cx, move |store| store.acknowledge(&answered))
                 .await?;
         }
+    }
+
+    /// The ids of the answers that belong to `sent`, after logging the rejections and
+    /// noting the ones the plan's limit refused.
+    fn read_answers(
+        &self,
+        sent: &HashSet<String>,
+        results: Vec<MutationResult>,
+        cx: &mut AsyncApp,
+    ) -> Result<Vec<String>, Failure> {
+        let mut quota = 0;
+        let mut answered = Vec::with_capacity(results.len());
+        for result in results {
+            if !sent.contains(&result.mid) {
+                tracing::warn!(
+                    mid = result.mid,
+                    "the server answered a change it wasn't sent"
+                );
+                continue;
+            }
+            if result.status == MutationStatus::Rejected {
+                match result.reason {
+                    Some(RejectReason::Quota) => quota += 1,
+                    reason => tracing::warn!(mid = result.mid, ?reason, "push rejected"),
+                }
+            }
+            answered.push(result.mid);
+        }
+        self.quota_refused(quota, cx)?;
+        Ok(answered)
     }
 
     /// Says how many new bookmarks the plan's limit kept off the server, or clears that

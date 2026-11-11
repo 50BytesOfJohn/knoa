@@ -12,7 +12,7 @@ mod outbox;
 mod recorder;
 mod rows;
 
-use knoa_core::protocol::Mutation;
+use knoa_core::protocol::{MAX_PUSH, MAX_PUSH_BYTES, Mutation};
 use rusqlite::{Connection, OptionalExtension as _};
 
 pub use device::{CloudJob, ThumbnailDownload, ThumbnailUpload};
@@ -43,9 +43,10 @@ impl Store {
             .optional()?)
     }
 
-    /// The oldest `limit` local changes not pushed yet, in the order they were made.
-    pub fn pending(&self, limit: usize) -> Result<Vec<Mutation>> {
-        outbox::pending(&self.conn, limit)
+    /// The next push: the oldest local changes not pushed yet, in the order they were
+    /// made, at most `MAX_PUSH` of them and `MAX_PUSH_BYTES` in all.
+    pub fn next_push(&self) -> Result<Vec<Mutation>> {
+        outbox::pending(&self.conn, MAX_PUSH, MAX_PUSH_BYTES)
     }
 
     /// Drops pushed mutations. The server's answer for each is final, whether it applied,

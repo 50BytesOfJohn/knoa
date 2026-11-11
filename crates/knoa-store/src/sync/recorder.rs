@@ -548,7 +548,7 @@ mod tests {
 
     fn mids(store: &Store) -> Vec<String> {
         store
-            .pending(1000)
+            .next_push()
             .unwrap()
             .into_iter()
             .map(|m| m.mid)
