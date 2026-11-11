@@ -91,8 +91,7 @@ pub enum SyncStatus {
     Error(String),
 }
 
-const ALLOWANCE_USED_UP: &str =
-    "This month's organizing allowance is used up. New bookmarks wait until next month.";
+const ALLOWANCE_USED_UP: &str = "This month's organizing allowance is used up, so new bookmarks aren't organized. Once it renews, use Organize again on them.";
 
 struct CloudGlobal(Entity<Cloud>);
 
