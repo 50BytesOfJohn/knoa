@@ -38,6 +38,6 @@ fn every_server_answer_in_the_fixtures_round_trips() {
 }
 
 fn round_trip<T: DeserializeOwned + Serialize>(wire: &Value) {
-    let parsed: T = serde_json::from_value(wire.clone()).unwrap();
-    assert_eq!(&serde_json::to_value(&parsed).unwrap(), wire);
+    let parsed: T = serde_json::from_value(wire.clone()).expect("the Rust type reads the answer");
+    assert_eq!(&serde_json::to_value(&parsed).expect("it serializes"), wire);
 }
