@@ -172,31 +172,42 @@ impl Change {
 /// A pulled row, or its tombstone. On the wire: `{"deleted": false, "data": {..}}` or
 /// `{"deleted": true}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(try_from = "WireState<T>", into = "WireState<T>")]
+#[serde(try_from = "PulledState", into = "WireState<T>")]
 #[serde(bound(
     serialize = "T: Serialize + Clone",
-    deserialize = "T: Deserialize<'de>"
+    deserialize = "T: serde::de::DeserializeOwned"
 ))]
 pub enum RowState<T> {
     Live(T),
     Deleted,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct WireState<T> {
     deleted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<T>,
 }
 
-impl<T> TryFrom<WireState<T>> for RowState<T> {
-    type Error = &'static str;
+/// A tombstone's data is never read, so a server that sends what a deleted row was
+/// blanked to (empty strings, nulls) can't fail the whole page.
+#[derive(Deserialize)]
+struct PulledState {
+    deleted: bool,
+    #[serde(default)]
+    data: Option<serde_json::Value>,
+}
 
-    fn try_from(wire: WireState<T>) -> Result<RowState<T>, &'static str> {
-        match (wire.deleted, wire.data) {
+impl<T: serde::de::DeserializeOwned> TryFrom<PulledState> for RowState<T> {
+    type Error = String;
+
+    fn try_from(pulled: PulledState) -> Result<RowState<T>, String> {
+        match (pulled.deleted, pulled.data) {
             (true, _) => Ok(RowState::Deleted),
-            (false, Some(data)) => Ok(RowState::Live(data)),
-            (false, None) => Err("a change that isn't a deletion needs its data"),
+            (false, Some(data)) => serde_json::from_value(data)
+                .map(RowState::Live)
+                .map_err(|err| err.to_string()),
+            (false, None) => Err("a change that isn't a deletion needs its data".into()),
         }
     }
 }
@@ -315,5 +326,17 @@ mod tests {
             more: false,
         };
         round_trip(&wire, &expected);
+    }
+
+    #[test]
+    fn a_tombstone_is_read_whatever_its_data_says() {
+        let wire = json!({ "cursor": 7, "more": false, "changes": [
+            { "entity": "bookmark", "key": "b1", "version": 7, "deleted": true,
+              "data": { "url": "", "title": "", "kind": null, "fields": "{}" } },
+            { "entity": "folder", "key": "f1", "version": 6, "deleted": true, "data": null },
+        ]});
+        let pulled: PullResponse = serde_json::from_value(wire).unwrap();
+        assert_eq!(pulled.changes[0].row, Changed::Bookmark(RowState::Deleted));
+        assert_eq!(pulled.changes[1].row, Changed::Folder(RowState::Deleted));
     }
 }
