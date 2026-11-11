@@ -1,12 +1,22 @@
 //! The HTTP client: timeouts, redirects, size limits and the User-Agent fallback.
 
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
+#[cfg(not(target_arch = "wasm32"))]
+use native as platform;
+#[cfg(target_arch = "wasm32")]
+use wasm as platform;
+
 use std::time::Duration;
 
-use reqwest::{Client, StatusCode, header, redirect};
+use reqwest::{Client, StatusCode, header};
 use serde::de::DeserializeOwned;
 use url::Url;
 
-use crate::{Error, access};
+use crate::Error;
 
 /// An honest User-Agent works best: Hacker News answers 419 and Cursor 403 to a browser UA.
 const KNOA_UA: &str = concat!(
@@ -17,8 +27,11 @@ const KNOA_UA: &str = concat!(
 /// For sites that reject unknown agents.
 const BROWSER_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0 Safari/537.36";
 
+const TIMEOUT: Duration = Duration::from_secs(20);
 const PAGE_LIMIT: usize = 4 * 1024 * 1024;
 pub const IMAGE_LIMIT: usize = 8 * 1024 * 1024;
+
+pub use platform::is_connect;
 
 pub struct Http {
     knoa: Client,
@@ -34,17 +47,9 @@ pub struct Response {
 
 impl Http {
     pub fn new() -> Result<Http, Error> {
-        let build = |ua: &str| {
-            Client::builder()
-                .user_agent(ua)
-                .timeout(Duration::from_secs(20))
-                .connect_timeout(Duration::from_secs(8))
-                .redirect(redirect_policy())
-                .build()
-        };
         Ok(Http {
-            knoa: build(KNOA_UA)?,
-            browser: build(BROWSER_UA)?,
+            knoa: platform::client(KNOA_UA)?,
+            browser: platform::client(BROWSER_UA)?,
         })
     }
 
@@ -74,22 +79,8 @@ impl Http {
     }
 }
 
-/// Only the bookmarked URL is checked before fetching, so a public page could otherwise
-/// redirect Knoa to a private host and have that page stored and sent to the AI. Stopping
-/// hands back the redirect itself, which reads as an unreadable page.
-fn redirect_policy() -> redirect::Policy {
-    let limited = redirect::Policy::limited(8);
-    redirect::Policy::custom(move |attempt| {
-        if access::is_private(attempt.url()) {
-            attempt.stop()
-        } else {
-            limited.redirect(attempt)
-        }
-    })
-}
-
 async fn get(client: &Client, url: &Url, limit: usize) -> Result<Response, Error> {
-    let mut response = client.get(url.clone()).send().await?;
+    let response = client.get(url.clone()).timeout(TIMEOUT).send().await?;
     let content_type = response
         .headers()
         .get(header::CONTENT_TYPE)
@@ -98,15 +89,7 @@ async fn get(client: &Client, url: &Url, limit: usize) -> Result<Response, Error
         .to_ascii_lowercase();
     let final_url = response.url().clone();
     let status = response.status();
-    let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        body.extend_from_slice(&chunk);
-        if body.len() > limit {
-            // A huge page's start holds its metadata; the rest isn't worth the memory.
-            body.truncate(limit);
-            break;
-        }
-    }
+    let body = platform::read_body(response, limit).await?;
     Ok(Response {
         url: final_url,
         status,

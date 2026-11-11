@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# The cloud organizer builds only for WebAssembly, with its own lockfile and profile.
+exclude = ["cloud/organizer"]
 default-members = ["crates/knoa"]
 
 [workspace.package]

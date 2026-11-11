@@ -1,0 +1,38 @@
+[package]
+name = "knoa-cloud-organizer"
+description = "The cloud organizer: Knoa's fetch and AI pipeline in a Cloudflare Worker."
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+futures = "0.3"
+knoa-ai = { path = "../../crates/knoa-ai" }
+knoa-core = { path = "../../crates/knoa-core" }
+knoa-fetch = { path = "../../crates/knoa-fetch" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+worker = { version = "0.8.7", features = ["queue"] }
+
+[lints.rust]
+unsafe_code = "deny"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+unwrap_used = "warn"
+
+[profile.release]
+# Workers cap the compressed bundle (3 MB free, 10 MB paid), so build for size.
+opt-level = "z"
+lto = true
+codegen-units = 1
+# No `strip`: wasm-bindgen needs the target_features section, and wasm-opt strips after it.
+panic = "abort"

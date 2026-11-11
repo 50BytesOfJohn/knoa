@@ -4,6 +4,27 @@ use serde_json::Value;
 
 use crate::Error;
 
+/// `Send` on the desktop, where requests run on a multi-threaded runtime. Nothing in a
+/// Worker is `Send` (JavaScript promises stay on their thread), and nothing needs to be.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSend: Send {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send + ?Sized> MaybeSend for T {}
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSend {}
+#[cfg(target_arch = "wasm32")]
+impl<T: ?Sized> MaybeSend for T {}
+
+/// `Sync` on the desktop; see [`MaybeSend`].
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSync: Sync {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Sync + ?Sized> MaybeSync for T {}
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSync {}
+#[cfg(target_arch = "wasm32")]
+impl<T: ?Sized> MaybeSync for T {}
+
 #[derive(Debug, Clone)]
 pub struct Message {
     pub role: &'static str,
@@ -43,13 +64,13 @@ pub struct StructuredReply {
     pub model: String,
 }
 
-pub trait LanguageModel: Send + Sync {
+pub trait LanguageModel: MaybeSend + MaybeSync {
     /// Generates JSON matching `request.schema`. A provider may retry with a fallback model
     /// when the first answer is malformed or truncated.
     fn generate(
         &self,
         request: &StructuredRequest,
-    ) -> impl Future<Output = Result<StructuredReply, Error>> + Send;
+    ) -> impl Future<Output = Result<StructuredReply, Error>> + MaybeSend;
 }
 
 /// A yes/no question about some state, answered with a probability of "yes".
@@ -69,18 +90,18 @@ pub struct Choice {
     pub options: Vec<(String, String)>,
 }
 
-pub trait Classifier: Send + Sync {
+pub trait Classifier: MaybeSend + MaybeSync {
     /// The probability of "yes" for each question, in order.
     fn classify(
         &self,
         state: &Value,
         questions: &[Question],
-    ) -> impl Future<Output = Result<Vec<f32>, Error>> + Send;
+    ) -> impl Future<Output = Result<Vec<f32>, Error>> + MaybeSend;
 
     /// The probability of each option, in order.
     fn choose(
         &self,
         state: &Value,
         choice: &Choice,
-    ) -> impl Future<Output = Result<Vec<f32>, Error>> + Send;
+    ) -> impl Future<Output = Result<Vec<f32>, Error>> + MaybeSend;
 }

@@ -1,11 +1,5 @@
-//! Downloading preview images into the thumbnail cache.
+//! Downloading preview images and checking they are shaped like previews.
 
-use std::{
-    hash::{DefaultHasher, Hash as _, Hasher as _},
-    path::Path,
-};
-
-use knoa_core::Image;
 use url::Url;
 
 use crate::http::{Http, IMAGE_LIMIT};
@@ -20,13 +14,19 @@ const MIN_HEIGHT: usize = 90;
 /// preview. Cards crop to about 16:9, so these would be unrecognizable slivers anyway.
 const MAX_ASPECT: usize = 4;
 
-/// Downloads `url` into `cache_dir`, keyed by URL, and reads its size. `None` when it isn't
-/// a usable preview image.
-pub async fn download(http: &Http, url: &Url, cache_dir: &Path) -> Option<Image> {
-    let mut hasher = DefaultHasher::new();
-    url.as_str().hash(&mut hasher);
-    let stem = format!("{:016x}", hasher.finish());
+/// A downloaded preview image, not yet stored.
+pub struct Preview {
+    /// Where it was downloaded from.
+    pub url: Url,
+    pub width: u32,
+    pub height: u32,
+    /// `png`, `jpg`, `gif` or `webp`.
+    pub extension: &'static str,
+    pub bytes: Vec<u8>,
+}
 
+/// Downloads `url` and reads its size. `None` when it isn't a usable preview image.
+pub async fn download(http: &Http, url: &Url) -> Option<Preview> {
     let response = http
         .bytes(url, IMAGE_LIMIT)
         .await
@@ -46,16 +46,12 @@ pub async fn download(http: &Http, url: &Url, cache_dir: &Path) -> Option<Image>
         imagesize::ImageType::Webp => "webp",
         _ => return None,
     };
-    let path = cache_dir.join(format!("{stem}.{extension}"));
-    tokio::fs::create_dir_all(cache_dir).await.ok()?;
-    tokio::fs::write(&path, &response.body)
-        .await
-        .inspect_err(|err| tracing::warn!(?path, "can't cache image: {err}"))
-        .ok()?;
-    Some(Image {
-        path,
+    Some(Preview {
+        url: url.clone(),
         width: size.width as u32,
         height: size.height as u32,
+        extension,
+        bytes: response.body,
     })
 }
 
