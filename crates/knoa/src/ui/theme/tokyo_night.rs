@@ -1,8 +1,11 @@
 //! Tokyo Night and Tokyo Night Storm, from folke/tokyonight.nvim. Its Day style is left
 //! out: tokyonight computes it by inverting Night instead of publishing a palette.
-//! Danger takes the hot pink, since both reds sit next to the brand red.
+//! Danger takes the hot pink, since both reds sit next to the brand red. Rose is the hot
+//! pink softened toward magenta.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, card_hover_shadow, rgb};
+use super::{
+    BRAND_RED, Theme, ai_soft, ai_text, between, card_hover_shadow, cocoa, inks, pine, rgb, slate,
+};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![
@@ -47,16 +50,22 @@ fn theme(id: &'static str, name: &'static str, bg: u32, bg_dark: u32, bg_dark1: 
         code_card: rgb(bg_dark1),
         code_text: rgb(0x00c0_caf5),
         danger: rgb(0x00ff_007c),
-        folders: [
-            0x00e0_af68,
-            0x009e_ce6a,
-            0x0073_daca,
-            0x001a_bc9c,
-            0x007d_cfff,
-            0x007a_a2f7,
-            0x009d_7cd8,
-            0x00bb_9af7,
-        ]
-        .map(rgb),
+        folders: inks(
+            [
+                0x00e0_af68,
+                0x009e_ce6a,
+                0x0073_daca,
+                0x001a_bc9c,
+                0x007d_cfff,
+                0x007a_a2f7,
+                0x009d_7cd8,
+                0x00bb_9af7,
+            ]
+            .map(rgb),
+            pine(rgb(0x009e_ce6a), rgb(0x0073_daca), true),
+            between(rgb(0x00bb_9af7), rgb(0x00ff_007c)),
+            cocoa(rgb(0x00e0_af68), true),
+            slate(rgb(0x007a_a2f7), true),
+        ),
     }
 }

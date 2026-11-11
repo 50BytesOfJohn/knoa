@@ -1,7 +1,10 @@
 //! Gruvbox, dark and light, from morhetz/gruvbox. Aqua is the accent, purple marks
-//! danger, and folders take two shades each of yellow, green, aqua and blue.
+//! danger and is the Rose ink, and folders take two shades each of yellow, green, aqua
+//! and blue.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, card_hover_shadow, rgb};
+use gpui::Hsla;
+
+use super::{BRAND_RED, Theme, ai_soft, ai_text, card_hover_shadow, cocoa, inks, pine, rgb, slate};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![light(), dark()]
@@ -31,17 +34,20 @@ fn dark() -> Theme {
         code_card: rgb(0x001d_2021),
         code_text: rgb(0x00eb_dbb2),
         danger: rgb(0x00d3_869b),
-        folders: [
-            0x00fa_bd2f,
-            0x00d7_9921,
-            0x00b8_bb26,
-            0x0098_971a,
-            0x008e_c07c,
-            0x0068_9d6a,
-            0x0083_a598,
-            0x0045_8588,
-        ]
-        .map(rgb),
+        folders: folders(
+            [
+                0x00fa_bd2f,
+                0x00d7_9921,
+                0x00b8_bb26,
+                0x0098_971a,
+                0x008e_c07c,
+                0x0068_9d6a,
+                0x0083_a598,
+                0x0045_8588,
+            ],
+            0x00d3_869b,
+            true,
+        ),
     }
 }
 
@@ -69,16 +75,32 @@ fn light() -> Theme {
         code_card: rgb(0x0028_2828),
         code_text: rgb(0x00eb_dbb2),
         danger: rgb(0x008f_3f71),
-        folders: [
-            0x00d7_9921,
-            0x00b5_7614,
-            0x0098_971a,
-            0x0079_740e,
-            0x0068_9d6a,
-            0x0042_7b58,
-            0x0045_8588,
-            0x0007_6678,
-        ]
-        .map(rgb),
+        folders: folders(
+            [
+                0x00d7_9921,
+                0x00b5_7614,
+                0x0098_971a,
+                0x0079_740e,
+                0x0068_9d6a,
+                0x0042_7b58,
+                0x0045_8588,
+                0x0007_6678,
+            ],
+            0x008f_3f71,
+            false,
+        ),
     }
+}
+
+/// Two shades each of yellow, green, aqua and blue, then the purple.
+fn folders(shades: [u32; 8], purple: u32, dark: bool) -> [Hsla; 12] {
+    let shades = shades.map(rgb);
+    let [_, yellow, _, green, _, aqua, _, blue] = shades;
+    inks(
+        shades,
+        pine(green, aqua, dark),
+        rgb(purple),
+        cocoa(yellow, dark),
+        slate(blue, dark),
+    )
 }

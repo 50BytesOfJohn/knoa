@@ -1,6 +1,7 @@
 //! Knoa's own themes: Paper, the default, and its relatives.
 
-use gpui::{Hsla, hsla};
+use gpui::Hsla;
+use knoa_core::Ink;
 
 use super::{BRAND_RED, Theme, ai_text, card_hover_shadow, rgb};
 
@@ -32,7 +33,7 @@ pub(super) fn paper() -> Theme {
         code_text: rgb(0x00e8_ecee),
         // Wine, not red: errors must not look like the AI's mark.
         danger: rgb(0x008e_1538),
-        folders: folder_palette(false),
+        folders: palette(false),
     }
 }
 
@@ -73,7 +74,7 @@ fn night() -> Theme {
         code_card: rgb(0x000f_1215),
         code_text: rgb(0x00d8_dee2),
         danger: rgb(0x00f5_8fb8),
-        folders: folder_palette(true),
+        folders: palette(true),
     }
 }
 
@@ -92,7 +93,37 @@ fn dusk() -> Theme {
     }
 }
 
-fn folder_palette(dark: bool) -> [Hsla; 8] {
-    let lightness = if dark { 0.66 } else { 0.55 };
-    [0.12, 0.2, 0.36, 0.47, 0.57, 0.65, 0.74, 0.84].map(|hue| hsla(hue, 0.55, lightness, 1.))
+fn palette(dark: bool) -> [Hsla; Ink::COUNT] {
+    let hex = if dark {
+        [
+            0x00d9_b04c,
+            0x00a9_b45a,
+            0x007f_bf6a,
+            0x005f_a892,
+            0x004f_bdbd,
+            0x0074_b8e8,
+            0x007c_9aec,
+            0x00a8_8ae6,
+            0x00c5_83c8,
+            0x00e0_8abd,
+            0x00b8_9078,
+            0x0094_a1b2,
+        ]
+    } else {
+        [
+            0x00b8_891f,
+            0x007f_8a2a,
+            0x004f_8f3a,
+            0x002f_6d5a,
+            0x001f_8a8a,
+            0x003a_8fc9,
+            0x003f_62c4,
+            0x007a_52c0,
+            0x009a_4a9e,
+            0x00c2_589a,
+            0x008a_6248,
+            0x005f_6b7a,
+        ]
+    };
+    hex.map(rgb)
 }

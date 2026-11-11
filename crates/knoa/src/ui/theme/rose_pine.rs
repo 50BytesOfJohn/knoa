@@ -1,6 +1,8 @@
 //! Rosé Pine, Moon and Dawn, from rose-pine/neovim's palette.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, between, card_hover_shadow, rgb};
+use super::{
+    BRAND_RED, Theme, ai_soft, ai_text, between, card_hover_shadow, cocoa, inks, rgb, slate,
+};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![
@@ -66,19 +68,27 @@ fn theme(id: &'static str, name: &'static str, v: &Variant) -> Theme {
         ai_soft: ai_soft(rgb(v.surface), v.dark),
         code_card: rgb(code_card),
         code_text: rgb(code_text),
-        // Love is Rosé Pine's own error color, a pink well apart from the brand red.
+        // Love is Rosé Pine's own error color, a pink well apart from the brand red, and
+        // it is the Rose ink too.
         danger: love,
-        // Six hues without love, so the gaps get the midpoints between neighbors.
-        folders: [
-            gold,
-            between(gold, leaf),
-            leaf,
-            foam,
-            pine,
-            between(pine, iris),
-            iris,
-            between(iris, love),
-        ],
+        // Six hues with love as Rose, so the gaps get the midpoints between neighbors.
+        folders: inks(
+            [
+                gold,
+                between(gold, leaf),
+                leaf,
+                foam,
+                pine,
+                between(pine, iris),
+                iris,
+                between(iris, love),
+            ],
+            // Rosé Pine's own pine is a blue; the Pine ink is a green.
+            super::pine(leaf, foam, v.dark),
+            love,
+            cocoa(gold, v.dark),
+            slate(pine, v.dark),
+        ),
     }
 }
 

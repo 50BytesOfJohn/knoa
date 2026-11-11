@@ -1,7 +1,8 @@
 //! Kanagawa Wave and Lotus, from rebelot/kanagawa.nvim's palette. Danger takes the
-//! sakura and lotus pinks, which sit well apart from the brand red.
+//! sakura and lotus pinks, which sit well apart from the brand red and also make the
+//! Rose ink. The boat and lotus yellows are brown enough for Cocoa.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, card_hover_shadow, rgb};
+use super::{BRAND_RED, Theme, ai_soft, ai_text, card_hover_shadow, inks, pine, rgb, slate};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![lotus(), wave()]
@@ -34,17 +35,24 @@ fn wave() -> Theme {
         code_card: rgb(0x0016_161d),
         code_text: rgb(FUJI_WHITE),
         danger: rgb(0x00d2_7e99),
-        folders: [
-            0x00e6_c384,
-            0x0098_bb6c,
-            0x0076_946a,
-            0x007a_a89f,
-            0x007f_b4ca,
-            0x007e_9cd8,
-            0x0095_7fb8,
-            0x0093_8aa9,
-        ]
-        .map(rgb),
+        folders: inks(
+            [
+                0x00e6_c384,
+                0x0098_bb6c,
+                0x0076_946a,
+                0x007a_a89f,
+                0x007f_b4ca,
+                0x007e_9cd8,
+                0x0095_7fb8,
+                0x0093_8aa9,
+            ]
+            .map(rgb),
+            // Wave Aqua 1, the quieter of its aquas.
+            rgb(0x006a_9589),
+            rgb(0x00d2_7e99),
+            rgb(0x0093_8056),
+            slate(rgb(0x007e_9cd8), true),
+        ),
     }
 }
 
@@ -72,16 +80,22 @@ fn lotus() -> Theme {
         code_card: rgb(SUMI_INK_3),
         code_text: rgb(FUJI_WHITE),
         danger: rgb(0x00b3_5b79),
-        folders: [
-            0x00de_9800,
-            0x006f_894e,
-            0x006e_915f,
-            0x0059_7b75,
-            0x0066_93bf,
-            0x004d_699b,
-            0x0062_4c83,
-            0x005d_57a3,
-        ]
-        .map(rgb),
+        folders: inks(
+            [
+                0x00de_9800,
+                0x006f_894e,
+                0x006e_915f,
+                0x0059_7b75,
+                0x0066_93bf,
+                0x004d_699b,
+                0x0062_4c83,
+                0x005d_57a3,
+            ]
+            .map(rgb),
+            pine(rgb(0x006e_915f), rgb(0x0059_7b75), false),
+            rgb(0x00b3_5b79),
+            rgb(0x0083_6f4a),
+            slate(rgb(0x004d_699b), false),
+        ),
     }
 }

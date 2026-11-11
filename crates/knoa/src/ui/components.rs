@@ -3,13 +3,19 @@
 use gpui::{
     AnyElement, AnyView, App, Div, ElementId, Hsla, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Svg,
-    Window, div, px, svg,
+    Window, div, prelude::FluentBuilder as _, px, svg,
 };
 use gpui_component::tooltip::Tooltip;
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
-use knoa_core::Kind;
+use knoa_core::{FolderIcon, Ink, Kind};
 
-use crate::ui::theme::{CARD_RADIUS, Theme};
+use crate::{
+    assets::knoa_icon,
+    ui::theme::{CARD_RADIUS, Theme},
+};
+
+/// How strongly the tinted finish fills a folder shape.
+const FOLDER_TINT: f32 = 0.18;
 
 /// A Lucide icon by file name, e.g. `"bookmark"`.
 pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
@@ -23,6 +29,49 @@ pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
 /// The same icon as [`icon`], for gpui-component pieces that take an `Icon`.
 pub fn icon_asset(name: &str) -> gpui_component::Icon {
     gpui_component::Icon::empty().path(format!("icons/{name}.svg"))
+}
+
+/// How a folder's mark is drawn.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Finish {
+    Line,
+    /// The folder shape with a faint fill under its line, for the selected folder. Glyphs
+    /// stay line only.
+    Tinted,
+}
+
+/// A folder's mark: its glyph, or the folder shape when it has none.
+pub fn folder_mark(glyph: Option<FolderIcon>, color: Hsla, size: Pixels, finish: Finish) -> Div {
+    let layer = |path: SharedString, color: Hsla| {
+        svg()
+            .path(path)
+            .absolute()
+            .top_0()
+            .left_0()
+            .size(size)
+            .text_color(color)
+    };
+    let tinted = finish == Finish::Tinted && glyph.is_none();
+    div()
+        .relative()
+        .size(size)
+        .flex_none()
+        .when(tinted, |s| {
+            s.child(layer(
+                knoa_icon("folder-filled"),
+                color.opacity(FOLDER_TINT),
+            ))
+        })
+        .child(layer(folder_mark_path(glyph), color))
+}
+
+/// The line mark of [`folder_mark`], for gpui-component pieces that take an `Icon`.
+pub fn folder_mark_asset(glyph: Option<FolderIcon>) -> gpui_component::Icon {
+    gpui_component::Icon::empty().path(folder_mark_path(glyph))
+}
+
+fn folder_mark_path(glyph: Option<FolderIcon>) -> SharedString {
+    knoa_icon(glyph.map_or("folder", FolderIcon::name))
 }
 
 pub fn kind_icon(kind: Option<Kind>) -> &'static str {
@@ -122,11 +171,12 @@ pub fn site_mark(site: &str, size: Pixels, cx: &App) -> AnyElement {
         .unwrap_or('•')
         .to_ascii_uppercase();
     let hash = site.bytes().fold(0u8, u8::wrapping_add);
+    let ink = Ink::nth(usize::from(hash));
     div()
         .size(size)
         .flex_none()
         .rounded_full()
-        .bg(theme.folder_color(hash).opacity(0.85))
+        .bg(theme.ink(ink).opacity(0.85))
         .flex()
         .items_center()
         .justify_center()
@@ -169,7 +219,7 @@ pub fn blocked_browsers_notice(blocked: &[Browser], cx: &App) -> Option<Div> {
 }
 
 /// The coloured square with a workspace's initial.
-pub fn workspace_mark(name: &str, color: u8, size: Pixels, cx: &App) -> Div {
+pub fn workspace_mark(name: &str, color: Ink, size: Pixels, cx: &App) -> Div {
     let theme = Theme::get(cx);
     let initial = name
         .chars()
@@ -181,7 +231,7 @@ pub fn workspace_mark(name: &str, color: u8, size: Pixels, cx: &App) -> Div {
         .size(size)
         .flex_none()
         .rounded(size * 0.28)
-        .bg(theme.folder_color(color))
+        .bg(theme.ink(color))
         .flex()
         .items_center()
         .justify_center()

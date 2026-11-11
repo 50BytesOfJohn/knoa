@@ -1,9 +1,9 @@
 //! Workspaces, the browser profiles each one syncs, and their tag lists.
 
-use knoa_core::{Screening, TagList, Workspace, WorkspaceId};
+use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceId};
 use rusqlite::{Transaction, params};
 
-use crate::{Result, Store, tag_list};
+use crate::{Result, Store, folders::stored_ink, tag_list};
 
 impl Store {
     /// All workspaces in switcher order. There is always at least one.
@@ -19,7 +19,7 @@ impl Store {
                 Workspace {
                     id: WorkspaceId(row.get(0)?),
                     name: row.get(1)?,
-                    color: row.get(2)?,
+                    color: stored_ink(row.get(2)?),
                     browsers: Vec::new(),
                     opens_in: row.get(6)?,
                     instructions: row.get(3)?,
@@ -54,11 +54,11 @@ impl Store {
     }
 
     /// Creates a workspace that syncs nothing until the user picks browsers for it.
-    pub fn create_workspace(&mut self, name: &str, color: u8) -> Result<WorkspaceId> {
+    pub fn create_workspace(&mut self, name: &str, color: Ink) -> Result<WorkspaceId> {
         self.conn.execute(
             "INSERT INTO workspaces (name, color, position)
              VALUES (?1, ?2, (SELECT coalesce(max(position), 0) + 1 FROM workspaces))",
-            params![name, color],
+            params![name, color.index()],
         )?;
         Ok(WorkspaceId(self.conn.last_insert_rowid()))
     }
@@ -71,7 +71,7 @@ impl Store {
             params![
                 workspace.id.0,
                 workspace.name,
-                workspace.color,
+                workspace.color.index(),
                 workspace.instructions,
                 workspace.screening.enabled,
                 workspace.screening.guideline,

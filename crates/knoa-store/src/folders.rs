@@ -1,6 +1,6 @@
 //! Folders and folder membership.
 
-use knoa_core::{BookmarkId, Folder, FolderColor, FolderId, WorkspaceId};
+use knoa_core::{BookmarkId, Folder, FolderColor, FolderIcon, FolderId, Hue, Ink, WorkspaceId};
 use rusqlite::params;
 
 use crate::{Result, Store, search};
@@ -9,7 +9,7 @@ impl Store {
     /// A workspace's folders in sidebar order, with how many bookmarks each holds.
     pub fn folders(&self, workspace: WorkspaceId) -> Result<Vec<Folder>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT f.id, f.name, f.description, f.auto_assign, f.color,
+            "SELECT f.id, f.name, f.description, f.auto_assign, f.color, f.hue, f.icon,
                     (SELECT count(*) FROM bookmark_folders bf JOIN bookmarks b ON b.id = bf.bookmark_id
                      WHERE bf.folder_id = f.id AND b.deleted_at IS NULL)
              FROM folders f WHERE f.workspace_id = ?1 ORDER BY f.position",
@@ -20,8 +20,12 @@ impl Store {
                 name: row.get(1)?,
                 description: row.get(2)?,
                 auto_assign: row.get(3)?,
-                color: FolderColor(row.get(4)?),
-                count: row.get(5)?,
+                color: stored_color(row.get(4)?, row.get(5)?),
+                icon: row
+                    .get::<_, Option<String>>(6)?
+                    .as_deref()
+                    .and_then(FolderIcon::from_name),
+                count: row.get(7)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -34,19 +38,39 @@ impl Store {
         description: &str,
         auto_assign: bool,
         color: FolderColor,
+        icon: Option<FolderIcon>,
     ) -> Result<FolderId> {
+        let (ink, hue) = color_columns(color);
         self.conn.execute(
-            "INSERT INTO folders (workspace_id, name, description, auto_assign, color, position)
-             VALUES (?5, ?1, ?2, ?3, ?4, (SELECT coalesce(max(position), 0) + 1 FROM folders))",
-            params![name, description, auto_assign, color.0, workspace.0],
+            "INSERT INTO folders (workspace_id, name, description, auto_assign, color, hue, icon, position)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT coalesce(max(position), 0) + 1 FROM folders))",
+            params![
+                workspace.0,
+                name,
+                description,
+                auto_assign,
+                ink,
+                hue,
+                icon.map(FolderIcon::name),
+            ],
         )?;
         Ok(FolderId(self.conn.last_insert_rowid()))
     }
 
     pub fn update_folder(&mut self, folder: &Folder) -> Result<()> {
+        let (ink, hue) = color_columns(folder.color);
         self.conn.execute(
-            "UPDATE folders SET name = ?2, description = ?3, auto_assign = ?4, color = ?5 WHERE id = ?1",
-            params![folder.id.0, folder.name, folder.description, folder.auto_assign, folder.color.0],
+            "UPDATE folders SET name = ?2, description = ?3, auto_assign = ?4, color = ?5, hue = ?6,
+                icon = ?7 WHERE id = ?1",
+            params![
+                folder.id.0,
+                folder.name,
+                folder.description,
+                folder.auto_assign,
+                ink,
+                hue,
+                folder.icon.map(FolderIcon::name),
+            ],
         )?;
         Ok(())
     }
@@ -112,6 +136,27 @@ impl Store {
     }
 }
 
+/// An ink from its stored index. Any number names some ink, so a bad value can't hide a
+/// folder or workspace.
+pub(crate) fn stored_ink(index: i64) -> Ink {
+    Ink::nth(usize::try_from(index).unwrap_or_default())
+}
+
+/// A set `hue` wins over the ink; one outside the allowed range falls back to it.
+fn stored_color(ink: i64, hue: Option<i64>) -> FolderColor {
+    hue.and_then(|degrees| u16::try_from(degrees).ok())
+        .and_then(Hue::new)
+        .map_or(FolderColor::Ink(stored_ink(ink)), FolderColor::Hue)
+}
+
+/// The `color` and `hue` columns. A free hue leaves `color` at the first ink.
+fn color_columns(color: FolderColor) -> (usize, Option<u16>) {
+    match color {
+        FolderColor::Ink(ink) => (ink.index(), None),
+        FolderColor::Hue(hue) => (Ink::default().index(), Some(hue.degrees())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use knoa_core::{Enrichment, Kind, Query};
@@ -134,7 +179,7 @@ mod tests {
             )
             .unwrap();
         let folder = store
-            .create_folder(WORKSPACE, "Reading", "", true, FolderColor(0))
+            .create_folder(WORKSPACE, "Reading", "", true, FolderColor::default(), None)
             .unwrap();
         let job = store.take_jobs(0, 1).unwrap().remove(0);
         let enrichment = Enrichment {
@@ -161,5 +206,27 @@ mod tests {
         let saved = store.search(&Query::default(), 1).unwrap().remove(0);
         assert_eq!(saved.folders, []);
         assert_eq!(saved.tags, [("rust".to_owned(), knoa_core::Origin::Ai)]);
+    }
+
+    #[test]
+    fn a_glyph_this_version_does_not_know_reads_as_the_folder_shape() {
+        let mut store = Store::open_in_memory().unwrap();
+        let id = store
+            .create_folder(
+                WORKSPACE,
+                "Reading",
+                "",
+                true,
+                FolderColor::default(),
+                Some(FolderIcon::Read),
+            )
+            .unwrap();
+        store
+            .conn
+            .execute("UPDATE folders SET icon = 'rocket' WHERE id = ?1", [id.0])
+            .unwrap();
+
+        let folder = store.folders(WORKSPACE).unwrap().remove(0);
+        assert_eq!(folder.icon, None);
     }
 }

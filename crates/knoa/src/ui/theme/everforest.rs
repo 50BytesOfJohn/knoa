@@ -1,8 +1,10 @@
 //! Everforest, dark and light at medium contrast, from sainnhe/everforest. Its red is
-//! the brand's, so danger takes the pinkish purple, and folders have four hues and the
-//! midpoints between them.
+//! the brand's, so danger takes the pinkish purple, and folders have four hues, the
+//! midpoints between them and the purple as Rose.
 
-use super::{BRAND_RED, Theme, ai_text, card_hover_shadow, rgb, spread};
+use gpui::Hsla;
+
+use super::{BRAND_RED, Theme, ai_text, card_hover_shadow, cocoa, inks, pine, rgb, slate, spread};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![light(), dark()]
@@ -32,15 +34,15 @@ fn dark() -> Theme {
         code_card: rgb(0x001e_2326),
         code_text: rgb(0x00d3_c6aa),
         danger: rgb(0x00d6_99b6),
-        folders: spread(
+        folders: folders(
             [
                 0x00db_bc7f,
                 0x00a7_c080,
                 0x0083_c092,
                 0x007f_bbb3,
                 0x00d6_99b6,
-            ]
-            .map(rgb),
+            ],
+            true,
         ),
     }
 }
@@ -69,15 +71,28 @@ fn light() -> Theme {
         code_card: rgb(0x002d_353b),
         code_text: rgb(0x00d3_c6aa),
         danger: rgb(0x00df_69ba),
-        folders: spread(
+        folders: folders(
             [
                 0x00df_a000,
                 0x008d_a101,
                 0x0035_a77c,
                 0x003a_94c5,
                 0x00df_69ba,
-            ]
-            .map(rgb),
+            ],
+            false,
         ),
     }
+}
+
+/// Yellow, green, aqua, blue and purple.
+fn folders(hues: [u32; 5], dark: bool) -> [Hsla; 12] {
+    let hues = hues.map(rgb);
+    let [yellow, green, aqua, blue, purple] = hues;
+    inks(
+        spread(hues),
+        pine(green, aqua, dark),
+        purple,
+        cocoa(yellow, dark),
+        slate(blue, dark),
+    )
 }

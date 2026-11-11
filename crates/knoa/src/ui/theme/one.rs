@@ -1,9 +1,12 @@
 //! One Dark and One Light, from Atom's one-*-syntax and one-*-ui packages. Atom defines
 //! the UI levels as lightness steps from the syntax background; the values here are
-//! those steps worked out. Neither has a pink, so purple and crimson mark danger, and
-//! folders fill in between the remaining hues.
+//! those steps worked out. Neither has a pink, so purple and crimson mark danger and are
+//! the Rose ink, and folders fill in between the remaining hues.
 
-use super::{BRAND_RED, Theme, ai_soft, ai_text, below, card_hover_shadow, hsl, rgb, spread};
+use super::{
+    BRAND_RED, Theme, ai_soft, ai_text, below, card_hover_shadow, cocoa, hsl, inks, pine, rgb,
+    slate, spread,
+};
 
 pub(super) fn themes() -> Vec<Theme> {
     vec![light(), dark()]
@@ -34,16 +37,24 @@ fn dark() -> Theme {
         code_card: below(canvas),
         code_text: rgb(0x00ab_b2bf),
         danger: rgb(0x00c6_78dd),
-        folders: spread(
-            [
+        folders: {
+            let hues = [
                 0x00e5_c07b,
                 0x0098_c379,
                 0x0056_b6c2,
                 0x0061_afef,
                 0x00c6_78dd,
             ]
-            .map(rgb),
-        ),
+            .map(rgb);
+            let [yellow, green, cyan, blue, purple] = hues;
+            inks(
+                spread(hues),
+                pine(green, cyan, true),
+                purple,
+                cocoa(yellow, true),
+                slate(blue, true),
+            )
+        },
     }
 }
 
@@ -71,12 +82,23 @@ fn light() -> Theme {
         code_card: hsl(220., 13., 18.),
         code_text: rgb(0x00ab_b2bf),
         danger: hsl(344., 84., 43.),
-        folders: spread([
-            hsl(119., 34., 47.),
-            hsl(198., 99., 37.),
-            hsl(221., 87., 60.),
-            hsl(301., 63., 40.),
-            hsl(344., 84., 43.),
-        ]),
+        folders: {
+            let hues = [
+                hsl(119., 34., 47.),
+                hsl(198., 99., 37.),
+                hsl(221., 87., 60.),
+                hsl(301., 63., 40.),
+                hsl(344., 84., 43.),
+            ];
+            let [green, cyan, blue, _, crimson] = hues;
+            inks(
+                spread(hues),
+                pine(green, cyan, false),
+                crimson,
+                // The syntax yellow, which the folder slots skip.
+                cocoa(hsl(41., 99., 38.), false),
+                slate(blue, false),
+            )
+        },
     }
 }

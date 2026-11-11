@@ -5,6 +5,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::{Input, Textarea};
+use knoa_core::Ink;
 
 use super::{nav, title};
 use crate::ui::{
@@ -30,19 +31,17 @@ impl Onboarding {
         let theme = Theme::get(cx).clone();
         let name = self.name.read(cx).value().to_string();
         let mut swatches = div().flex().gap_2();
-        for index in 0..8u8 {
+        for ink in Ink::ALL {
             swatches = swatches.child(
                 div()
-                    .id(("color", usize::from(index)))
+                    .id(("color", ink.index()))
                     .size(px(22.))
                     .rounded(px(7.))
-                    .bg(theme.folder_color(index))
+                    .bg(theme.ink(ink))
                     .cursor_pointer()
-                    .when(index == self.color, |s| {
-                        s.border_2().border_color(theme.text)
-                    })
+                    .when(ink == self.color, |s| s.border_2().border_color(theme.text))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.color = index;
+                        this.color = ink;
                         cx.notify();
                     })),
             );

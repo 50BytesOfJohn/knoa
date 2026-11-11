@@ -21,7 +21,10 @@ use super::{
 };
 use crate::{
     services::thumbnails::{Refresh, Thumbnails},
-    ui::{components::icon_asset, theme::Theme},
+    ui::{
+        components::{folder_mark_asset, icon_asset},
+        theme::Theme,
+    },
 };
 
 /// The folder submenu's fixed width, and the least the menu takes. The submenu picks the
@@ -221,10 +224,10 @@ fn folder_items(
     folders.iter().fold(menu, |menu, (folder, filed)| {
         let (folder_id, filed) = (folder.id, *filed);
         let view = view.clone();
-        let tint = theme.folder_color(folder.color.0);
+        let tint = theme.folder_color(folder.color);
         menu.item(
             PopupMenuItem::new(shorten(&folder.name))
-                .icon(icon_asset("folder").text_color(tint))
+                .icon(folder_mark_asset(folder.icon).text_color(tint))
                 .checked(filed)
                 .on_click(move |_, _, cx| {
                     let _ = view.update(cx, |this, cx| {

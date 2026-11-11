@@ -1,13 +1,15 @@
 //! User-made, one-level folders.
 
+mod color;
+mod icon;
+
+pub use color::{FolderColor, Hue, Ink};
+pub use icon::FolderIcon;
+
 use crate::Origin;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FolderId(pub i64);
-
-/// An index into the theme's folder palette, so folder colors follow the theme.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct FolderColor(pub u8);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Folder {
@@ -18,6 +20,8 @@ pub struct Folder {
     /// Whether the AI may add new bookmarks to this folder.
     pub auto_assign: bool,
     pub color: FolderColor,
+    /// `None` shows the folder shape.
+    pub icon: Option<FolderIcon>,
     pub count: usize,
 }
 
