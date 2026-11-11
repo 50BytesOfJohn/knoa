@@ -2,9 +2,9 @@
 //! organizing queue to the cloud organizer, and moving thumbnails to and from the server.
 //! None of it is recorded in the outbox; the server learns about it its own way.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use knoa_core::BookmarkId;
+use knoa_core::{BookmarkId, Image};
 use rusqlite::params;
 
 use crate::{Result, Store};
@@ -111,12 +111,41 @@ impl Store {
         Ok(downloads.collect::<rusqlite::Result<_>>()?)
     }
 
-    /// Records the key the server stored an uploaded thumbnail under, so the cached file
-    /// counts as the server's image.
-    pub fn set_image_key(&mut self, id: BookmarkId, image_key: &str) -> Result<()> {
+    /// Caches a downloaded server thumbnail, unless a pull changed the bookmark's image
+    /// while it was on its way.
+    pub fn set_server_image(
+        &mut self,
+        id: BookmarkId,
+        image_key: &str,
+        image: &Image,
+    ) -> Result<()> {
         self.conn.execute(
-            "UPDATE bookmarks SET image_key = ?2 WHERE id = ?1",
-            params![id.0, image_key],
+            "UPDATE bookmarks SET image_path = ?3, image_width = ?4, image_height = ?5
+             WHERE id = ?1 AND image_key = ?2",
+            params![
+                id.0,
+                image_key,
+                image.path.to_string_lossy(),
+                image.width,
+                image.height
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Records the key the server stored an uploaded thumbnail under, so the cached file
+    /// counts as the server's image. A thumbnail replaced while `uploaded` was on its way
+    /// keeps no key, so it is uploaded in turn.
+    pub fn set_image_key(
+        &mut self,
+        id: BookmarkId,
+        uploaded: &Path,
+        image_key: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE bookmarks SET image_key = ?3
+             WHERE id = ?1 AND image_path = ?2 AND image_key IS NULL",
+            params![id.0, uploaded.to_string_lossy(), image_key],
         )?;
         Ok(())
     }
@@ -124,6 +153,10 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use knoa_core::Image;
+
     use crate::{Store, test_support::*};
 
     #[test]
@@ -134,7 +167,7 @@ mod tests {
         assert_eq!(store.cloud_jobs(10).unwrap().len(), 0);
 
         let mids: Vec<String> = store
-            .pending(100)
+            .next_push()
             .unwrap()
             .into_iter()
             .map(|m| m.mid)
@@ -150,6 +183,36 @@ mod tests {
         let bookmark = store.bookmark(added.id).unwrap().unwrap();
         assert_eq!(bookmark.status, knoa_core::Status::New);
         // Handing over is this Mac's business: nothing goes to the server.
-        assert_eq!(store.pending(100).unwrap().len(), 0);
+        assert_eq!(store.next_push().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn a_thumbnail_replaced_during_its_upload_is_uploaded_in_turn() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
+        let mids: Vec<String> = store
+            .next_push()
+            .unwrap()
+            .into_iter()
+            .map(|m| m.mid)
+            .collect();
+        store.acknowledge(&mids).unwrap();
+        let image = |path: &str| Image {
+            path: path.into(),
+            width: 10,
+            height: 10,
+        };
+        store.set_image(added.id, &image("/cache/old.png")).unwrap();
+        let uploading = store.thumbnail_uploads(10).unwrap().remove(0);
+
+        store.set_image(added.id, &image("/cache/new.png")).unwrap();
+        store
+            .set_image_key(added.id, &uploading.path, "key-of-old")
+            .unwrap();
+
+        let next = store.thumbnail_uploads(10).unwrap();
+        assert_eq!(next.len(), 1);
+        assert_eq!(next[0].path, PathBuf::from("/cache/new.png"));
     }
 }

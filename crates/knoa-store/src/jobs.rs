@@ -151,6 +151,7 @@ impl Store {
             "UPDATE bookmarks SET page_text = ?2, page_evidence = ?3, fetched_at = ?4,
                 image_path = coalesce(?5, image_path), image_width = coalesce(?6, image_width),
                 image_height = coalesce(?7, image_height),
+                image_key = CASE WHEN ?5 IS NULL THEN image_key END,
                 summary = CASE WHEN model IS NULL THEN coalesce(?8, summary) ELSE summary END,
                 kind = CASE WHEN model IS NULL THEN coalesce(?9, kind) ELSE kind END,
                 fields = CASE WHEN model IS NULL THEN ?10 ELSE fields END,

@@ -35,17 +35,20 @@ impl Thumbnails {
                 let fetcher = engine.fetcher.clone();
                 let url = engine.api.image_url(&download.image_key);
                 let fetch = net(cx, async move { Ok(fetcher.download_image(&url?).await) });
-                async move { (download.id, fetch.await) }
+                async move { (download, fetch.await) }
             });
             let fetched: Vec<_> = stream::iter(fetches)
                 .buffer_unordered(AT_ONCE)
                 .collect()
                 .await;
-            for (id, image) in fetched {
+            for (download, image) in fetched {
+                let id = download.id;
                 match image {
                     Ok(Some(image)) => {
                         engine
-                            .store(cx, move |store| store.set_image(id, &image))
+                            .store(cx, move |store| {
+                                store.set_server_image(id, &download.image_key, &image)
+                            })
                             .await?;
                     }
                     Ok(None) => {
@@ -71,22 +74,25 @@ impl Thumbnails {
             }
             let sends = wanted.into_iter().map(|upload| {
                 let api = engine.api.clone();
+                let (id, path) = (upload.id, upload.path.clone());
                 let send = net(cx, async move {
                     let bytes = tokio::fs::read(&upload.path).await?;
                     api.upload_image(&upload.bookmark, bytes, upload.width, upload.height)
                         .await
                 });
-                async move { (upload.id, send.await) }
+                async move { (id, path, send.await) }
             });
             let sent: Vec<_> = stream::iter(sends)
                 .buffer_unordered(AT_ONCE)
                 .collect()
                 .await;
-            for (id, answer) in sent {
+            for (id, path, answer) in sent {
                 match answer {
                     Ok(answer) => {
                         engine
-                            .store(cx, move |store| store.set_image_key(id, &answer.image_key))
+                            .store(cx, move |store| {
+                                store.set_image_key(id, &path, &answer.image_key)
+                            })
                             .await?;
                     }
                     Err(Failure::Sync(err)) if !err.is_transient() || is_missing_file(&err) => {
