@@ -1,5 +1,5 @@
 //! Knoa's domain types: workspaces, bookmarks, kinds and their fields, folders, tags,
-//! search queries and AI usage.
+//! search queries, AI usage, and the cloud sync protocol.
 //!
 //! No I/O lives here. Storage is in `knoa-store`, network work in `knoa-fetch` and `knoa-ai`.
 
@@ -8,6 +8,7 @@ mod enrichment;
 mod field;
 mod folder;
 mod kind;
+pub mod protocol;
 mod query;
 mod tag;
 mod usage;

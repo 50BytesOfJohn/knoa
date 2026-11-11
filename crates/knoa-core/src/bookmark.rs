@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{Fields, FolderLink, Kind, WorkspaceId};
@@ -59,7 +60,8 @@ impl Status {
 }
 
 /// Who set a value. User values always win over the AI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Origin {
     Ai,
     User,
