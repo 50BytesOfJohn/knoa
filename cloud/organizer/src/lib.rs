@@ -21,8 +21,9 @@ use crate::{
     organize::Outcome,
 };
 
-/// Jobs the queue gave up on land here, so their bookmarks still get a result.
-const FAILED_QUEUE: &str = "knoa-organize-failed";
+/// Jobs the queue gave up on land in a queue named like this, in every environment, so
+/// their bookmarks still get a result.
+const FAILED_QUEUE_MARK: &str = "-dlq";
 /// How long a result waits when the API Worker couldn't take it.
 const DELIVERY_RETRY_SECONDS: u32 = 60;
 
@@ -49,7 +50,7 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> worker::Result<Resp
 
 #[event(queue)]
 async fn queue(batch: MessageBatch<Value>, env: Env, _ctx: Context) -> worker::Result<()> {
-    let gave_up = batch.queue() == FAILED_QUEUE;
+    let gave_up = batch.queue().contains(FAILED_QUEUE_MARK);
     let messages = batch.messages()?;
     join_all(
         messages

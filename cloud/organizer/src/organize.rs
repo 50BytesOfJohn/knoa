@@ -84,6 +84,7 @@ async fn file(
         .await
         .map_err(|err| ai_failure(&err))?;
     Ok(Box::new(JobResult {
+        folders_only: true,
         folders: folder_picks(job, &picked),
         ..empty_result(job)
     }))
@@ -152,11 +153,7 @@ fn organized(job: &Job, enrichment: Enrichment) -> Box<JobResult> {
         kind: Some(enrichment.kind.slug().to_owned()),
         summary: enrichment.summary,
         fields: enrichment.fields,
-        extras: enrichment
-            .extras
-            .into_iter()
-            .map(|(label, value)| job::Extra { label, value })
-            .collect(),
+        extras: enrichment.extras,
         tags: enrichment.tags,
         folders: folder_picks(job, &enrichment.folders),
         set_aside: enrichment.set_aside,
@@ -181,7 +178,9 @@ pub fn failure(job: &Job, error: String) -> Box<JobResult> {
 
 fn empty_result(job: &Job) -> JobResult {
     JobResult {
+        user_id: job.user_id.clone(),
         bookmark_id: job.bookmark_id.clone(),
+        url: job.url.clone(),
         site: site_of(&job.url),
         ..JobResult::default()
     }

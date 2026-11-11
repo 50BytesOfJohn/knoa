@@ -69,7 +69,12 @@ pub enum ApiKeySource {
 /// the desktop store applies when it saves a page and then the AI's answer.
 #[derive(Debug, Default, Serialize)]
 pub struct JobResult {
+    pub user_id: String,
     pub bookmark_id: String,
+    /// The URL that was organized: the API drops a result for a bookmark that moved on.
+    pub url: String,
+    /// Only `folders` was looked at; everything else stays as stored.
+    pub folders_only: bool,
     /// The page's own title, only for a bookmark whose title is still its URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -82,7 +87,8 @@ pub struct JobResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub fields: serde_json::Map<String, Value>,
-    pub extras: Vec<Extra>,
+    /// `[name, value]` pairs, as the sync protocol has them.
+    pub extras: Vec<(String, String)>,
     pub tags: Vec<String>,
     pub folders: Vec<FolderPick>,
     /// Why the bookmark doesn't fit the workspace's guideline, when it doesn't.
@@ -103,12 +109,6 @@ pub struct JobResult {
     pub usage: Vec<ModelUsage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Extra {
-    pub label: String,
-    pub value: String,
 }
 
 #[derive(Debug, Serialize)]
