@@ -39,8 +39,9 @@ quality are a priority from the first milestone.
   run in the background and never block the UI.
 - **Visible, reversible automation.** Every value the AI sets is marked as AI-made, shows
   why it was set, and can be undone in one click. User edits always win over the AI.
-- **Local and private.** The library is stored on the user's machine. Only page fetches
-  and LLM requests (to OpenRouter, with the user's own key) leave it.
+- **Local and private by default.** In Local mode the library is stored on the user's
+  machine. Only page fetches and LLM requests (to OpenRouter, with the user's own key)
+  leave it. Cloud mode is a choice: see below.
 
 ## Library model
 
@@ -90,6 +91,18 @@ quality are a priority from the first milestone.
   from the browser.
 - Deleting a bookmark in Knoa does not delete it from the browser. It waits in Trash for
   30 days, and sync doesn't bring it back unless it is bookmarked again.
+
+## Cloud mode
+
+Signing in to a Knoa account is optional. It syncs the library across the user's devices
+and with Knoa on the web. Sync is free, within generous limits. With Pro, Knoa also
+organizes bookmarks in the cloud with no key of the user's own, so a bookmark saved on
+any device is organized even while the Mac is off. On the free plan the Mac organizes, as
+in Local mode.
+
+In Cloud mode the library is kept on Knoa's servers, which read pages to organize them.
+It is not end-to-end encrypted. Users who want everything on their Mac stay in Local mode,
+which keeps working exactly as before.
 
 ## After the alpha
 

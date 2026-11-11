@@ -37,6 +37,7 @@ One process. The UI thread only renders and handles input:
 | `knoa-browser` | Chromium profile discovery, `Bookmarks` parsing, file watching, opening links in a profile | no |
 | `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails | no |
 | `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
+| `knoa-sync` | Cloud mode's client: Clerk sign-in, the Knoa API and its socket | no |
 
 ## Data model
 
@@ -66,6 +67,9 @@ SQLite via `rusqlite` (`bundled`), WAL mode, embedded versioned migrations. The 
 `~/Library/Application Support/Knoa/knoa.db`. Thumbnails are cached as files in the app's
 cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 
+Debug builds keep their files under `Knoa Dev` instead of `Knoa`, so a branch with a newer
+schema never migrates the installed release's library, which would then refuse to open it.
+
 The app opens the file twice: one connection writes, and a read-only one serves the UI's
 reads, so loading the library and saving the organizer's results don't wait for each
 other. Reads that must agree run in one read transaction
@@ -93,6 +97,40 @@ Knoa, a native alert shows the reason and the app quits when it is dismissed.
 - Links added by hand go straight into the organizing queue and are always kept.
 - The first import stores metadata only. AI processing of those bookmarks starts when the
   user triggers it. Later bookmarks are processed automatically.
+
+## Cloud mode
+
+Signed in to a Knoa account, the library also syncs with the account's copy on the server
+(the Knoa API, in the private `knoa-web` repository), which the web app and other devices
+share. Signed out, the app is Local mode and none of this runs.
+
+- **Sign-in:** Clerk is the OAuth provider. The app opens the system browser on Clerk's
+  authorize page, with PKCE and a redirect to a one-shot listener on
+  `http://127.0.0.1:<port>/callback`, on a port the system picks (RFC 8252). The refresh
+  token is stored like the AI key ([ADR 0008](adr/0008-credential-storage.md)), and the
+  access token is refreshed shortly before it runs out.
+- **Ids:** linking a library gives every workspace, folder and bookmark a sync id.
+  Bookmark ids are UUID v5 of the URL under the workspace id, so two devices importing the
+  same bookmark converge on one row. A second device's workspaces and folders are matched
+  to the account's by name.
+- **Push:** every store change in a linked library also writes an outbox row with a
+  client-made id, in the same transaction, recording only the columns that changed and
+  who made them (user or AI). The sync loop sends the outbox after local changes and drops
+  each mutation once the server has answered it.
+- **Pull:** the server gives every changed row a rising version, and the app pulls what
+  came after its cursor, one transaction per page. Columns with a pending local change
+  keep the local value. A socket pokes the app when something changed; a pull every few
+  minutes covers a missed poke.
+- **Device-only data** never syncs: browser profiles, the job queue, page evidence,
+  `deleted_urls` and AI usage. Thumbnails go through the server's image store instead of
+  the rows.
+- **Who organizes:** the account says. With Pro, the server's organizer (the same
+  `knoa-fetch` and `knoa-ai` code compiled to WASM, in `cloud/organizer`) does it, and this
+  Mac hands its queue to the server instead of running it. On the free plan this Mac
+  organizes with the user's own key, pushes the results and uploads the thumbnails.
+- **Account page** in Settings: sign in and out, the plan and its usage, and how sync is
+  doing. Signing out keeps the library and its link, so signing in to the same account
+  carries on; signing in to another account asks before merging the library into it.
 
 ## Enrichment
 
