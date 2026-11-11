@@ -1,0 +1,218 @@
+{
+	"$comment": "Sync protocol fixture, shared by the TypeScript and Rust cores. Each fixture starts from an empty library on the free plan; run the steps in order and compare each response exactly.",
+	"about": "Deleting a bookmark leaves one tombstone and no child tombstones; a put on it must bring every required column.",
+	"steps": [
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m1",
+						"entity": "workspace",
+						"key": "11111111-1111-4111-8111-111111111111",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"name": "Personal"
+						}
+					},
+					{
+						"mid": "m2",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://example.com/a",
+							"added_at": 1
+						}
+					},
+					{
+						"mid": "m3",
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/rust",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"origin": "user"
+						}
+					},
+					{
+						"mid": "m4",
+						"entity": "bookmark_text",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"text": "The page."
+						}
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m1",
+						"status": "applied"
+					},
+					{
+						"mid": "m2",
+						"status": "applied"
+					},
+					{
+						"mid": "m3",
+						"status": "applied"
+					},
+					{
+						"mid": "m4",
+						"status": "applied"
+					}
+				],
+				"version": 4
+			}
+		},
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m5",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "delete"
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m5",
+						"status": "applied"
+					}
+				],
+				"version": 5
+			}
+		},
+		{
+			"pull": {
+				"cursor": 0,
+				"limit": 1000,
+				"texts": true
+			},
+			"expect": {
+				"changes": [
+					{
+						"entity": "workspace",
+						"key": "11111111-1111-4111-8111-111111111111",
+						"version": 1,
+						"deleted": false,
+						"data": {
+							"id": "11111111-1111-4111-8111-111111111111",
+							"name": "Personal",
+							"color": 0,
+							"position": 0,
+							"instructions": "",
+							"screening": false,
+							"guideline": "",
+							"only_listed_tags": false,
+							"tag_list": []
+						}
+					},
+					{
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"version": 5,
+						"deleted": true
+					}
+				],
+				"cursor": 5,
+				"more": false
+			}
+		},
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m6",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"title": "Back"
+						}
+					},
+					{
+						"mid": "m7",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://example.com/b",
+							"added_at": 2
+						}
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m6",
+						"status": "rejected",
+						"reason": "invalid"
+					},
+					{
+						"mid": "m7",
+						"status": "applied"
+					}
+				],
+				"version": 6
+			}
+		},
+		{
+			"pull": {
+				"cursor": 5,
+				"limit": 1000,
+				"texts": true
+			},
+			"expect": {
+				"changes": [
+					{
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"version": 6,
+						"deleted": false,
+						"data": {
+							"id": "33333333-3333-4333-8333-333333333333",
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://example.com/b",
+							"title": "https://example.com/b",
+							"site": "example.com",
+							"added_at": 2,
+							"up_next": false,
+							"kept": false,
+							"deleted_at": null,
+							"browser_folder": null,
+							"status": "new",
+							"kind": null,
+							"summary": null,
+							"fields": {},
+							"extras": [],
+							"set_aside": null,
+							"model": null,
+							"organized_at": null,
+							"error": null,
+							"image_key": null,
+							"image_width": null,
+							"image_height": null
+						}
+					}
+				],
+				"cursor": 6,
+				"more": false
+			}
+		}
+	]
+}

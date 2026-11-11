@@ -1,0 +1,171 @@
+{
+	"$comment": "Sync protocol fixture, shared by the TypeScript and Rust cores. Each fixture starts from an empty library on the free plan; run the steps in order and compare each response exactly.",
+	"about": "The AI can't change or delete a user's tag, never sets aside a kept bookmark, and a retried mutation gets its first answer.",
+	"steps": [
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m1",
+						"entity": "workspace",
+						"key": "11111111-1111-4111-8111-111111111111",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"name": "Personal"
+						}
+					},
+					{
+						"mid": "m2",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://example.com/a",
+							"added_at": 1,
+							"kept": true
+						}
+					},
+					{
+						"mid": "m3",
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/rust",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"origin": "user"
+						}
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m1",
+						"status": "applied"
+					},
+					{
+						"mid": "m2",
+						"status": "applied"
+					},
+					{
+						"mid": "m3",
+						"status": "applied"
+					}
+				],
+				"version": 3
+			}
+		},
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m4",
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/rust",
+						"actor": "ai",
+						"op": "put",
+						"data": {
+							"origin": "ai"
+						}
+					},
+					{
+						"mid": "m5",
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/rust",
+						"actor": "ai",
+						"op": "delete"
+					},
+					{
+						"mid": "m6",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "ai",
+						"op": "put",
+						"data": {
+							"kind": "article",
+							"status": "organized",
+							"set_aside": "Off topic"
+						}
+					},
+					{
+						"mid": "m1",
+						"entity": "workspace",
+						"key": "11111111-1111-4111-8111-111111111111",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"name": "Renamed"
+						}
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m4",
+						"status": "ignored"
+					},
+					{
+						"mid": "m5",
+						"status": "ignored"
+					},
+					{
+						"mid": "m6",
+						"status": "applied"
+					},
+					{
+						"mid": "m1",
+						"status": "applied"
+					}
+				],
+				"version": 4
+			}
+		},
+		{
+			"pull": {
+				"cursor": 3,
+				"limit": 1000,
+				"texts": false
+			},
+			"expect": {
+				"changes": [
+					{
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"version": 4,
+						"deleted": false,
+						"data": {
+							"id": "33333333-3333-4333-8333-333333333333",
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://example.com/a",
+							"title": "https://example.com/a",
+							"site": "example.com",
+							"added_at": 1,
+							"up_next": false,
+							"kept": true,
+							"deleted_at": null,
+							"browser_folder": null,
+							"status": "organized",
+							"kind": "article",
+							"summary": null,
+							"fields": {},
+							"extras": [],
+							"set_aside": null,
+							"model": null,
+							"organized_at": null,
+							"error": null,
+							"image_key": null,
+							"image_width": null,
+							"image_height": null
+						}
+					}
+				],
+				"cursor": 4,
+				"more": false
+			}
+		}
+	]
+}
