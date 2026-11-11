@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::{
     Message,
     client::IntoClientRequest as _,
     http::{HeaderValue, header::SEC_WEBSOCKET_PROTOCOL},
+    protocol::frame::coding::CloseCode,
 };
 
 use crate::{Api, Error, Result};
@@ -37,15 +38,22 @@ pub async fn run_socket(api: Arc<Api>, events: UnboundedSender<SocketEvent>) {
     let mut backoff = MIN_BACKOFF;
     loop {
         let started = Instant::now();
+        let mut displaced = false;
         match connect_once(&api, &events).await {
             Err(Error::SignedOut) => return,
             Err(err) => tracing::debug!("cloud socket: {err}"),
-            Ok(()) => {}
+            Ok(Ended::Displaced) => {
+                tracing::debug!("cloud socket closed: the account has too many open");
+                displaced = true;
+            }
+            Ok(Ended::Closed) => {}
         }
         if events.unbounded_send(SocketEvent::Disconnected).is_err() {
             return;
         }
-        if started.elapsed() > STABLE {
+        // Coming straight back would close another client's socket, which would come
+        // back in turn; backing off instead lets the churn settle.
+        if started.elapsed() > STABLE && !displaced {
             backoff = MIN_BACKOFF;
         }
         tokio::time::sleep(backoff).await;
@@ -53,7 +61,15 @@ pub async fn run_socket(api: Arc<Api>, events: UnboundedSender<SocketEvent>) {
     }
 }
 
-async fn connect_once(api: &Api, events: &UnboundedSender<SocketEvent>) -> Result<()> {
+/// How a connection that didn't fail ended.
+enum Ended {
+    Closed,
+    /// The server keeps a few sockets per account and closed this one, the oldest, to
+    /// make room for a new one.
+    Displaced,
+}
+
+async fn connect_once(api: &Api, events: &UnboundedSender<SocketEvent>) -> Result<Ended> {
     let token = api.session().access_token().await?;
     let mut request = api.socket_url()?.as_str().into_client_request()?;
     let protocols = format!("{SOCKET_PROTOCOL}, {SOCKET_TOKEN_PREFIX}{token}");
@@ -65,7 +81,7 @@ async fn connect_once(api: &Api, events: &UnboundedSender<SocketEvent>) -> Resul
     let (stream, _) = tokio_tungstenite::connect_async(request).await?;
     tracing::debug!("cloud socket connected");
     if events.unbounded_send(SocketEvent::Connected).is_err() {
-        return Ok(());
+        return Ok(Ended::Closed);
     }
     let (mut write, mut read) = stream.split();
     let mut ping = tokio::time::interval(PING_EVERY);
@@ -75,19 +91,22 @@ async fn connect_once(api: &Api, events: &UnboundedSender<SocketEvent>) -> Resul
             _ = ping.tick() => {
                 // Two pings without an answer: the connection is gone, though nobody said so.
                 if heard_at.elapsed() > PING_EVERY * 2 + Duration::from_secs(5) {
-                    return Ok(());
+                    return Ok(Ended::Closed);
                 }
                 write.send(Message::text(PING)).await?;
             }
             message = read.next() => {
                 heard_at = Instant::now();
                 match message {
-                    None | Some(Ok(Message::Close(_))) => return Ok(()),
+                    Some(Ok(Message::Close(Some(frame)))) if frame.code == CloseCode::Policy => {
+                        return Ok(Ended::Displaced);
+                    }
+                    None | Some(Ok(Message::Close(_))) => return Ok(Ended::Closed),
                     Some(Err(err)) => return Err(err.into()),
                     // The app stopped listening; the caller sees that too, and stops.
                     Some(Ok(Message::Text(text))) if text.as_str() != PONG => {
                         if !forward(text.as_str(), events) {
-                            return Ok(());
+                            return Ok(Ended::Closed);
                         }
                     }
                     Some(Ok(_)) => {}
