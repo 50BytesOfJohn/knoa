@@ -68,7 +68,11 @@ pub enum OrganizeScope {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrganizeResponse {
+    /// Queued by this call.
     pub queued: u64,
+    /// Still to be queued this month, on the server's own schedule.
+    #[serde(default)]
+    pub pending: u64,
 }
 
 /// The answer to `PUT /v1/images/<bookmark_id>`.

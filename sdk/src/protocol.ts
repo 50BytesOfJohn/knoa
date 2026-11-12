@@ -318,7 +318,10 @@ export interface OrganizeRequest {
 }
 
 export interface OrganizeResponse {
+	/** Queued by this call. */
 	queued: number;
+	/** Still to be queued this month, on the server's own schedule: no need to ask again. */
+	pending: number;
 }
 
 /**

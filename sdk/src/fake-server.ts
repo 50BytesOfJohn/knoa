@@ -150,7 +150,7 @@ export class FakeServer {
 			if (this.plan !== "pro") {
 				return json({ error: "forbidden", message: "Pro only" }, 403);
 			}
-			return json({ queued: 0 });
+			return json({ queued: 0, pending: 0 });
 		}
 		return json({ error: "not_found", message: url.pathname }, 404);
 	};
