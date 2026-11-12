@@ -1,13 +1,12 @@
 //! The AI step: an OpenRouter key and checking that it works.
 
 use gpui::{
-    Context, Div, InteractiveElement as _, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, div, px,
+    Context, Div, ParentElement as _, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use gpui_component::input::Input;
 use knoa_ai::ProviderKind;
 
-use super::{lead, title};
+use super::{lead, link, title};
 use crate::ui::{
     components::{Tone, button, problem},
     mascot::{Mood, mascot},
@@ -87,13 +86,4 @@ impl Onboarding {
                     }))),
             )
     }
-}
-
-fn link(id: &'static str, text: &'static str, theme: &Theme) -> gpui::Stateful<Div> {
-    div()
-        .id(id)
-        .text_color(theme.accent)
-        .cursor_pointer()
-        .hover(gpui::Styled::underline)
-        .child(text)
 }

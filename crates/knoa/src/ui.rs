@@ -55,12 +55,20 @@ impl RootView {
 impl Render for RootView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let screen = if SettingsFile::get(cx).onboarded {
-            self.onboarding = None;
+            let wants_account = (self.onboarding.take())
+                .is_some_and(|onboarding| onboarding.read(cx).wants_account());
             let library = self.library.clone();
-            self.main
+            let main = self
+                .main
                 .get_or_insert_with(|| cx.new(|cx| main::MainView::new(library, window, cx)))
-                .clone()
-                .into_any_element()
+                .clone();
+            if wants_account {
+                let main = main.clone();
+                cx.defer_in(window, move |_, window, cx| {
+                    main.update(cx, |main, cx| main.open_account(window, cx));
+                });
+            }
+            main.into_any_element()
         } else {
             self.main = None;
             let library = self.library.clone();

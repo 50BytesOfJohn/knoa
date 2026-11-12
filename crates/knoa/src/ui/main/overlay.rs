@@ -76,6 +76,11 @@ impl MainView {
         self.show_settings(page, window, cx);
     }
 
+    /// Opens settings on the Account page, to sign in.
+    pub fn open_account(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.show_settings(Page::Account, window, cx);
+    }
+
     pub(super) fn show_settings(
         &mut self,
         page: Page,

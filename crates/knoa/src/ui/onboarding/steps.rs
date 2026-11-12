@@ -7,8 +7,8 @@ mod hello;
 mod library;
 
 use gpui::{
-    AnyElement, Context, Div, FontWeight, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use super::{Onboarding, Step};
@@ -67,4 +67,13 @@ fn nav(step: Step, label: impl Into<SharedString>, cx: &mut Context<'_, Onboardi
                 .px_5()
                 .on_click(cx.listener(|this, _, window, cx| this.go(this.step.next(), window, cx))),
         )
+}
+
+fn link(id: &'static str, text: &'static str, theme: &Theme) -> gpui::Stateful<Div> {
+    div()
+        .id(id)
+        .text_color(theme.accent)
+        .cursor_pointer()
+        .hover(gpui::Styled::underline)
+        .child(text)
 }
