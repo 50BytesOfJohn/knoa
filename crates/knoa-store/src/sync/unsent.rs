@@ -93,6 +93,19 @@ pub(crate) fn is_unsent(conn: &Connection, bookmark: i64) -> Result<bool> {
         .is_some())
 }
 
+/// Protects retained local values with pending mutations before a pulled row is applied.
+pub(super) fn resume(conn: &Connection, bookmark: i64) -> Result<bool> {
+    let removed = conn.execute(
+        "DELETE FROM unsent_bookmarks WHERE bookmark_id = ?1",
+        [bookmark],
+    )?;
+    if removed == 0 {
+        return Ok(false);
+    }
+    resend(conn, bookmark)?;
+    Ok(true)
+}
+
 /// Keeps the bookmark known as `key` back, and forgets what the outbox still holds for
 /// it, which the server would refuse too. False when there is no such bookmark.
 fn park(conn: &Connection, key: &str) -> Result<bool> {
@@ -180,13 +193,16 @@ where
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::Query;
+    use knoa_core::{Page, Place, Query, protocol::bookmark_id};
     use serde_json::{Value, json};
 
     use super::*;
     use crate::{
         NewBookmarks,
-        test_support::{WORKSPACE, bookmark, linked, pushed},
+        test_support::{
+            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, import_one, linked, mids,
+            pushed,
+        },
     };
 
     fn answer(mutation: &Value, reason: &str) -> MutationResult {
@@ -194,6 +210,62 @@ mod tests {
             "mid": mutation["mid"], "status": "rejected", "reason": reason,
         }))
         .unwrap()
+    }
+
+    #[test]
+    fn a_pulled_parked_bookmark_retains_local_edits_and_resumes_syncing() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let id = import_one(&mut store);
+        let put = pushed(&store).remove(0);
+        store.settle(&[answer(&put, "quota")]).unwrap();
+        store.set_up_next(id, true).unwrap();
+        store.add_tag(id, "rust", Origin::User).unwrap();
+        let page = Page {
+            text: "Local page text".into(),
+            description: Some("Local summary".into()),
+            ..Page::default()
+        };
+        store.save_page(id, &page, 10).unwrap();
+        assert_eq!(pushed(&store), Vec::<Value>::new());
+        let key = bookmark_id(WORKSPACE_KEY, "https://a.dev/").unwrap();
+        let changes = [
+            change(json!({
+                "entity": "bookmark", "key": key, "version": 2, "deleted": false,
+                "data": bookmark_row(&key, WORKSPACE_KEY, "https://a.dev/", "Remote title"),
+            })),
+            change(json!({
+                "entity": "bookmark_tag", "key": format!("{key}/rust"),
+                "version": 3, "deleted": false,
+                "data": { "bookmark_id": key, "tag": "rust", "origin": "user", "excluded": true },
+            })),
+            change(json!({
+                "entity": "bookmark_text", "key": key, "version": 4, "deleted": false,
+                "data": { "bookmark_id": key, "text": "Remote text" },
+            })),
+        ];
+
+        store.apply_remote(&changes, 4).unwrap();
+
+        let saved = store.bookmark(id).unwrap().unwrap();
+        assert_eq!(saved.title, "A");
+        assert!(saved.up_next);
+        assert_eq!(saved.summary, page.description);
+        assert_eq!(saved.tags, [("rust".into(), Origin::User)]);
+        let found = store
+            .search(&Query::parse("local page text", None, Place::Everything), 1)
+            .unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, id);
+        assert_eq!(store.unsent_bookmarks().unwrap(), 0);
+        let pending = pushed(&store);
+        assert_eq!(pending.len(), 3);
+        assert_eq!(pending[0]["data"]["title"], "A");
+        assert_eq!(pending[0]["data"]["up_next"], true);
+        store.acknowledge(&mids(&store)).unwrap();
+        store.set_up_next(id, false).unwrap();
+        let [edit] = <[Value; 1]>::try_from(pushed(&store)).unwrap();
+        assert_eq!(edit["data"], json!({ "up_next": false }));
     }
 
     #[test]

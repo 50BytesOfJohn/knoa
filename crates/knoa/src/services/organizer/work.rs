@@ -4,9 +4,8 @@ use std::sync::Arc;
 
 use gpui::{App, BackgroundExecutor};
 use knoa_ai::Provider;
-use knoa_core::BookmarkId;
 use knoa_fetch::Fetcher;
-use knoa_store::Store;
+use knoa_store::{Job, Store};
 use tokio::runtime::Handle;
 
 use super::job::Outcome;
@@ -45,26 +44,26 @@ impl Work {
 
     pub(super) async fn save(
         &self,
-        id: BookmarkId,
+        job: &Job,
         action: impl FnOnce(&mut Store) -> knoa_store::Result<()> + Send + 'static,
     ) -> Outcome {
         let database = self.database.clone();
         let ticket = self.ticket.clone();
+        let job = job.clone();
         self.background
             .spawn(async move {
                 let mut store = database.write();
-                match ticket.if_current(|| action(&mut store)) {
-                    Some(Ok(())) => Outcome::Done,
-                    Some(Err(err)) => Outcome::Failed(err.to_string()),
-                    None => {
-                        if let Err(err) = store.return_interrupted_job(id) {
-                            tracing::error!(
-                                ?id,
-                                "can't return invalidated work to the queue: {err}"
-                            );
-                        }
-                        Outcome::Superseded
+                match store.save_job(&job, |store| {
+                    if let Some(result) = ticket.if_current(|| action(store)) {
+                        result.map(|()| Outcome::Done)
+                    } else {
+                        store.return_interrupted_job(job.bookmark.id)?;
+                        Ok(Outcome::Superseded)
                     }
+                }) {
+                    Ok(Some(outcome)) => outcome,
+                    Ok(None) => Outcome::Superseded,
+                    Err(err) => Outcome::Failed(err.to_string()),
                 }
             })
             .await

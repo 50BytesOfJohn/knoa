@@ -36,7 +36,7 @@ pub(super) async fn process(job: Job, work: Arc<Work>) -> Outcome {
         usage::save(provider, work.database.clone(), &work.background).await;
     }
     let next = next_step(&outcome, &job);
-    if let Outcome::Failed(err) = work.save(id, move |store| record(store, id, next)).await {
+    if let Outcome::Failed(err) = work.save(&job, move |store| record(store, id, next)).await {
         tracing::error!(?id, "can't update the queue: {err}");
     }
     if work.current() {
@@ -114,7 +114,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
     };
     let (id, saved_page) = (bookmark.id, page.clone());
     match work
-        .save(id, move |store| store.save_page(id, &saved_page, now()))
+        .save(job, move |store| store.save_page(id, &saved_page, now()))
         .await
     {
         Outcome::Done => {}
@@ -126,7 +126,9 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
 
     let Some(provider) = work.provider.clone() else {
         let id = bookmark.id;
-        return work.save(id, move |store| store.finish_page_only(id)).await;
+        return work
+            .save(job, move |store| store.finish_page_only(id))
+            .await;
     };
 
     let database = work.database.clone();
@@ -169,7 +171,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         })
         .await;
     match answer {
-        Ok(Ok(enrichment)) => save_enrichment(work, bookmark.id, enrichment).await,
+        Ok(Ok(enrichment)) => save_enrichment(work, job, enrichment).await,
         Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
     }
@@ -182,7 +184,7 @@ async fn file_one(job: &Job, work: &Work) -> Outcome {
     let bookmark = &job.bookmark;
     let Some(provider) = work.provider.clone() else {
         // AI was turned off after queuing: nothing to ask, and the bookmark stays as it is.
-        return finish_filed(work, bookmark.id, Vec::new()).await;
+        return finish_filed(work, job, Vec::new()).await;
     };
     let (Some(kind), Some(_)) = (bookmark.kind, provider.classifier()) else {
         return organize_one(job, work).await;
@@ -219,7 +221,7 @@ async fn file_one(job: &Job, work: &Work) -> Outcome {
         })
         .await;
     match answer {
-        Ok(Ok(folders)) => finish_filed(work, job.bookmark.id, folders).await,
+        Ok(Ok(folders)) => finish_filed(work, job, folders).await,
         Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("folder task failed: {err}")),
     }
@@ -243,15 +245,17 @@ fn ai_failure(err: &knoa_ai::Error, attempts: u32) -> Outcome {
     }
 }
 
-async fn save_enrichment(work: &Work, id: BookmarkId, enrichment: Enrichment) -> Outcome {
-    work.save(id, move |store| {
+async fn save_enrichment(work: &Work, job: &Job, enrichment: Enrichment) -> Outcome {
+    let id = job.bookmark.id;
+    work.save(job, move |store| {
         store.finish_organized(id, &enrichment, now())
     })
     .await
 }
 
-async fn finish_filed(work: &Work, id: BookmarkId, folders: Vec<(FolderId, f32)>) -> Outcome {
-    work.save(id, move |store| store.finish_filed(id, &folders))
+async fn finish_filed(work: &Work, job: &Job, folders: Vec<(FolderId, f32)>) -> Outcome {
+    let id = job.bookmark.id;
+    work.save(job, move |store| store.finish_filed(id, &folders))
         .await
 }
 

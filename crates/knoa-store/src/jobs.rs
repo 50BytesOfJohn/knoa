@@ -15,6 +15,7 @@ pub struct Job {
     pub attempts: u32,
     /// Only file the bookmark into folders again, from what it already has.
     pub folders_only: bool,
+    sync_id: Option<String>,
 }
 
 impl Store {
@@ -100,10 +101,42 @@ impl Store {
                     bookmark,
                     attempts,
                     folders_only,
+                    sync_id: self.conn.query_row(
+                        "SELECT sync_id FROM bookmarks WHERE id = ?1",
+                        [id],
+                        |row| row.get(0),
+                    )?,
                 });
             }
         }
         Ok(jobs)
+    }
+
+    /// Saves work only while the row still belongs to the bookmark taken from the queue.
+    /// The caller must hold the database write lock through this call.
+    pub fn save_job<T>(
+        &mut self,
+        job: &Job,
+        save: impl FnOnce(&mut Store) -> Result<T>,
+    ) -> Result<Option<T>> {
+        // Sync can delete a row and reuse its integer id while a request is in flight.
+        // Unlinked bookmarks have no sync id, so their workspace and URL identify them.
+        let current: bool = self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM bookmarks
+             WHERE id = ?1 AND workspace_id = ?2 AND url = ?3
+               AND (?4 IS NULL OR sync_id = ?4))",
+            params![
+                job.bookmark.id.0,
+                job.bookmark.workspace.0,
+                job.bookmark.url,
+                job.sync_id,
+            ],
+            |row| row.get(0),
+        )?;
+        if !current {
+            return Ok(None);
+        }
+        save(self).map(Some)
     }
 
     /// When the next waiting job becomes due, if any job is waiting.
@@ -333,13 +366,77 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{Enrichment, Fields, Kind, Status};
+    use knoa_core::{Enrichment, Fields, Kind, Place, Query, Status, protocol::bookmark_id};
+    use serde_json::json;
 
     use super::*;
     use crate::{
         NewBookmarks,
-        test_support::{WORKSPACE, bookmark},
+        test_support::{
+            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, import_one, linked, mids,
+            pushed,
+        },
     };
+
+    #[test]
+    fn stale_job_results_do_not_change_a_pulled_bookmark_reusing_the_rowid() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let id = import_one(&mut store);
+        let job = store.take_jobs(0, 1).unwrap().remove(0);
+        assert_eq!(
+            store
+                .save_job(&job, |store| store.save_page(id, &Page::default(), 1))
+                .unwrap(),
+            Some(())
+        );
+        store.acknowledge(&mids(&store)).unwrap();
+        let old_key = bookmark_id(WORKSPACE_KEY, &job.bookmark.url).unwrap();
+        let url = "https://b.dev/";
+        let key = bookmark_id(WORKSPACE_KEY, url).unwrap();
+        store
+            .apply_remote(
+                &[change(json!({
+                    "entity": "bookmark", "key": old_key, "version": 2, "deleted": true,
+                }))],
+                2,
+            )
+            .unwrap();
+        store
+            .apply_remote(
+                &[change(json!({
+                    "entity": "bookmark", "key": key, "version": 3, "deleted": false,
+                    "data": bookmark_row(&key, WORKSPACE_KEY, url, "B"),
+                }))],
+                3,
+            )
+            .unwrap();
+        let replacement = store.bookmark(id).unwrap().unwrap();
+        assert_eq!(replacement.url, url, "the pull reused the old rowid");
+        let mut answer = enrichment();
+        answer.tags = vec!["stale".into()];
+        let page = Page {
+            text: "A's page".into(),
+            ..Page::default()
+        };
+
+        let saved = store
+            .save_job(&job, |store| {
+                store.save_page(id, &page, 10)?;
+                store.finish_organized(id, &answer, 10)
+            })
+            .unwrap();
+
+        assert_eq!(saved, None);
+        assert_eq!(store.bookmark(id).unwrap().unwrap(), replacement);
+        assert_eq!(
+            store
+                .search(&Query::parse("page", None, Place::Everything), 1)
+                .unwrap(),
+            Vec::<Bookmark>::new()
+        );
+        assert_eq!(pushed(&store), Vec::<serde_json::Value>::new());
+    }
 
     #[test]
     fn queue_all_requeues_organized_bookmarks_but_not_trash() {

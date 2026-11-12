@@ -134,6 +134,7 @@ jobs:
         env:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          KNOA_CLERK_CLIENT_ID: ${{ vars.KNOA_CLERK_CLIENT_ID }}
         run: scripts/package.sh
 
       - name: Write the release notes

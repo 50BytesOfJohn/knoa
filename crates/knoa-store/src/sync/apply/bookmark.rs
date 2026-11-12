@@ -9,7 +9,7 @@ use crate::{
     Result, search,
     sync::{
         ids::{self, Table},
-        outbox,
+        outbox, unsent,
     },
     trash,
 };
@@ -18,11 +18,14 @@ pub(super) fn put(conn: &Connection, key: &str, row: Bookmark) -> Result<Outcome
     let Some(workspace) = ids::local_id(conn, Table::Workspaces, &row.workspace_id)? else {
         return Ok(Outcome::WaitsForParent);
     };
-    let pending = outbox::pending_for(conn, Entity::Bookmark, key)?;
+    let mut pending = outbox::pending_for(conn, Entity::Bookmark, key)?;
     if pending.deleted {
         return Ok(Outcome::Done);
     }
     let id = local_row(conn, key, workspace, &row.url)?;
+    if unsent::resume(conn, id)? {
+        pending = outbox::pending_for(conn, Entity::Bookmark, key)?;
+    }
     let patch = rebased(BookmarkPatch::from(row), &pending)?;
     if matches!(patch.deleted_at, Some(Some(_))) {
         leave_queue(conn, id)?;
