@@ -14,7 +14,7 @@ import { Backoff } from "./backoff";
 export interface SocketLike {
 	onopen: (() => void) | null;
 	onmessage: ((event: { data: unknown }) => void) | null;
-	onclose: (() => void) | null;
+	onclose: ((event: { code?: number }) => void) | null;
 	onerror: (() => void) | null;
 	send(data: string): void;
 	close(): void;
@@ -32,6 +32,13 @@ export interface PokeHandlers {
 /** Proxies and load balancers drop quiet connections after about a minute. */
 const PING_EVERY_MS = 25_000;
 const PONG_WITHIN_MS = 10_000;
+/**
+ * How the server closes the oldest of a user's sockets to make room for a new one. Coming
+ * straight back would close another client's socket, which would come back in turn.
+ */
+const DISPLACED = 1008;
+/** A connection that lasted this long was healthy, so the next displacement waits less. */
+const STABLE_MS = 60_000;
 
 export class PokeSocket {
 	private socket: SocketLike | null = null;
@@ -40,6 +47,10 @@ export class PokeSocket {
 	private ping: ReturnType<typeof setInterval> | null = null;
 	private pongDue: ReturnType<typeof setTimeout> | null = null;
 	private readonly backoff = new Backoff(1_000, 30_000);
+	/** Grows across reconnects until a connection stays up, so the churn settles. */
+	private readonly displacedBackoff = new Backoff(30_000, 300_000);
+	/** Waiting after the server closed this socket for a newer one. */
+	private displaced = false;
 
 	constructor(
 		private readonly url: string,
@@ -63,7 +74,7 @@ export class PokeSocket {
 
 	/** Skips the wait, for when the browser says it is back online. */
 	reconnectNow(): void {
-		if (this.stopped || this.socket) return;
+		if (this.stopped || this.socket || this.displaced) return;
 		this.backoff.reset();
 		if (this.retry) clearTimeout(this.retry);
 		this.retry = null;
@@ -85,17 +96,28 @@ export class PokeSocket {
 			`${SOCKET_TOKEN_PREFIX}${token}`,
 		]);
 		this.socket = socket;
+		let openedAt = 0;
 		socket.onopen = () => {
+			openedAt = Date.now();
+			this.displaced = false;
 			this.backoff.reset();
 			this.startPinging(socket);
 			this.handlers.onOpen();
 		};
 		socket.onmessage = (event) => this.receive(event.data);
 		socket.onerror = () => socket.close();
-		socket.onclose = () => {
+		socket.onclose = (event) => {
 			if (this.socket !== socket) return;
 			this.socket = null;
 			this.clearTimers();
+			this.displaced = event?.code === DISPLACED;
+			if (this.displaced) {
+				this.scheduleReconnect(this.displacedBackoff);
+				return;
+			}
+			if (openedAt > 0 && Date.now() - openedAt > STABLE_MS) {
+				this.displacedBackoff.reset();
+			}
 			this.scheduleReconnect();
 		};
 	}
@@ -124,12 +146,12 @@ export class PokeSocket {
 		}, PING_EVERY_MS);
 	}
 
-	private scheduleReconnect(): void {
+	private scheduleReconnect(backoff = this.backoff): void {
 		if (this.stopped || this.retry) return;
 		this.retry = setTimeout(() => {
 			this.retry = null;
 			void this.connect();
-		}, this.backoff.next());
+		}, backoff.next());
 	}
 
 	private clearTimers(): void {

@@ -240,6 +240,12 @@ export class FakeServer {
 		});
 	}
 
+	/** Closes the oldest socket as the API does to make room for a newer one. */
+	displaceOldestSocket(): void {
+		const [oldest] = this.sockets;
+		oldest?.close(1008);
+	}
+
 	private poke(): void {
 		const message = JSON.stringify({ type: "poke", version: this.version });
 		for (const socket of this.sockets) socket.deliver(message);
@@ -259,7 +265,7 @@ function json(body: unknown, status = 200): Response {
 class FakeSocket implements SocketLike {
 	onopen: (() => void) | null = null;
 	onmessage: ((event: { data: unknown }) => void) | null = null;
-	onclose: (() => void) | null = null;
+	onclose: ((event: { code?: number }) => void) | null = null;
 	onerror: (() => void) | null = null;
 
 	constructor(private readonly all: Set<FakeSocket>) {
@@ -271,9 +277,9 @@ class FakeSocket implements SocketLike {
 		if (data === "ping") queueMicrotask(() => this.deliver("pong"));
 	}
 
-	close(): void {
+	close(code = 1000): void {
 		if (!this.all.delete(this)) return;
-		queueMicrotask(() => this.onclose?.());
+		queueMicrotask(() => this.onclose?.({ code }));
 	}
 
 	deliver(data: string): void {

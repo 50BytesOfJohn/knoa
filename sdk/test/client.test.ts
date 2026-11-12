@@ -4,6 +4,7 @@ import { nextBatch } from "../src/batch";
 import { FakeServer } from "../src/fake-server";
 import { addLink, addTag, createWorkspace, setUpNext } from "../src/mutations";
 import { bookmarksIn } from "../src/select";
+import type { SocketFactory } from "../src/socket";
 import { MemoryStorage } from "../src/storage";
 import { clientFor, started } from "./fixtures";
 
@@ -136,6 +137,39 @@ describe("SyncClient", () => {
 		);
 		mac.stop();
 		web.stop();
+	});
+
+	it("backs off longer each time the server displaces its socket", async () => {
+		vi.useFakeTimers();
+		const server = new FakeServer();
+		let connections = 0;
+		const counting: SocketFactory = (url, protocols) => {
+			connections += 1;
+			return server.socket(url, protocols);
+		};
+		const web = await started(clientFor(server, undefined, counting));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(connections).toBe(1);
+
+		server.displaceOldestSocket();
+		await vi.advanceTimersByTimeAsync(29_000);
+		const mac = await started(clientFor(server, undefined, null));
+		mac.mutate([createWorkspace("Personal", 0).mutation]);
+		await mac.settled();
+		web.cameOnline();
+		await web.settled();
+		expect(connections).toBe(1);
+		expect(web.getSnapshot().library.workspace.size).toBe(1);
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(connections).toBe(2);
+
+		server.displaceOldestSocket();
+		await vi.advanceTimersByTimeAsync(59_000);
+		expect(connections).toBe(2);
+		await vi.advanceTimersByTimeAsync(1_000);
+		expect(connections).toBe(3);
+		web.stop();
+		mac.stop();
 	});
 
 	it("renders from storage before the network answers", async () => {
