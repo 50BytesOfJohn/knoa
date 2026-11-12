@@ -3,6 +3,7 @@
 //! the web app (default <http://localhost:3210>). Release-channel builds use
 //! production, and only when the build was given its OAuth client id.
 
+use anyhow::anyhow;
 use knoa_sync::Config;
 use url::Url;
 
@@ -20,7 +21,7 @@ pub struct CloudConfig {
 
 impl CloudConfig {
     /// `None` when this build has no cloud to sign in to.
-    pub fn load() -> Result<Option<CloudConfig>, url::ParseError> {
+    pub fn load() -> anyhow::Result<Option<CloudConfig>> {
         if Channel::current() == Channel::Dev {
             staging().map(Some)
         } else {
@@ -34,25 +35,37 @@ impl CloudConfig {
     }
 }
 
-fn staging() -> Result<CloudConfig, url::ParseError> {
-    let var = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.into());
+fn staging() -> anyhow::Result<CloudConfig> {
     let web = var("KNOA_WEB_URL", "http://localhost:3210");
     let web = web.trim_end_matches('/');
     Ok(CloudConfig {
         sync: Config {
-            api: Url::parse(&var(
+            api: parse_var(
                 "KNOA_API_URL",
                 "https://knoa-api-staging.mynthio.workers.dev",
-            ))?,
-            issuer: Url::parse(&var(
+            )?,
+            issuer: parse_var(
                 "KNOA_CLERK_ISSUER",
                 "https://more-buck-9676.clerk.accounts.dev",
-            ))?,
+            )?,
             client_id: var("KNOA_CLERK_CLIENT_ID", "C8fhAQh3MI0bMg9O"),
         },
-        pricing: Url::parse(&format!("{web}/pricing"))?,
-        web_app: Url::parse(&format!("{web}/app"))?,
+        pricing: parse_named("KNOA_WEB_URL", &format!("{web}/pricing"))?,
+        web_app: parse_named("KNOA_WEB_URL", &format!("{web}/app"))?,
     })
+}
+
+fn var(name: &str, default: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| default.into())
+}
+
+fn parse_var(name: &str, default: &str) -> anyhow::Result<Url> {
+    parse_named(name, &var(name, default))
+}
+
+/// Names the variable in the error, since the parser's own message doesn't say which.
+fn parse_named(name: &str, value: &str) -> anyhow::Result<Url> {
+    Url::parse(value).map_err(|err| anyhow!("{name} is {value:?}, which isn't a URL: {err}"))
 }
 
 /// The client id comes from the build, so a fork's builds don't sign in as Knoa.
