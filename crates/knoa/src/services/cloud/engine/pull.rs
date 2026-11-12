@@ -7,7 +7,7 @@ use crate::{services::cloud::SyncStatus, state::library::Library};
 
 impl Engine {
     /// Pulls and applies every page after the cursor, one transaction per page.
-    pub(super) async fn pull(&self, cx: &mut AsyncApp) -> Result<(), Failure> {
+    pub(in crate::services::cloud) async fn pull(&self, cx: &mut AsyncApp) -> Result<(), Failure> {
         loop {
             let Some(cursor) = self.store(cx, |store| store.cursor()).await? else {
                 return Ok(());

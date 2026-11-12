@@ -26,7 +26,7 @@ pub use add_link::AddedLink;
 pub use import::{ImportReport, NewBookmarks};
 pub use jobs::Job;
 pub use read::Counts;
-pub use sync::{CloudJob, Settled, ThumbnailDownload, ThumbnailUpload};
+pub use sync::{AccountRows, CloudJob, Settled, ThumbnailDownload, ThumbnailUpload};
 
 // The wrapped errors are in the message and deliberately not the `source()`: an error chain
 // shown as `{:#}` would print them twice, and rusqlite's own source would add a third copy.
@@ -118,7 +118,7 @@ pub(crate) mod test_support {
     };
     use serde_json::{Value, json};
 
-    use crate::{NewBookmarks, Store};
+    use crate::{AccountRows, NewBookmarks, Store};
 
     /// The workspace every database starts with.
     pub const WORKSPACE: WorkspaceId = WorkspaceId(1);
@@ -132,7 +132,20 @@ pub(crate) mod test_support {
             "entity": "workspace", "key": WORKSPACE_KEY, "version": 1, "deleted": false,
             "data": workspace_row(WORKSPACE_KEY, "Personal"),
         }));
-        store.link("user-1", &[personal], 1).unwrap();
+        link(store, "user-1", &[&[personal]]);
+    }
+
+    /// Links `store` to `user` as the app does: matching against every page first, then
+    /// pulling them one by one, page `n` ending at cursor `n + 1`.
+    pub fn link(store: &mut Store, user: &str, pages: &[&[Change]]) {
+        let mut account = AccountRows::default();
+        for page in pages {
+            account.add(page);
+        }
+        store.link(user, account).unwrap();
+        for (cursor, page) in (1..).zip(pages) {
+            store.apply_remote(page, cursor).unwrap();
+        }
     }
 
     pub fn change(json: Value) -> Change {

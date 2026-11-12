@@ -1,9 +1,11 @@
 //! Linking the library to an account, and unlinking it.
 //!
 //! Linking gives every row its sync id, adopting the account's workspace or folder of the
-//! same name, and queues what the server doesn't have yet. It happens in one transaction
-//! together with applying everything the server has, so a crash leaves the library either
-//! linked and up to date, or local as before.
+//! same name, and queues what the server doesn't have yet, in one transaction. What it
+//! matches against is only the account's workspaces, folders and bookmark ids, gathered
+//! page by page in [`AccountRows`]; the account's rows themselves arrive afterwards
+//! through ordinary pulls from cursor 0. A crash before the link leaves the library local
+//! as before, and one after it resumes the pull from the last page applied.
 
 use std::collections::{HashMap, HashSet};
 
@@ -14,18 +16,61 @@ use knoa_core::{
 use rusqlite::{Connection, OptionalExtension as _, params};
 
 use super::{
-    Recorder, apply,
+    Recorder,
     ids::{self, Table},
 };
 use crate::{Error, Result, Store};
 
+/// What linking needs to know of the account: its workspaces and folders by name, and
+/// which bookmarks it has. Built from pulled pages, as of the last one added.
+#[derive(Debug, Default)]
+pub struct AccountRows {
+    /// Workspace name by id; `None` once deleted.
+    workspaces: HashMap<String, Option<String>>,
+    /// Folder workspace id and name by id; `None` once deleted.
+    folders: HashMap<String, Option<(String, String)>>,
+    /// Whether each bookmark id is live.
+    bookmarks: HashMap<String, bool>,
+}
+
+impl AccountRows {
+    /// Takes in one pulled page, keeping only what matching needs.
+    pub fn add(&mut self, changes: &[Change]) {
+        for change in changes {
+            let key = change.key.clone();
+            match &change.row {
+                Changed::Workspace(RowState::Live(row)) => {
+                    self.workspaces.insert(key, Some(same_name(&row.name)));
+                }
+                Changed::Folder(RowState::Live(row)) => {
+                    let folder = (row.workspace_id.clone(), same_name(&row.name));
+                    self.folders.insert(key, Some(folder));
+                }
+                Changed::Bookmark(RowState::Live(_)) => {
+                    self.bookmarks.insert(key, true);
+                }
+                Changed::Workspace(RowState::Deleted) => {
+                    self.workspaces.insert(key, None);
+                }
+                Changed::Folder(RowState::Deleted) => {
+                    self.folders.insert(key, None);
+                }
+                Changed::Bookmark(RowState::Deleted) => {
+                    self.bookmarks.insert(key, false);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 impl Store {
-    /// Links the library to `user_id`'s account. `remote` is everything the server has,
-    /// pulled from cursor 0, and `cursor` the pull's last cursor.
+    /// Links the library to `user_id`'s account, matching it against `account`, and sets
+    /// the cursor to 0 so the next pulls bring everything the account has.
     ///
     /// Linking again to the same account changes nothing; the caller pulls as usual.
     /// Another account is refused until [`Store::unlink`].
-    pub fn link(&mut self, user_id: &str, remote: &[Change], cursor: i64) -> Result<()> {
+    pub fn link(&mut self, user_id: &str, account: AccountRows) -> Result<()> {
         let tx = self.conn.transaction()?;
         let linked: Option<String> = tx
             .query_row("SELECT user_id FROM sync_state", [], |row| row.get(0))
@@ -36,18 +81,16 @@ impl Store {
             None => {}
         }
         tx.execute(
-            "INSERT INTO sync_state (id, user_id) VALUES (1, ?1)",
+            "INSERT INTO sync_state (id, user_id, cursor) VALUES (1, ?1, 0)",
             [user_id],
         )?;
-        let remote_rows = RemoteRows::new(remote);
+        let remote = RemoteRows::new(account);
         let new = New {
-            workspaces: adopt_workspaces(&tx, &remote_rows)?,
-            folders: adopt_folders(&tx, &remote_rows)?,
-            bookmarks: assign_bookmarks(&tx, &remote_rows)?,
+            workspaces: adopt_workspaces(&tx, &remote)?,
+            folders: adopt_folders(&tx, &remote)?,
+            bookmarks: assign_bookmarks(&tx, &remote)?,
         };
         enqueue(&tx, &new)?;
-        apply::apply(&tx, remote)?;
-        apply::set_cursor(&tx, cursor)?;
         tx.commit()?;
         Ok(())
     }
@@ -74,8 +117,7 @@ impl Store {
     }
 }
 
-/// What the server already has, as of the end of `remote`.
-#[derive(Default)]
+/// The live rows of [`AccountRows`], in the shape matching uses.
 struct RemoteRows {
     /// Workspace id by name.
     workspaces: Vec<(String, String)>,
@@ -85,40 +127,14 @@ struct RemoteRows {
 }
 
 impl RemoteRows {
-    fn new(changes: &[Change]) -> RemoteRows {
-        let mut workspaces = HashMap::new();
-        let mut folders = HashMap::new();
-        let mut bookmarks = HashMap::new();
-        for change in changes {
-            let key = change.key.clone();
-            match &change.row {
-                Changed::Workspace(RowState::Live(row)) => {
-                    workspaces.insert(key, Some(same_name(&row.name)));
-                }
-                Changed::Folder(RowState::Live(row)) => {
-                    folders.insert(key, Some((row.workspace_id.clone(), same_name(&row.name))));
-                }
-                Changed::Bookmark(RowState::Live(_)) => {
-                    bookmarks.insert(key, true);
-                }
-                Changed::Workspace(RowState::Deleted) => {
-                    workspaces.insert(key, None);
-                }
-                Changed::Folder(RowState::Deleted) => {
-                    folders.insert(key, None);
-                }
-                Changed::Bookmark(RowState::Deleted) => {
-                    bookmarks.insert(key, false);
-                }
-                _ => {}
-            }
-        }
+    fn new(account: AccountRows) -> RemoteRows {
         RemoteRows {
-            workspaces: live(workspaces).collect(),
-            folders: live(folders)
+            workspaces: live(account.workspaces).collect(),
+            folders: live(account.folders)
                 .map(|(id, (workspace, name))| (id, workspace, name))
                 .collect(),
-            bookmarks: bookmarks
+            bookmarks: account
+                .bookmarks
                 .into_iter()
                 .filter_map(|(id, live)| live.then_some(id))
                 .collect(),
@@ -261,14 +277,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{FolderColor, Query};
+    use knoa_core::{FolderColor, Ink, Query};
     use serde_json::{Value, json};
 
     use super::*;
     use crate::{
         NewBookmarks,
         test_support::{
-            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, pushed, workspace_row,
+            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, link, mids, pushed,
+            workspace_row,
         },
     };
 
@@ -294,7 +311,7 @@ mod tests {
             "data": workspace_row(WORKSPACE_KEY, " personal "),
         }));
 
-        store.link("user-1", &[remote], 3).unwrap();
+        link(&mut store, "user-1", &[&[remote]]);
 
         let entities: Vec<Value> = pushed(&store)
             .into_iter()
@@ -306,7 +323,7 @@ mod tests {
         );
         let workspace = store.workspace(WORKSPACE).unwrap().unwrap();
         assert_eq!(workspace.name, " personal ", "the account's values win");
-        assert_eq!(store.cursor().unwrap(), Some(3));
+        assert_eq!(store.cursor().unwrap(), Some(1));
     }
 
     #[test]
@@ -335,7 +352,7 @@ mod tests {
         ]
         .map(change);
 
-        store.link("user-1", &remote, 3).unwrap();
+        link(&mut store, "user-1", &[&remote]);
 
         assert_eq!(store.search(&Query::default(), 1).unwrap()[0].tags, []);
         let entities: Vec<Value> = pushed(&store)
@@ -348,15 +365,92 @@ mod tests {
     #[test]
     fn linking_to_another_account_is_refused_until_unlinked() {
         let mut store = Store::open_in_memory().unwrap();
-        store.link("user-1", &[], 1).unwrap();
-        store.link("user-1", &[], 1).unwrap();
+        store.link("user-1", AccountRows::default()).unwrap();
+        store.link("user-1", AccountRows::default()).unwrap();
 
         assert!(matches!(
-            store.link("user-2", &[], 1),
+            store.link("user-2", AccountRows::default()),
             Err(Error::OtherAccount { .. })
         ));
         store.unlink().unwrap();
-        store.link("user-2", &[], 1).unwrap();
+        store.link("user-2", AccountRows::default()).unwrap();
         assert_eq!(store.account().unwrap().as_deref(), Some("user-2"));
+    }
+
+    const WORK_KEY: &str = "1b7d0c2e-4a5f-4c6d-9e8f-0a1b2c3d4e5f";
+    const FOLDER_KEY: &str = "0d2b6c1e-3f4a-4b5c-8d6e-7f8091a2b3c4";
+
+    /// The account over two pages: Personal with a Reading folder that the second page
+    /// deletes, and a Work workspace.
+    fn two_pages() -> [Vec<Change>; 2] {
+        let first = [
+            json!({ "entity": "workspace", "key": WORKSPACE_KEY, "version": 1, "deleted": false,
+                    "data": workspace_row(WORKSPACE_KEY, "Personal") }),
+            json!({ "entity": "folder", "key": FOLDER_KEY, "version": 2, "deleted": false,
+                    "data": { "id": FOLDER_KEY, "workspace_id": WORKSPACE_KEY,
+                    "name": "Reading", "description": "", "auto_assign": true, "color": 2,
+                    "hue": null, "icon": null, "position": 1 } }),
+        ];
+        let second = [
+            json!({ "entity": "folder", "key": FOLDER_KEY, "version": 3, "deleted": true }),
+            json!({ "entity": "workspace", "key": WORK_KEY, "version": 4, "deleted": false,
+                    "data": workspace_row(WORK_KEY, "Work") }),
+        ];
+        [first.map(change).to_vec(), second.map(change).to_vec()]
+    }
+
+    /// Local Personal with a Reading folder, and a Work workspace.
+    fn local_library(store: &mut Store) {
+        store
+            .create_folder(WORKSPACE, "Reading", "", true, FolderColor::default(), None)
+            .unwrap();
+        store.create_workspace("Work", Ink::Moss).unwrap();
+    }
+
+    fn workspace_names(store: &Store) -> Vec<String> {
+        store
+            .workspaces()
+            .unwrap()
+            .into_iter()
+            .map(|w| w.name)
+            .collect()
+    }
+
+    #[test]
+    fn linking_matches_against_the_account_as_of_its_last_page() {
+        let mut store = Store::open_in_memory().unwrap();
+        local_library(&mut store);
+        let [first, second] = two_pages();
+
+        link(&mut store, "user-1", &[&first, &second]);
+
+        let entities: Vec<Value> = pushed(&store)
+            .into_iter()
+            .map(|m| m["entity"].clone())
+            .collect();
+        assert_eq!(entities, ["folder"], "Reading is gone from the account");
+        assert_eq!(workspace_names(&store), ["Personal", "Work"]);
+        assert_eq!(store.cursor().unwrap(), Some(2));
+    }
+
+    #[test]
+    fn an_interrupted_link_resumes_from_the_last_page_applied() {
+        let mut store = Store::open_in_memory().unwrap();
+        local_library(&mut store);
+        let [first, second] = two_pages();
+        let mut account = AccountRows::default();
+        account.add(&first);
+        account.add(&second);
+        store.link("user-1", account).unwrap();
+        store.apply_remote(&first, 1).unwrap();
+        let queued = mids(&store);
+
+        // The next launch finds the library linked, and pulls on from its cursor.
+        store.link("user-1", AccountRows::default()).unwrap();
+        assert_eq!(store.cursor().unwrap(), Some(1));
+        store.apply_remote(&second, 2).unwrap();
+
+        assert_eq!(mids(&store), queued);
+        assert_eq!(workspace_names(&store), ["Personal", "Work"]);
     }
 }

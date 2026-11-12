@@ -42,11 +42,21 @@ impl Api {
 
     /// The changes after `cursor`, with page text, which the desktop indexes for search.
     pub async fn pull(&self, cursor: i64) -> Result<PullResponse> {
+        self.pull_page(cursor, true).await
+    }
+
+    /// The changes after `cursor` without page text, for a look at the whole account that
+    /// stays small.
+    pub async fn pull_without_texts(&self, cursor: i64) -> Result<PullResponse> {
+        self.pull_page(cursor, false).await
+    }
+
+    async fn pull_page(&self, cursor: i64, texts: bool) -> Result<PullResponse> {
         let mut url = self.url("v1/sync/pull")?;
         url.query_pairs_mut()
             .append_pair("cursor", &cursor.to_string())
             .append_pair("limit", &MAX_PULL.to_string())
-            .append_pair("texts", "1");
+            .append_pair("texts", if texts { "1" } else { "0" });
         self.json(|http, token| http.get(url.clone()).bearer_auth(token))
             .await
     }

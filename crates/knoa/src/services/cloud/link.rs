@@ -1,10 +1,13 @@
-//! Linking the library to the signed-in account the first time: everything the account
-//! has, merged with what this Mac has, in one transaction.
+//! Linking the library to the signed-in account the first time. A look at the whole
+//! account without page texts tells linking which workspaces and folders to adopt; then
+//! everything the account has comes in by ordinary pulls, a page at a time, so the
+//! account is never held in memory whole.
 
 use std::time::Instant;
 
 use gpui::AsyncApp;
 use knoa_core::protocol::Account;
+use knoa_store::AccountRows;
 
 use super::{
     SyncStatus,
@@ -33,28 +36,33 @@ pub(super) async fn ensure(
 
 async fn link(engine: &Engine, account: &Account, cx: &mut AsyncApp) -> Result<(), Failure> {
     let started = Instant::now();
-    let mut changes = Vec::new();
-    let mut cursor = 0;
-    loop {
-        engine.status(SyncStatus::Syncing(changes.len()), cx)?;
-        let api = engine.api.clone();
-        let page = net(cx, async move { api.pull(cursor).await }).await?;
-        changes.extend(page.changes);
-        cursor = page.cursor;
-        if !page.more {
-            break;
-        }
-    }
-    let pulled = changes.len();
+    let rows = account_rows(engine, cx).await?;
     let user_id = account.user_id.clone();
     engine
-        .store(cx, move |store| store.link(&user_id, &changes, cursor))
+        .store(cx, move |store| store.link(&user_id, rows))
         .await?;
-    tracing::info!(
-        pulled,
-        took = ?started.elapsed(),
-        "linked the library to the cloud account"
-    );
     engine.library.update(cx, Library::refresh);
+    // Before the first push, as linking always did; an interrupted pull carries on from
+    // its cursor in the next round.
+    engine.pull(cx).await?;
+    tracing::info!(took = ?started.elapsed(), "linked the library to the cloud account");
     Ok(())
+}
+
+/// What linking matches against, pulled from cursor 0 without page texts.
+async fn account_rows(engine: &Engine, cx: &mut AsyncApp) -> Result<AccountRows, Failure> {
+    let mut rows = AccountRows::default();
+    let mut cursor = 0;
+    let mut seen = 0;
+    loop {
+        engine.status(SyncStatus::Syncing(seen), cx)?;
+        let api = engine.api.clone();
+        let page = net(cx, async move { api.pull_without_texts(cursor).await }).await?;
+        seen += page.changes.len();
+        rows.add(&page.changes);
+        cursor = page.cursor;
+        if !page.more {
+            return Ok(rows);
+        }
+    }
 }

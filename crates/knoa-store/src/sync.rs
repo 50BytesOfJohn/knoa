@@ -18,6 +18,7 @@ use rusqlite::{Connection, OptionalExtension as _};
 
 pub(crate) use apply::apply_held;
 pub use device::{CloudJob, ThumbnailDownload, ThumbnailUpload};
+pub use link::AccountRows;
 pub(crate) use recorder::Recorder;
 pub(crate) use rows::page_text;
 pub use unsent::Settled;
