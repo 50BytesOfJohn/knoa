@@ -74,7 +74,9 @@ cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 Only distribution builds made with `KNOA_CHANNEL=release` use `Knoa`. All other builds,
 including optimized builds, keep their library and file credentials in `Knoa Dev` and
 disable self-updates, so development never migrates the installed app's library. In the dev
-channel, `KNOA_DATA_DIR` puts support files in `<dir>/support` and caches in `<dir>/cache`.
+channel, `KNOA_DATA_DIR` puts support files in `<dir>/support` and caches in `<dir>/cache`,
+and `KNOA_SKIP_ONBOARDING=1` marks onboarding done, with no browsers chosen and the default
+workspace, so a fresh library opens on the main screen.
 
 The app opens the file twice: one connection writes, and a read-only one serves the UI's
 reads, so loading the library and saving the organizer's results don't wait for each

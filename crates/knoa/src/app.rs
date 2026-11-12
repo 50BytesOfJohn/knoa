@@ -30,6 +30,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     gpui_component::init(cx);
     let paths = Paths::new()?;
     cx.set_global(SettingsFile::load(paths.settings()));
+    skip_onboarding_in_dev(cx);
     Theme::apply(&SettingsFile::get(cx).theme.clone(), cx);
     Credentials::init(paths.dev_credentials(), cx);
     Network::init(cx)?;
@@ -64,6 +65,18 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     open_main_window(library, cx)?;
     cx.activate(true);
     Ok(())
+}
+
+/// Lets scripted and manual testing start on the main screen of a fresh library, as if
+/// onboarding was finished with no browsers chosen and the default workspace.
+fn skip_onboarding_in_dev(cx: &mut App) {
+    if Channel::current() == Channel::Dev
+        && std::env::var_os("KNOA_SKIP_ONBOARDING").is_some_and(|v| v == "1")
+        && !SettingsFile::get(cx).onboarded
+    {
+        tracing::info!("skipping onboarding: KNOA_SKIP_ONBOARDING=1");
+        SettingsFile::update(cx, |s| s.onboarded = true);
+    }
 }
 
 fn open_main_window(library: gpui::Entity<Library>, cx: &mut App) -> anyhow::Result<()> {
