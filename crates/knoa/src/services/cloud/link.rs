@@ -36,7 +36,12 @@ pub(super) async fn ensure(
 
 async fn link(engine: &Engine, account: &Account, cx: &mut AsyncApp) -> Result<(), Failure> {
     let started = Instant::now();
-    let rows = account_rows(engine, cx).await?;
+    let (rows, read) = account_rows(engine, cx).await?;
+    tracing::debug!(
+        pages = read.pages,
+        rows = read.rows,
+        "linking: read the account, adopting its workspaces and folders"
+    );
     let user_id = account.user_id.clone();
     engine
         .store(cx, move |store| store.link(&user_id, rows))
@@ -44,25 +49,44 @@ async fn link(engine: &Engine, account: &Account, cx: &mut AsyncApp) -> Result<(
     engine.library.update(cx, Library::refresh);
     // Before the first push, as linking always did; an interrupted pull carries on from
     // its cursor in the next round.
-    engine.pull(cx).await?;
-    tracing::info!(took = ?started.elapsed(), "linked the library to the cloud account");
+    let pulled = engine.pull(cx).await?;
+    tracing::info!(
+        read = read.rows,
+        pulled,
+        took = ?started.elapsed(),
+        "linked the library to the cloud account"
+    );
     Ok(())
 }
 
+/// How much of the account the first pass read.
+#[derive(Default)]
+struct Read {
+    pages: usize,
+    rows: usize,
+}
+
 /// What linking matches against, pulled from cursor 0 without page texts.
-async fn account_rows(engine: &Engine, cx: &mut AsyncApp) -> Result<AccountRows, Failure> {
+async fn account_rows(engine: &Engine, cx: &mut AsyncApp) -> Result<(AccountRows, Read), Failure> {
     let mut rows = AccountRows::default();
+    let mut read = Read::default();
     let mut cursor = 0;
-    let mut seen = 0;
     loop {
-        engine.status(SyncStatus::Syncing(seen), cx)?;
+        engine.status(SyncStatus::Syncing(read.rows), cx)?;
         let api = engine.api.clone();
         let page = net(cx, async move { api.pull_without_texts(cursor).await }).await?;
-        seen += page.changes.len();
+        read.pages += 1;
+        read.rows += page.changes.len();
+        tracing::debug!(
+            page = read.pages,
+            rows = page.changes.len(),
+            seen = read.rows,
+            "linking: read a page of the account"
+        );
         rows.add(&page.changes);
         cursor = page.cursor;
         if !page.more {
-            return Ok(rows);
+            return Ok((rows, read));
         }
     }
 }
