@@ -6,7 +6,7 @@ use knoa_core::{
     Origin,
     protocol::{Entity, Mutation, new_id},
 };
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension as _, params};
 use serde_json::{Map, Value, json};
 
 use crate::Result;
@@ -102,6 +102,18 @@ pub(crate) fn acknowledge(conn: &Connection, mids: &[String]) -> Result<()> {
         stmt.execute([mid])?;
     }
     Ok(())
+}
+
+/// The entity and key of a mutation still in the outbox.
+pub(crate) fn row_of(conn: &Connection, mid: &str) -> Result<Option<(Entity, String)>> {
+    let row = conn
+        .query_row(
+            "SELECT entity, key FROM outbox WHERE mid = ?1",
+            [mid],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()?;
+    Ok(row.and_then(|(entity, key)| Some((Entity::from_slug(&entity)?, key))))
 }
 
 pub(crate) fn pending_for(conn: &Connection, entity: Entity, key: &str) -> Result<Pending> {

@@ -21,6 +21,7 @@ use super::{
     ids::{self, Table},
     linked, outbox,
     rows::{self, Link, Synced},
+    unsent,
 };
 use crate::{Error, Result};
 
@@ -90,6 +91,9 @@ impl<'c> Recorder<'c> {
     }
 
     pub fn bookmark_before(&self, id: i64) -> Result<Before<BookmarkPatch>> {
+        if self.linked && unsent::is_unsent(self.conn, id)? {
+            return Ok(Before(None));
+        }
         self.before(|| rows::bookmark(self.conn, id))
     }
 
@@ -216,6 +220,10 @@ impl<'c> Recorder<'c> {
     }
 
     pub fn deleting_bookmark(&self, id: i64) -> Result<()> {
+        // The server never had it.
+        if self.linked && unsent::is_unsent(self.conn, id)? {
+            return Ok(());
+        }
         self.deleting(Entity::Bookmark, Table::Bookmarks, id)
     }
 
@@ -316,8 +324,9 @@ impl<'c> Recorder<'c> {
         Ok(Some(key))
     }
 
+    /// `None` too while the bookmark waits for room on the account: it goes again whole.
     fn bookmark_key(&self, id: i64) -> Result<Option<String>> {
-        if !self.linked {
+        if !self.linked || unsent::is_unsent(self.conn, id)? {
             return Ok(None);
         }
         if let Some(key) = ids::sync_id(self.conn, Table::Bookmarks, id)? {

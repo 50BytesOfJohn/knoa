@@ -122,7 +122,8 @@ share. Signed out, the app is Local mode and none of this runs.
 - **Push:** every store change in a linked library also writes an outbox row with a
   client-made id, in the same transaction, recording only the columns that changed and
   who made them (user or AI). The sync loop sends the outbox after local changes and drops
-  each mutation once the server has answered it.
+  each mutation once the server has answered it. A bookmark refused for the plan's limit
+  waits on this Mac and is sent again whole once the account has room.
 - **Pull:** the server gives every changed row a rising version, and the app pulls what
   came after its cursor, one transaction per page. Columns with a pending local change
   keep the local value. A socket pokes the app when something changed; a pull every few

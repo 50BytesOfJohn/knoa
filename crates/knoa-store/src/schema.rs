@@ -275,6 +275,12 @@ ALTER TABLE bookmarks ADD COLUMN pending_image TEXT;
 UPDATE bookmarks SET pending_image = hex(randomblob(16))
     WHERE image_path IS NOT NULL AND image_key IS NULL;
 ",
+    r"
+-- Bookmarks the account's plan refused, sent again once it has room.
+CREATE TABLE unsent_bookmarks (
+    bookmark_id INTEGER PRIMARY KEY REFERENCES bookmarks (id) ON DELETE CASCADE
+);
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

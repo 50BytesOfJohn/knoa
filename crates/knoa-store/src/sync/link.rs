@@ -60,6 +60,7 @@ impl Store {
             "DELETE FROM sync_state;
              DELETE FROM outbox;
              DELETE FROM sync_inbox;
+             DELETE FROM unsent_bookmarks;
              UPDATE workspaces SET sync_id = NULL;
              UPDATE folders SET sync_id = NULL;
              UPDATE bookmarks SET sync_id = NULL, image_key = NULL,

@@ -203,6 +203,39 @@ fn log_account(previous: Option<&Account>, account: &Account) {
     tracing::info!(plan, organizer, "cloud account");
 }
 
+/// The answers that belong to `sent`, after logging the rejections the plan's limit
+/// didn't cause.
+fn read_answers(sent: &HashSet<String>, results: Vec<MutationResult>) -> Vec<MutationResult> {
+    results
+        .into_iter()
+        .filter(|result| {
+            let ours = sent.contains(&result.mid);
+            if !ours {
+                tracing::warn!(
+                    mid = result.mid,
+                    "the server answered a change it wasn't sent"
+                );
+            } else if result.status == MutationStatus::Rejected
+                && result.reason != Some(RejectReason::Quota)
+            {
+                tracing::warn!(mid = result.mid, reason = ?result.reason, "push rejected");
+            }
+            ours
+        })
+        .collect()
+}
+
+/// Whether bookmarks the plan's limit refused may get through now: the account has room
+/// and has just connected, grown its limit or changed plan. Anything narrower would leave
+/// them waiting; anything wider would resend them on every pull while still over.
+fn has_new_room(previous: Option<&Account>, account: &Account) -> bool {
+    let room = account.usage.bookmarks < account.limits.bookmarks;
+    let changed = previous.is_none_or(|previous| {
+        previous.limits.bookmarks < account.limits.bookmarks || previous.plan != account.plan
+    });
+    room && changed
+}
+
 fn is_too_large(err: &knoa_sync::Error) -> bool {
     matches!(err, knoa_sync::Error::Server { status: 413, .. })
 }
@@ -219,7 +252,7 @@ fn smaller_batch(sent: usize) -> Option<usize> {
 struct Refused {
     /// Some batch got an answer, so the notice says how this push went.
     sent: bool,
-    /// New bookmarks past the plan's limit.
+    /// New bookmarks past the plan's limit, parked until the account has room.
     quota: usize,
     /// Some change was too large for the server even alone.
     too_large: bool,
@@ -233,11 +266,11 @@ impl Refused {
         self.quota > 0 || self.too_large || self.invalid
     }
 
-    fn notice(&self, limit: u64) -> Option<String> {
-        let quota = (self.quota > 0).then(|| {
+    /// `unsent`: the bookmarks the plan's limit keeps on this Mac, from this push or before.
+    fn notice(&self, limit: u64, unsent: usize) -> Option<String> {
+        let quota = (unsent > 0).then(|| {
             format!(
-                "Your plan holds {limit} bookmarks, so {} new bookmarks stayed on this Mac only.",
-                self.quota
+                "Your plan holds {limit} bookmarks, so {unsent} new bookmarks stayed on this Mac only."
             )
         });
         let other = if self.invalid {
@@ -275,6 +308,12 @@ impl Engine {
                 .map_err(|_| Failure::Stopped)?;
             if link::ensure(self, &account, cx).await? == link::Linked::OtherAccount {
                 return Ok(Round::OtherAccount(account));
+            }
+            if has_new_room(self.account.as_ref(), &account) {
+                let resent = self.store(cx, Store::resend_unsent).await?;
+                if resent > 0 {
+                    tracing::info!(resent, "sending bookmarks the plan's limit held back");
+                }
             }
             self.account = Some(account);
         }
@@ -325,7 +364,7 @@ impl Engine {
                 .await?;
             if batch.is_empty() {
                 return if refused.sent {
-                    self.refused(&refused, cx)
+                    self.refused(&refused, cx).await
                 } else {
                     Ok(())
                 };
@@ -333,10 +372,18 @@ impl Engine {
             self.status(SyncStatus::Syncing(batch.len()), cx)?;
             let sent: HashSet<String> = batch.iter().map(|m| m.mid.clone()).collect();
             let api = self.api.clone();
-            let answered = match net(cx, async move { api.push(batch).await }).await {
+            match net(cx, async move { api.push(batch).await }).await {
                 Ok(response) => {
                     at_most = MAX_PUSH;
-                    self.read_answers(&sent, response.results, &mut refused)
+                    let answers = read_answers(&sent, response.results);
+                    // Settling nothing would send the same batch again right away, forever.
+                    if answers.is_empty() {
+                        return Err(Failure::Unanswered);
+                    }
+                    // Every answer is final, whatever it says.
+                    let settled = self.store(cx, move |store| store.settle(&answers)).await?;
+                    refused.quota += settled.parked;
+                    refused.invalid |= settled.invalid > 0;
                 }
                 Err(Failure::Sync(err)) if is_too_large(&err) => {
                     if let Some(smaller) = smaller_batch(sent.len()) {
@@ -346,64 +393,29 @@ impl Engine {
                     // Alone and still too large, the change can never get through.
                     tracing::warn!(?sent, "dropped a change too large for the server");
                     refused.too_large = true;
-                    sent.into_iter().collect()
+                    let dropped: Vec<String> = sent.into_iter().collect();
+                    self.store(cx, move |store| store.acknowledge(&dropped))
+                        .await?;
                 }
                 Err(failure) => {
                     // The batches before this one were answered, and what they kept off
                     // the server stays off it.
                     if refused.kept_any() {
-                        self.refused(&refused, cx)?;
+                        self.refused(&refused, cx).await?;
                     }
                     return Err(failure);
                 }
-            };
+            }
             refused.sent = true;
-            // Acknowledging nothing would send the same batch again right away, forever.
-            if answered.is_empty() {
-                return Err(Failure::Unanswered);
-            }
-            // Every answer is final, whatever it says.
-            self.store(cx, move |store| store.acknowledge(&answered))
-                .await?;
         }
-    }
-
-    /// The ids of the answers that belong to `sent`, after logging the rejections and
-    /// counting them in `refused`.
-    fn read_answers(
-        &self,
-        sent: &HashSet<String>,
-        results: Vec<MutationResult>,
-        refused: &mut Refused,
-    ) -> Vec<String> {
-        let mut answered = Vec::with_capacity(results.len());
-        for result in results {
-            if !sent.contains(&result.mid) {
-                tracing::warn!(
-                    mid = result.mid,
-                    "the server answered a change it wasn't sent"
-                );
-                continue;
-            }
-            if result.status == MutationStatus::Rejected {
-                match result.reason {
-                    Some(RejectReason::Quota) => refused.quota += 1,
-                    reason => {
-                        tracing::warn!(mid = result.mid, ?reason, "push rejected");
-                        refused.invalid = true;
-                    }
-                }
-            }
-            answered.push(result.mid);
-        }
-        answered
     }
 
     /// Says what the last push kept off the server, or clears that once a push gets
     /// through whole.
-    fn refused(&self, refused: &Refused, cx: &mut AsyncApp) -> Result<(), Failure> {
+    async fn refused(&self, refused: &Refused, cx: &mut AsyncApp) -> Result<(), Failure> {
         let limit = self.account.as_ref().map_or(0, |a| a.limits.bookmarks);
-        let notice = refused.notice(limit);
+        let unsent = self.store(cx, |store| store.unsent_bookmarks()).await?;
+        let notice = refused.notice(limit, unsent);
         if let Some(notice) = &notice {
             tracing::warn!("{notice}");
         }
