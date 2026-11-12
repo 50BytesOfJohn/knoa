@@ -233,6 +233,13 @@ CREATE UNIQUE INDEX bookmarks_sync_id ON bookmarks (sync_id);
 -- The server's thumbnail. `image_path` is this Mac's cached copy.
 ALTER TABLE bookmarks ADD COLUMN image_key TEXT;
 
+-- A local image stays pending across pulls until that exact image is uploaded. Every
+-- v0.1.5 row with an image needs one, since none has an `image_key` yet; this must run
+-- after both columns exist.
+ALTER TABLE bookmarks ADD COLUMN pending_image TEXT;
+UPDATE bookmarks SET pending_image = hex(randomblob(16))
+    WHERE image_path IS NOT NULL AND image_key IS NULL;
+
 -- The title and folder this Mac's browser last gave the bookmark. Imports compare against
 -- these, not the synced columns, so two Macs whose browsers disagree don't keep
 -- rewriting each other.
@@ -268,14 +275,7 @@ CREATE TABLE sync_inbox (
     change  TEXT NOT NULL,
     PRIMARY KEY (entity, key)
 );
-",
-    r"
--- A local image stays pending across pulls until that exact image is uploaded.
-ALTER TABLE bookmarks ADD COLUMN pending_image TEXT;
-UPDATE bookmarks SET pending_image = hex(randomblob(16))
-    WHERE image_path IS NOT NULL AND image_key IS NULL;
-",
-    r"
+
 -- Bookmarks the account's plan refused, sent again once it has room.
 CREATE TABLE unsent_bookmarks (
     bookmark_id INTEGER PRIMARY KEY REFERENCES bookmarks (id) ON DELETE CASCADE
@@ -381,6 +381,7 @@ mod tests {
                  VALUES (7, 1, 'https://a.dev/', 'A', 'a.dev', 1, 'helium:Default', 'Bar');
              INSERT INTO bookmarks (id, workspace_id, url, title, site, added_at)
                  VALUES (8, 1, 'https://b.dev/', 'https://b.dev/', 'b.dev', 2);
+             UPDATE bookmarks SET image_path = 'a.png' WHERE id = 7;
              INSERT INTO bookmark_folders VALUES (7, 3, 'user', NULL);
              INSERT INTO bookmark_tags VALUES (7, 'rust', 'ai');",
         )
@@ -403,8 +404,21 @@ mod tests {
             None,
             "added by hand"
         );
-        assert_eq!(text("SELECT max(sync_id) FROM bookmarks"), None);
         let count = |sql: &str| -> i64 { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(text("SELECT max(sync_id) FROM bookmarks"), None);
+        assert_eq!(
+            count("SELECT length(pending_image) FROM bookmarks WHERE id = 7"),
+            32,
+            "a v0.1.5 image still has to be uploaded"
+        );
+        assert_eq!(
+            text("SELECT pending_image FROM bookmarks WHERE id = 8"),
+            None
+        );
+        assert_eq!(
+            count("SELECT count(*) FROM sqlite_master WHERE name = 'unsent_bookmarks'"),
+            1
+        );
         assert_eq!(count("SELECT count(*) FROM bookmark_folders"), 1);
         assert_eq!(count("SELECT count(*) FROM bookmark_tags"), 1);
         assert_eq!(count("SELECT count(*) FROM sync_state"), 0);
