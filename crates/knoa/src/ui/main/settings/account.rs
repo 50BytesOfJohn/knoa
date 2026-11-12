@@ -12,7 +12,7 @@ use super::{form, updates::when};
 use crate::{
     services::cloud::{Cloud, Phase, SyncStatus},
     ui::{
-        components::{Tone, button},
+        components::{Tone, button, grouped},
         theme::Theme,
     },
 };
@@ -208,17 +208,4 @@ fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
         ),
     };
     form::row("Usage", Some(&about), gpui::Empty, theme)
-}
-
-/// `100000` as `100,000`.
-fn grouped(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, digit) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
 }

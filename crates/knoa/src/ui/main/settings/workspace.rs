@@ -105,8 +105,10 @@ impl WorkspacePage {
             cx.subscribe(&instructions, Self::save_on_blur),
             cx.subscribe(&guideline, Self::save_on_blur),
             cx.subscribe(&tag_list, |this, _, _: &TagListChanged, cx| this.save(cx)),
-            // The header shows the name as it's typed.
+            // The header shows the name as it's typed, and the limits' messages follow it.
             cx.observe(&name, |_, _, cx| cx.notify()),
+            cx.observe(&instructions, |_, _, cx| cx.notify()),
+            cx.observe(&guideline, |_, _, cx| cx.notify()),
             // Organizing again is offered only while AI is on.
             cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify()),
         ];
