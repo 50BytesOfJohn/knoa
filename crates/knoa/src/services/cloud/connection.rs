@@ -222,7 +222,7 @@ impl Cloud {
         self.session_events = None;
         self.sync = SyncStatus::Starting;
         self.last_synced = None;
-        self.quota_notice = None;
+        self.push_notice = None;
     }
 }
 

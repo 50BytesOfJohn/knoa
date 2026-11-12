@@ -36,8 +36,9 @@ pub struct Cloud {
     phase: Phase,
     sync: SyncStatus,
     last_synced: Option<jiff::Timestamp>,
-    /// The plan's bookmark limit refused changes in the last push.
-    quota_notice: Option<String>,
+    /// What the last push kept off the server: bookmarks past the plan's limit, or
+    /// changes too large to send.
+    push_notice: Option<String>,
     /// Why the last sign-in didn't work, until the next one starts.
     problem: Option<String>,
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
@@ -116,7 +117,7 @@ impl Cloud {
                 phase: Phase::SignedOut,
                 sync: SyncStatus::Starting,
                 last_synced: None,
-                quota_notice: None,
+                push_notice: None,
                 problem: None,
                 session_events: None,
                 _library_changes: changes,
@@ -159,9 +160,9 @@ impl Cloud {
     }
 
     /// Something the user should know that isn't an error of the sync itself: the plan's
-    /// limits holding back changes or organizing.
+    /// limits holding back changes or organizing, or changes too large to send.
     pub fn notice(&self) -> Option<&str> {
-        self.quota_notice
+        self.push_notice
             .as_deref()
             .or_else(|| self.allowance_used_up().then_some(ALLOWANCE_USED_UP))
     }
@@ -210,9 +211,9 @@ impl Cloud {
         }
     }
 
-    fn set_quota_notice(&mut self, notice: Option<String>, cx: &mut Context<'_, Cloud>) {
-        if self.quota_notice != notice {
-            self.quota_notice = notice;
+    fn set_push_notice(&mut self, notice: Option<String>, cx: &mut Context<'_, Cloud>) {
+        if self.push_notice != notice {
+            self.push_notice = notice;
             cx.notify();
         }
     }

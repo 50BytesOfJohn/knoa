@@ -24,7 +24,7 @@ pub use kind::{Kind, KindDef};
 pub use query::{Comparison, FieldFilter, Place, Query};
 pub use tag::{
     ListedTag, MAX_AI_TAGS, MAX_LISTED_TAGS, MAX_TAG_CHARS, MAX_TAG_DESCRIPTION_CHARS, TagList,
-    normalize_tag,
+    normalize_tag, tag_fits,
 };
 pub use usage::{ModelUsage, Usage, UsageTotals};
 pub use workspace::{Screening, Workspace, WorkspaceId};

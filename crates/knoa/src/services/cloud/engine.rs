@@ -187,6 +187,42 @@ fn is_too_large(err: &knoa_sync::Error) -> bool {
     matches!(err, knoa_sync::Error::Server { status: 413, .. })
 }
 
+/// How many of the `sent` changes to try next after the server found them too large
+/// together. Halving finds the one too large on its own in a few tries; `None` when it is
+/// already alone.
+fn smaller_batch(sent: usize) -> Option<usize> {
+    (sent > 1).then_some(sent / 2)
+}
+
+/// What one push kept off the server.
+#[derive(Default)]
+struct Refused {
+    /// Some batch got an answer, so the notice says how this push went.
+    sent: bool,
+    /// New bookmarks past the plan's limit.
+    quota: usize,
+    /// Some change was too large for the server even alone.
+    too_large: bool,
+}
+
+impl Refused {
+    fn notice(&self, limit: u64) -> Option<String> {
+        let quota = (self.quota > 0).then(|| {
+            format!(
+                "Your plan holds {limit} bookmarks, so {} new bookmarks stayed on this Mac only.",
+                self.quota
+            )
+        });
+        let too_large = self
+            .too_large
+            .then(|| "Some changes were too large to sync and stayed on this Mac only.".to_owned());
+        match (quota, too_large) {
+            (Some(quota), Some(too_large)) => Some(format!("{quota} {too_large}")),
+            (quota, too_large) => quota.or(too_large),
+        }
+    }
+}
+
 enum Round {
     Done,
     /// The library is linked to another account than this one.
@@ -210,14 +246,16 @@ impl Engine {
                 .map_err(|_| Failure::Stopped)?;
             self.account = Some(account);
         }
-        self.push(cx).await?;
+        // A push that keeps failing mustn't keep this Mac from hearing what changed elsewhere.
+        let pushed = self.push(cx).await;
         let organizer = self.account.as_ref().map(|a| a.organizer);
-        if organizer == Some(Who::Cloud) {
+        if pushed.is_ok() && organizer == Some(Who::Cloud) {
             self.hand_jobs_to_cloud(cx).await?;
         }
         if wanted.pull {
             self.pull(cx).await?;
         }
+        pushed?;
         thumbnails.download(self, cx).await?;
         if organizer == Some(Who::Device) {
             thumbnails.upload(self, cx).await?;
@@ -247,23 +285,40 @@ impl Engine {
 
     /// Sends the outbox, a batch at a time, until it is empty.
     async fn push(&self, cx: &mut AsyncApp) -> Result<(), Failure> {
+        let mut at_most = MAX_PUSH;
+        let mut refused = Refused::default();
         loop {
-            let batch = self.store(cx, |store| store.next_push()).await?;
+            let batch = self
+                .store(cx, move |store| store.next_push_at_most(at_most))
+                .await?;
             if batch.is_empty() {
-                return Ok(());
+                return if refused.sent {
+                    self.refused(&refused, cx)
+                } else {
+                    Ok(())
+                };
             }
             self.status(SyncStatus::Syncing(batch.len()), cx)?;
             let sent: HashSet<String> = batch.iter().map(|m| m.mid.clone()).collect();
             let api = self.api.clone();
             let answered = match net(cx, async move { api.push(batch).await }).await {
-                Ok(response) => self.read_answers(&sent, response.results, cx)?,
-                // Alone and still too large, the change can never get through.
-                Err(Failure::Sync(err)) if is_too_large(&err) && sent.len() == 1 => {
+                Ok(response) => {
+                    at_most = MAX_PUSH;
+                    self.read_answers(&sent, response.results, &mut refused)
+                }
+                Err(Failure::Sync(err)) if is_too_large(&err) => {
+                    if let Some(smaller) = smaller_batch(sent.len()) {
+                        at_most = smaller;
+                        continue;
+                    }
+                    // Alone and still too large, the change can never get through.
                     tracing::warn!(?sent, "dropped a change too large for the server");
+                    refused.too_large = true;
                     sent.into_iter().collect()
                 }
                 Err(failure) => return Err(failure),
             };
+            refused.sent = true;
             // Acknowledging nothing would send the same batch again right away, forever.
             if answered.is_empty() {
                 return Err(Failure::Unanswered);
@@ -275,14 +330,13 @@ impl Engine {
     }
 
     /// The ids of the answers that belong to `sent`, after logging the rejections and
-    /// noting the ones the plan's limit refused.
+    /// counting the ones the plan's limit refused.
     fn read_answers(
         &self,
         sent: &HashSet<String>,
         results: Vec<MutationResult>,
-        cx: &mut AsyncApp,
-    ) -> Result<Vec<String>, Failure> {
-        let mut quota = 0;
+        refused: &mut Refused,
+    ) -> Vec<String> {
         let mut answered = Vec::with_capacity(results.len());
         for result in results {
             if !sent.contains(&result.mid) {
@@ -294,30 +348,25 @@ impl Engine {
             }
             if result.status == MutationStatus::Rejected {
                 match result.reason {
-                    Some(RejectReason::Quota) => quota += 1,
+                    Some(RejectReason::Quota) => refused.quota += 1,
                     reason => tracing::warn!(mid = result.mid, ?reason, "push rejected"),
                 }
             }
             answered.push(result.mid);
         }
-        self.quota_refused(quota, cx)?;
-        Ok(answered)
+        answered
     }
 
-    /// Says how many new bookmarks the plan's limit kept off the server, or clears that
-    /// once a push gets through without any.
-    fn quota_refused(&self, refused: usize, cx: &mut AsyncApp) -> Result<(), Failure> {
-        let notice = (refused > 0).then(|| {
-            let limit = self.account.as_ref().map_or(0, |a| a.limits.bookmarks);
-            format!(
-                "Your plan holds {limit} bookmarks, so {refused} new bookmarks stayed on this Mac only."
-            )
-        });
+    /// Says what the last push kept off the server, or clears that once a push gets
+    /// through whole.
+    fn refused(&self, refused: &Refused, cx: &mut AsyncApp) -> Result<(), Failure> {
+        let limit = self.account.as_ref().map_or(0, |a| a.limits.bookmarks);
+        let notice = refused.notice(limit);
         if let Some(notice) = &notice {
             tracing::warn!("{notice}");
         }
         self.this
-            .update(cx, |this, cx| this.set_quota_notice(notice, cx))
+            .update(cx, |this, cx| this.set_push_notice(notice, cx))
             .map_err(|_| Failure::Stopped)
     }
 
@@ -422,5 +471,22 @@ pub(super) async fn net<T: Send + 'static>(
         Err(err) => Err(Failure::Sync(knoa_sync::Error::Io(std::io::Error::other(
             err.to_string(),
         )))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn halving_a_batch_too_large_isolates_one_change() {
+        let mut tries = 0;
+        let mut at_most = MAX_PUSH;
+        while let Some(smaller) = smaller_batch(at_most) {
+            at_most = smaller;
+            tries += 1;
+        }
+        assert_eq!(at_most, 1);
+        assert!(tries <= 9, "{tries} tries");
     }
 }

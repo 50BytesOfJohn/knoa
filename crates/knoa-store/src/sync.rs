@@ -46,7 +46,12 @@ impl Store {
     /// The next push: the oldest local changes not pushed yet, in the order they were
     /// made, at most `MAX_PUSH` of them and `MAX_PUSH_BYTES` in all.
     pub fn next_push(&self) -> Result<Vec<Mutation>> {
-        outbox::pending(&self.conn, MAX_PUSH, MAX_PUSH_BYTES)
+        self.next_push_at_most(MAX_PUSH)
+    }
+
+    /// [`Store::next_push`], with at most `limit` changes.
+    pub fn next_push_at_most(&self, limit: usize) -> Result<Vec<Mutation>> {
+        outbox::pending(&self.conn, limit.min(MAX_PUSH), MAX_PUSH_BYTES)
     }
 
     /// Drops pushed mutations. The server's answer for each is final, whether it applied,

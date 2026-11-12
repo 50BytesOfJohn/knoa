@@ -1,6 +1,6 @@
 //! Tags on bookmarks.
 
-use knoa_core::{BookmarkId, Origin, WorkspaceId, normalize_tag};
+use knoa_core::{BookmarkId, Origin, WorkspaceId, normalize_tag, tag_fits};
 use rusqlite::params;
 
 use crate::{Result, Store, search, sync::Recorder};
@@ -21,7 +21,8 @@ impl Store {
     /// back an AI tag that was removed by mistake.
     pub fn add_tag(&mut self, bookmark: BookmarkId, tag: &str, origin: Origin) -> Result<()> {
         let tag = normalize_tag(tag);
-        if tag.is_empty() {
+        // The server refuses a longer one, and the change would wait in the outbox for good.
+        if !tag_fits(&tag) {
             return Ok(());
         }
         let tx = self.conn.transaction()?;
