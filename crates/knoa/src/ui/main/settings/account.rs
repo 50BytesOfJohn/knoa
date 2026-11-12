@@ -131,7 +131,7 @@ impl AccountPage {
                     Plan::Pro => (
                         "Pro plan. Knoa organizes your bookmarks in the cloud.",
                         "Manage subscription",
-                        config.web_app,
+                        config.billing,
                     ),
                 };
                 form::row(

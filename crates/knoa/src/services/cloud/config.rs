@@ -1,6 +1,6 @@
 //! Which servers Cloud mode talks to. Dev builds use staging, which `KNOA_API_URL`,
 //! `KNOA_CLERK_ISSUER` and `KNOA_CLERK_CLIENT_ID` can override. `KNOA_WEB_URL` sets
-//! the web app (default <http://localhost:3210>). Release-channel builds use
+//! the website (default <http://localhost:3210>). Release-channel builds use
 //! production, and only when the build was given its OAuth client id.
 
 use anyhow::anyhow;
@@ -15,8 +15,8 @@ pub struct CloudConfig {
     pub sync: Config,
     /// Where a free account goes to subscribe.
     pub pricing: Url,
-    /// The web app, where subscribers manage their subscription.
-    pub web_app: Url,
+    /// The web page that opens the subscriber's billing portal.
+    pub billing: Url,
 }
 
 impl CloudConfig {
@@ -51,7 +51,7 @@ fn staging() -> anyhow::Result<CloudConfig> {
             client_id: var("KNOA_CLERK_CLIENT_ID", "C8fhAQh3MI0bMg9O"),
         },
         pricing: parse_named("KNOA_WEB_URL", &format!("{web}/pricing"))?,
-        web_app: parse_named("KNOA_WEB_URL", &format!("{web}/app"))?,
+        billing: parse_named("KNOA_WEB_URL", &format!("{web}/billing"))?,
     })
 }
 
@@ -78,6 +78,6 @@ fn production() -> Option<CloudConfig> {
             client_id: client_id.to_owned(),
         },
         pricing: Url::parse("https://useknoa.app/pricing").ok()?,
-        web_app: Url::parse("https://useknoa.app/app").ok()?,
+        billing: Url::parse("https://useknoa.app/billing").ok()?,
     })
 }
