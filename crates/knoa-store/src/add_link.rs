@@ -3,7 +3,7 @@
 use knoa_core::{BookmarkId, WorkspaceId, site_of};
 use rusqlite::{OptionalExtension as _, params};
 
-use crate::{Result, Store, search, trash};
+use crate::{Result, Store, search, sync::Recorder, trash};
 
 /// A link the user added by hand.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,11 +26,15 @@ impl Store {
                 |row| row.get(0),
             )
             .optional()?;
+        let recorder = Recorder::user(&tx)?;
         if let Some(id) = existing {
-            tx.execute(
-                "UPDATE bookmarks SET kept = 1, set_aside = NULL, deleted_at = NULL WHERE id = ?1",
-                [id],
-            )?;
+            recorder.on_bookmark(id, || {
+                tx.execute(
+                    "UPDATE bookmarks SET kept = 1, set_aside = NULL, deleted_at = NULL WHERE id = ?1",
+                    [id],
+                )?;
+                Ok(())
+            })?;
             tx.commit()?;
             return Ok(AddedLink {
                 id: BookmarkId(id),
@@ -45,6 +49,7 @@ impl Store {
         )?;
         let id = tx.last_insert_rowid();
         tx.execute("INSERT INTO jobs (bookmark_id) VALUES (?1)", [id])?;
+        recorder.created_bookmark(id)?;
         search::reindex(&tx, id)?;
         tx.commit()?;
         Ok(AddedLink {

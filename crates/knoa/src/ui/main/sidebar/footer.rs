@@ -1,5 +1,5 @@
 //! The sidebar's footer: the wordmark with the mascot as its full stop, a word on what the
-//! AI is doing, and the settings button.
+//! AI is doing, how cloud sync is doing when signed in, and the settings button.
 
 use gpui::{
     Context, InteractiveElement as _, IntoElement, ParentElement as _,
@@ -8,10 +8,13 @@ use gpui::{
 
 use super::{BUTTON_ICON, BUTTON_PADDING, CONTENT_INSET, TITLEBAR_BUTTON};
 use crate::{
-    services::organizer::AiStatus,
+    services::{
+        cloud::{Cloud, Phase, SyncStatus},
+        organizer::AiStatus,
+    },
     ui::{
-        components::icon,
-        main::{MainView, OpenSettings},
+        components::{icon, tip},
+        main::{MainView, OpenSettings, settings::Page},
         mascot::{Mood, mascot},
         theme::{ROW_RADIUS, Theme},
         wordmark::wordmark_letters,
@@ -24,14 +27,17 @@ impl MainView {
         organizing: usize,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
+        let sync_mark = self.sync_mark(cx);
         let theme = Theme::get(cx);
         let status = self.organizer.read(cx).status().clone();
         let mood = Mood::of(&status, organizing);
         // Idle and ready needs no words: the mascot's face says it.
         let label = match &status {
             AiStatus::Off => Some(("AI off".to_owned(), theme.faint)),
-            AiStatus::Ready if organizing > 0 => Some((organizing.to_string(), theme.ai_text)),
-            AiStatus::Ready => None,
+            AiStatus::Ready | AiStatus::Cloud if organizing > 0 => {
+                Some((organizing.to_string(), theme.ai_text))
+            }
+            AiStatus::Ready | AiStatus::Cloud => None,
             AiStatus::NeedsAttention(_) => Some(("Needs attention".to_owned(), theme.danger)),
         };
         // The mascot stands on the wordmark's baseline, where the logo's dot would be.
@@ -61,6 +67,7 @@ impl MainView {
                 s.child(div().text_xs().text_color(color).child(label))
             })
             .child(div().flex_1())
+            .children(sync_mark)
             .child(
                 div()
                     .id("settings")
@@ -76,5 +83,48 @@ impl MainView {
                         this.open_settings(&OpenSettings, window, cx);
                     })),
             )
+    }
+}
+
+impl MainView {
+    /// A quiet cloud while all is well, so a sync problem is noticed without a banner.
+    fn sync_mark(&self, cx: &mut Context<'_, MainView>) -> Option<gpui::AnyElement> {
+        let theme = Theme::get(cx);
+        let cloud = Cloud::entity(cx);
+        let cloud = cloud.read(cx);
+        if !matches!(cloud.phase(), Phase::SignedIn(_) | Phase::OtherAccount(_)) {
+            return None;
+        }
+        let (name, color, tooltip) = if matches!(cloud.phase(), Phase::OtherAccount(_)) {
+            ("cloud-alert", theme.danger, "Sync is waiting for you")
+        } else if cloud.notice().is_some() {
+            ("cloud-alert", theme.danger, "Your plan's limit is reached")
+        } else {
+            match cloud.sync() {
+                SyncStatus::Starting | SyncStatus::Syncing(_) => {
+                    ("refresh-cw", theme.faint, "Syncing")
+                }
+                SyncStatus::UpToDate => ("cloud-check", theme.faint, "Synced"),
+                SyncStatus::Offline => ("cloud-off", theme.faint, "Offline"),
+                SyncStatus::Error(_) => ("cloud-alert", theme.danger, "Sync stopped"),
+            }
+        };
+        Some(
+            div()
+                .id("sync-status")
+                .size(TITLEBAR_BUTTON)
+                .rounded(ROW_RADIUS)
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.hover))
+                .child(icon(name, BUTTON_ICON, color))
+                .tooltip(tip(tooltip, None, theme))
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.show_settings(Page::Account, window, cx);
+                }))
+                .into_any_element(),
+        )
     }
 }

@@ -3,7 +3,8 @@
 # Knoa-<version>.zip for Sparkle. Both hold a universal Knoa.app signed with a Developer ID
 # and notarized, with the ticket stapled so Gatekeeper accepts it offline.
 #
-#   KNOA_SIGN_IDENTITY   a Developer ID Application identity in the keychain.
+#   KNOA_SIGN_IDENTITY     a Developer ID Application identity in the keychain.
+#   KNOA_CLERK_CLIENT_ID   the production OAuth client id; without it Cloud mode is compiled out.
 #   Notary credentials, one of:
 #     KNOA_NOTARY_PROFILE                                a `notarytool store-credentials` profile
 #     NOTARY_KEY_PATH, NOTARY_KEY_ID, NOTARY_ISSUER_ID   an App Store Connect API key
@@ -13,6 +14,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 : "${KNOA_SIGN_IDENTITY:?set it to a Developer ID Application identity}"
+: "${KNOA_CLERK_CLIENT_ID:?set it to the production Clerk OAuth client id}"
+export KNOA_CLERK_CLIENT_ID
 if [[ -n ${KNOA_NOTARY_PROFILE:-} ]]; then
     NOTARY=(--keychain-profile "$KNOA_NOTARY_PROFILE")
 else
@@ -23,7 +26,7 @@ APP=target/release/Knoa.app
 DIST=target/dist
 VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 
-KNOA_UNIVERSAL=1 scripts/bundle.sh
+KNOA_CHANNEL=release KNOA_DEV=0 KNOA_UNIVERSAL=1 scripts/bundle.sh
 rm -rf "$DIST"
 mkdir -p "$DIST"
 

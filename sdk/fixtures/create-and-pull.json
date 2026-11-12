@@ -1,0 +1,234 @@
+{
+	"$comment": "Sync protocol fixture, shared by the TypeScript and Rust cores. Each fixture starts from an empty library on the free plan; run the steps in order and compare each response exactly.",
+	"about": "Rows get their defaults, tag keys are normalized, and a bookmark without its workspace is rejected.",
+	"steps": [
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m1",
+						"entity": "workspace",
+						"key": "11111111-1111-4111-8111-111111111111",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"name": "Personal"
+						}
+					},
+					{
+						"mid": "m2",
+						"entity": "folder",
+						"key": "22222222-2222-4222-8222-222222222222",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"name": "Reading"
+						}
+					},
+					{
+						"mid": "m3",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://www.example.com/a",
+							"added_at": 1700000000
+						}
+					},
+					{
+						"mid": "m4",
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/Rust Lang",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"origin": "user"
+						}
+					},
+					{
+						"mid": "m5",
+						"entity": "bookmark_folder",
+						"key": "33333333-3333-4333-8333-333333333333/22222222-2222-4222-8222-222222222222",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"origin": "user"
+						}
+					},
+					{
+						"mid": "m6",
+						"entity": "bookmark",
+						"key": "44444444-4444-4444-8444-444444444444",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"workspace_id": "55555555-5555-4555-8555-555555555555",
+							"url": "https://example.com/x",
+							"added_at": 1
+						}
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m1",
+						"status": "applied"
+					},
+					{
+						"mid": "m2",
+						"status": "applied"
+					},
+					{
+						"mid": "m3",
+						"status": "applied"
+					},
+					{
+						"mid": "m4",
+						"status": "applied"
+					},
+					{
+						"mid": "m5",
+						"status": "applied"
+					},
+					{
+						"mid": "m6",
+						"status": "rejected",
+						"reason": "invalid"
+					}
+				],
+				"version": 5
+			}
+		},
+		{
+			"pull": {
+				"cursor": 0,
+				"limit": 1000,
+				"texts": false
+			},
+			"expect": {
+				"changes": [
+					{
+						"entity": "workspace",
+						"key": "11111111-1111-4111-8111-111111111111",
+						"version": 1,
+						"deleted": false,
+						"data": {
+							"id": "11111111-1111-4111-8111-111111111111",
+							"name": "Personal",
+							"color": 0,
+							"position": 0,
+							"instructions": "",
+							"screening": false,
+							"guideline": "",
+							"only_listed_tags": false,
+							"tag_list": []
+						}
+					},
+					{
+						"entity": "folder",
+						"key": "22222222-2222-4222-8222-222222222222",
+						"version": 2,
+						"deleted": false,
+						"data": {
+							"id": "22222222-2222-4222-8222-222222222222",
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"name": "Reading",
+							"description": "",
+							"auto_assign": true,
+							"color": 0,
+							"hue": null,
+							"icon": null,
+							"position": 0
+						}
+					},
+					{
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"version": 3,
+						"deleted": false,
+						"data": {
+							"id": "33333333-3333-4333-8333-333333333333",
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://www.example.com/a",
+							"title": "https://www.example.com/a",
+							"site": "example.com",
+							"added_at": 1700000000,
+							"up_next": false,
+							"kept": false,
+							"deleted_at": null,
+							"browser_folder": null,
+							"status": "new",
+							"kind": null,
+							"summary": null,
+							"fields": {},
+							"extras": [],
+							"set_aside": null,
+							"model": null,
+							"organized_at": null,
+							"error": null,
+							"image_key": null,
+							"image_width": null,
+							"image_height": null
+						}
+					},
+					{
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/rust-lang",
+						"version": 4,
+						"deleted": false,
+						"data": {
+							"bookmark_id": "33333333-3333-4333-8333-333333333333",
+							"tag": "rust-lang",
+							"origin": "user",
+							"excluded": false
+						}
+					},
+					{
+						"entity": "bookmark_folder",
+						"key": "33333333-3333-4333-8333-333333333333/22222222-2222-4222-8222-222222222222",
+						"version": 5,
+						"deleted": false,
+						"data": {
+							"bookmark_id": "33333333-3333-4333-8333-333333333333",
+							"folder_id": "22222222-2222-4222-8222-222222222222",
+							"origin": "user",
+							"probability": null,
+							"excluded": false
+						}
+					}
+				],
+				"cursor": 5,
+				"more": false
+			}
+		},
+		{
+			"pull": {
+				"cursor": 3,
+				"limit": 1,
+				"texts": false
+			},
+			"expect": {
+				"changes": [
+					{
+						"entity": "bookmark_tag",
+						"key": "33333333-3333-4333-8333-333333333333/rust-lang",
+						"version": 4,
+						"deleted": false,
+						"data": {
+							"bookmark_id": "33333333-3333-4333-8333-333333333333",
+							"tag": "rust-lang",
+							"origin": "user",
+							"excluded": false
+						}
+					}
+				],
+				"cursor": 4,
+				"more": true
+			}
+		}
+	]
+}

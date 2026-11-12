@@ -31,7 +31,7 @@ use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
-    services::{organizer::Organizer, thumbnails::Thumbnails},
+    services::{cloud::Cloud, organizer::Organizer, thumbnails::Thumbnails},
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -94,6 +94,7 @@ impl MainView {
             }),
             cx.observe(&organizer, |_, _, cx| cx.notify()),
             cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
+            cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
         ];
         let cards_focus = cx.focus_handle();

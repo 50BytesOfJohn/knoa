@@ -11,6 +11,7 @@ mod jobs;
 mod read;
 mod schema;
 mod search;
+mod sync;
 mod tag_list;
 mod tags;
 mod trash;
@@ -25,6 +26,7 @@ pub use add_link::AddedLink;
 pub use import::{ImportReport, NewBookmarks};
 pub use jobs::Job;
 pub use read::Counts;
+pub use sync::{AccountRows, CloudJob, Settled, ThumbnailDownload, ThumbnailUpload};
 
 // The wrapped errors are in the message and deliberately not the `source()`: an error chain
 // shown as `{:#}` would print them twice, and rusqlite's own source would add a third copy.
@@ -38,6 +40,12 @@ pub enum Error {
         "the library was saved by a newer version of Knoa (schema {found}, this version knows up to {supported}); update Knoa to open it"
     )]
     NewerDatabase { found: usize, supported: usize },
+    #[error("the library is linked to another account ({linked}); unlink it first")]
+    OtherAccount { linked: String },
+    #[error("the library isn't linked to an account")]
+    NotLinked,
+    #[error("sync id {0:?} isn't a UUID")]
+    InvalidSyncId(String),
 }
 
 impl From<rusqlite::Error> for Error {
@@ -104,10 +112,92 @@ impl Store {
 
 #[cfg(test)]
 pub(crate) mod test_support {
-    use knoa_core::{NewBookmark, WorkspaceId};
+    use knoa_core::{
+        BookmarkId, NewBookmark, Query, WorkspaceId,
+        protocol::{Change, Mutation},
+    };
+    use serde_json::{Value, json};
+
+    use crate::{AccountRows, NewBookmarks, Store};
 
     /// The workspace every database starts with.
     pub const WORKSPACE: WorkspaceId = WorkspaceId(1);
+
+    /// The id the account knows `WORKSPACE` by, once linked.
+    pub const WORKSPACE_KEY: &str = "6f1c2a3e-8b4d-4e5f-9a6b-7c8d9e0f1a2b";
+
+    /// A store linked to an account whose only row is a workspace that `WORKSPACE` adopts.
+    pub fn linked(store: &mut Store) {
+        let personal = change(json!({
+            "entity": "workspace", "key": WORKSPACE_KEY, "version": 1, "deleted": false,
+            "data": workspace_row(WORKSPACE_KEY, "Personal"),
+        }));
+        link(store, "user-1", &[&[personal]]);
+    }
+
+    /// Links `store` to `user` as the app does: matching against every page first, then
+    /// pulling them one by one, page `n` ending at cursor `n + 1`.
+    pub fn link(store: &mut Store, user: &str, pages: &[&[Change]]) {
+        let mut account = AccountRows::default();
+        for page in pages {
+            account.add(page);
+        }
+        store.link(user, account).unwrap();
+        for (cursor, page) in (1..).zip(pages) {
+            store.apply_remote(page, cursor).unwrap();
+        }
+    }
+
+    pub fn change(json: Value) -> Change {
+        serde_json::from_value(json).unwrap()
+    }
+
+    pub fn workspace_row(id: &str, name: &str) -> Value {
+        json!({ "id": id, "name": name, "color": 0, "position": 1, "instructions": "",
+                "screening": false, "guideline": "", "only_listed_tags": false, "tag_list": [] })
+    }
+
+    pub fn bookmark_row(id: &str, workspace: &str, url: &str, title: &str) -> Value {
+        json!({ "id": id, "workspace_id": workspace, "url": url, "title": title, "site": "a.dev",
+                "added_at": 5, "up_next": false, "kept": false, "deleted_at": null,
+                "browser_folder": null, "status": "new", "kind": null, "summary": null,
+                "fields": {}, "extras": [], "set_aside": null, "model": null,
+                "organized_at": null, "error": null, "image_key": null, "image_width": null,
+                "image_height": null })
+    }
+
+    /// Everything waiting to be pushed, as JSON for compact assertions.
+    pub fn pushed(store: &Store) -> Vec<Value> {
+        store
+            .next_push()
+            .unwrap()
+            .iter()
+            .map(|mutation: &Mutation| serde_json::to_value(mutation).unwrap())
+            .collect()
+    }
+
+    /// The ids of everything waiting to be pushed.
+    pub fn mids(store: &Store) -> Vec<String> {
+        store
+            .next_push()
+            .unwrap()
+            .into_iter()
+            .map(|m| m.mid)
+            .collect()
+    }
+
+    /// Imports one bookmark for organizing and returns its id.
+    pub fn import_one(store: &mut Store) -> BookmarkId {
+        store
+            .import(
+                WORKSPACE,
+                "helium:Default",
+                &[bookmark("https://a.dev/", "A", 1)],
+                NewBookmarks::Organize,
+            )
+            .unwrap();
+        store.search(&Query::default(), 1).unwrap()[0].id
+    }
 
     pub fn bookmark(url: &str, title: &str, added_at: i64) -> NewBookmark {
         NewBookmark {

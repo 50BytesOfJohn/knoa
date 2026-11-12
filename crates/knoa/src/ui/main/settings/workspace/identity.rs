@@ -5,11 +5,11 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use gpui_component::input::Input;
-use knoa_core::Ink;
+use knoa_core::{Ink, protocol::max_chars};
 
 use super::{WorkspacePage, browsers::synced_from, form};
 use crate::ui::{
-    components::{Tone, button, tip, workspace_mark},
+    components::{Tone, button, tip, too_long, workspace_mark},
     theme::Theme,
 };
 
@@ -82,15 +82,17 @@ impl WorkspacePage {
                     })),
             );
         }
-        let rows = vec![
-            form::row(
-                "Name",
-                None,
-                div().w(px(240.)).child(Input::new(&self.name)),
-                theme,
-            ),
-            form::row("Color", None, swatches, theme),
-        ];
+        let mut rows = vec![form::row(
+            "Name",
+            None,
+            div().w(px(240.)).child(Input::new(&self.name)),
+            theme,
+        )];
+        let name = self.name.read(cx).value();
+        if let Some(reason) = too_long("A name", name.trim(), max_chars::workspace::NAME) {
+            rows.push(form::problem_note(reason, theme));
+        }
+        rows.push(form::row("Color", None, swatches, theme));
         form::group("Name and color", rows, theme)
     }
 }

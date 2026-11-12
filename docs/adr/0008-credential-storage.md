@@ -1,4 +1,4 @@
-# 0008: Keychain in signed builds, plain file in dev builds
+# 0008: Keychain in distribution builds, plain file in dev builds
 
 - Status: Accepted
 - Date: 2026-11-04
@@ -16,10 +16,10 @@ Developer ID keeps the same identity across updates and is not prompted.
 
 - A small `CredentialStore` trait (read, write, delete) with two implementations. The rest
   of the app doesn't know which one is in use.
-- **Release builds** use the Keychain through GPUI's `cx.write_credentials`,
+- **Release-channel builds** (`KNOA_CHANNEL=release`) use the Keychain through GPUI's `cx.write_credentials`,
   `cx.read_credentials` and `cx.delete_credentials`. No extra dependency (this replaces
   the `keyring` crate mentioned in the architecture doc).
-- **Debug builds** (`cfg!(debug_assertions)`) use a plain JSON file,
+- **Dev-channel builds** (every other build, including the release profile) use a plain JSON file,
   `dev-credentials.json`, in the app's support directory, created with `0600`
   permissions.
 
@@ -31,4 +31,5 @@ Developer ID keeps the same identity across updates and is not prompted.
 - In dev builds the key sits on disk unencrypted. It's readable by any process running as
   the user, and can end up in backups. That's acceptable for a developer's own key; the
   file must never be used by release builds.
-- A locally built, unsigned release build will still prompt. That's expected.
+- Locally built, optimized binaries use the dev file too. Only distribution builds opt
+  into the Keychain.

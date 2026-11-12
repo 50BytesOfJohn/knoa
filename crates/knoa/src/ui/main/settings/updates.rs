@@ -79,7 +79,7 @@ fn rows(updates: &Updates, theme: &Theme, cx: &App) -> Vec<AnyElement> {
 }
 
 /// "today at 14:05", "yesterday at 09:30", or "on 3 Nov 2026".
-fn when(at: Timestamp, now: &Zoned) -> String {
+pub(super) fn when(at: Timestamp, now: &Zoned) -> String {
     let at = at.to_zoned(TimeZone::system());
     let days = (now.date() - at.date()).get_days();
     match days {

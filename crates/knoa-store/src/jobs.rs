@@ -6,7 +6,7 @@
 use knoa_core::{Bookmark, BookmarkId, Enrichment, FolderId, Page, WorkspaceId};
 use rusqlite::{OptionalExtension as _, params};
 
-use crate::{Result, Store, search};
+use crate::{Result, Store, search, sync::Recorder};
 
 /// A bookmark taken from the queue.
 #[derive(Debug, Clone)]
@@ -15,6 +15,7 @@ pub struct Job {
     pub attempts: u32,
     /// Only file the bookmark into folders again, from what it already has.
     pub folders_only: bool,
+    sync_id: Option<String>,
 }
 
 impl Store {
@@ -100,10 +101,42 @@ impl Store {
                     bookmark,
                     attempts,
                     folders_only,
+                    sync_id: self.conn.query_row(
+                        "SELECT sync_id FROM bookmarks WHERE id = ?1",
+                        [id],
+                        |row| row.get(0),
+                    )?,
                 });
             }
         }
         Ok(jobs)
+    }
+
+    /// Saves work only while the row still belongs to the bookmark taken from the queue.
+    /// The caller must hold the database write lock through this call.
+    pub fn save_job<T>(
+        &mut self,
+        job: &Job,
+        save: impl FnOnce(&mut Store) -> Result<T>,
+    ) -> Result<Option<T>> {
+        // Sync can delete a row and reuse its integer id while a request is in flight.
+        // Unlinked bookmarks have no sync id, so their workspace and URL identify them.
+        let current: bool = self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM bookmarks
+             WHERE id = ?1 AND workspace_id = ?2 AND url = ?3
+               AND (?4 IS NULL OR sync_id = ?4))",
+            params![
+                job.bookmark.id.0,
+                job.bookmark.workspace.0,
+                job.bookmark.url,
+                job.sync_id,
+            ],
+            |row| row.get(0),
+        )?;
+        if !current {
+            return Ok(None);
+        }
+        save(self).map(Some)
     }
 
     /// When the next waiting job becomes due, if any job is waiting.
@@ -119,15 +152,31 @@ impl Store {
             .flatten())
     }
 
-    /// Jobs that were running when the app quit go back to the queue.
+    /// Jobs that were running when the app quit go back to the queue. In a linked library
+    /// a queued bookmark without a job is waiting for the cloud organizer, so it stays.
     pub fn requeue_interrupted(&mut self) -> Result<()> {
+        let stuck = if self.is_linked()? {
+            "('organizing')"
+        } else {
+            "('organizing', 'queued')"
+        };
         self.conn.execute(
             "UPDATE bookmarks SET status = 'queued' WHERE status = 'organizing' AND id IN (SELECT bookmark_id FROM jobs)",
             [],
         )?;
         self.conn.execute(
-            "UPDATE bookmarks SET status = 'new' WHERE status IN ('organizing', 'queued') AND id NOT IN (SELECT bookmark_id FROM jobs)",
+            &format!("UPDATE bookmarks SET status = 'new' WHERE status IN {stuck} AND id NOT IN (SELECT bookmark_id FROM jobs)"),
             [],
+        )?;
+        Ok(())
+    }
+
+    /// Returns invalidated local work without changing results pulled from the cloud.
+    pub fn return_interrupted_job(&mut self, id: BookmarkId) -> Result<()> {
+        self.conn.execute(
+            "UPDATE bookmarks SET status = 'queued' WHERE id = ?1 AND status = 'organizing'
+             AND EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1)",
+            [id.0],
         )?;
         Ok(())
     }
@@ -136,11 +185,17 @@ impl Store {
     /// summary until the AI provides its own, and the title of a link added by hand.
     pub fn save_page(&mut self, id: BookmarkId, page: &Page, now: i64) -> Result<()> {
         let tx = self.conn.transaction()?;
+        let recorder = Recorder::ai(&tx)?;
         let image = page.image.as_ref();
-        tx.execute(
+        // A page fetched again usually reads the same; the server has that text already.
+        let old_text = crate::sync::page_text(&tx, id.0)?;
+        recorder.on_bookmark(id.0, || {
+            tx.execute(
             "UPDATE bookmarks SET page_text = ?2, page_evidence = ?3, fetched_at = ?4,
                 image_path = coalesce(?5, image_path), image_width = coalesce(?6, image_width),
                 image_height = coalesce(?7, image_height),
+                image_key = CASE WHEN ?5 IS NULL THEN image_key END,
+                pending_image = CASE WHEN ?5 IS NULL THEN pending_image ELSE hex(randomblob(16)) END,
                 summary = CASE WHEN model IS NULL THEN coalesce(?8, summary) ELSE summary END,
                 kind = CASE WHEN model IS NULL THEN coalesce(?9, kind) ELSE kind END,
                 fields = CASE WHEN model IS NULL THEN ?10 ELSE fields END,
@@ -159,7 +214,12 @@ impl Store {
                 serde_json::to_string(&page.fields)?,
                 page.title,
             ],
-        )?;
+            )?;
+            Ok(())
+        })?;
+        if old_text.as_deref() != Some(page.text.as_str()) {
+            recorder.text(id.0)?;
+        }
         search::reindex(&tx, id.0)?;
         tx.commit()?;
         Ok(())
@@ -174,7 +234,9 @@ impl Store {
         now: i64,
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
-        let updated = tx.execute(
+        let recorder = Recorder::ai(&tx)?;
+        let updated = recorder.on_bookmark(id.0, || {
+            Ok(tx.execute(
             "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
                 status = 'organized', organized_at = ?7, error = NULL,
                 set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END WHERE id = ?1",
@@ -188,12 +250,13 @@ impl Store {
                 now,
                 enrichment.set_aside,
             ],
-        )?;
+            )?)
+        })?;
         if updated == 0 {
             return Ok(());
         }
-        Store::replace_ai_tags(&tx, id, &enrichment.tags)?;
-        Store::add_ai_folders(&tx, id, &enrichment.folders)?;
+        Store::replace_ai_tags(&tx, &recorder, id, &enrichment.tags)?;
+        Store::add_ai_folders(&tx, &recorder, id, &enrichment.folders)?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         search::reindex(&tx, id.0)?;
         tx.commit()?;
@@ -204,11 +267,15 @@ impl Store {
     /// Everything else it has stays as it was.
     pub fn finish_filed(&mut self, id: BookmarkId, folders: &[(FolderId, f32)]) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "UPDATE bookmarks SET status = 'organized', error = NULL WHERE id = ?1",
-            [id.0],
-        )?;
-        Store::add_ai_folders(&tx, id, folders)?;
+        let recorder = Recorder::ai(&tx)?;
+        recorder.on_bookmark(id.0, || {
+            tx.execute(
+                "UPDATE bookmarks SET status = 'organized', error = NULL WHERE id = ?1",
+                [id.0],
+            )?;
+            Ok(())
+        })?;
+        Store::add_ai_folders(&tx, &recorder, id, folders)?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -218,7 +285,10 @@ impl Store {
     /// own metadata is all it gets. It stays "not organized".
     pub fn finish_page_only(&mut self, id: BookmarkId) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute("UPDATE bookmarks SET status = 'new' WHERE id = ?1", [id.0])?;
+        Recorder::ai(&tx)?.on_bookmark(id.0, || {
+            tx.execute("UPDATE bookmarks SET status = 'new' WHERE id = ?1", [id.0])?;
+            Ok(())
+        })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -254,10 +324,13 @@ impl Store {
     pub fn fail_job(&mut self, id: BookmarkId, error: &str, folders_only: bool) -> Result<()> {
         let status = if folders_only { "organized" } else { "failed" };
         let tx = self.conn.transaction()?;
-        tx.execute(
-            "UPDATE bookmarks SET error = ?2, status = ?3 WHERE id = ?1",
-            params![id.0, error, status],
-        )?;
+        Recorder::ai(&tx)?.on_bookmark(id.0, || {
+            tx.execute(
+                "UPDATE bookmarks SET error = ?2, status = ?3 WHERE id = ?1",
+                params![id.0, error, status],
+            )?;
+            Ok(())
+        })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
         tx.commit()?;
         Ok(())
@@ -267,13 +340,15 @@ impl Store {
 /// Marks the bookmark queued again after its job ended. A bookmark trashed meanwhile lost
 /// its job row, and nothing would ever take it, so it goes back to 'new' instead.
 fn requeue(tx: &rusqlite::Transaction<'_>, id: BookmarkId, error: &str) -> Result<()> {
-    tx.execute(
-        "UPDATE bookmarks SET error = ?2, status = CASE
-            WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1) THEN 'queued' ELSE 'new' END
-         WHERE id = ?1",
-        params![id.0, error],
-    )?;
-    Ok(())
+    Recorder::ai(tx)?.on_bookmark(id.0, || {
+        tx.execute(
+            "UPDATE bookmarks SET error = ?2, status = CASE
+                WHEN EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1) THEN 'queued' ELSE 'new' END
+             WHERE id = ?1",
+            params![id.0, error],
+        )?;
+        Ok(())
+    })
 }
 
 fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {
@@ -291,13 +366,77 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{Enrichment, Fields, Kind, Status};
+    use knoa_core::{Enrichment, Fields, Kind, Place, Query, Status, protocol::bookmark_id};
+    use serde_json::json;
 
     use super::*;
     use crate::{
         NewBookmarks,
-        test_support::{WORKSPACE, bookmark},
+        test_support::{
+            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, import_one, linked, mids,
+            pushed,
+        },
     };
+
+    #[test]
+    fn stale_job_results_do_not_change_a_pulled_bookmark_reusing_the_rowid() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let id = import_one(&mut store);
+        let job = store.take_jobs(0, 1).unwrap().remove(0);
+        assert_eq!(
+            store
+                .save_job(&job, |store| store.save_page(id, &Page::default(), 1))
+                .unwrap(),
+            Some(())
+        );
+        store.acknowledge(&mids(&store)).unwrap();
+        let old_key = bookmark_id(WORKSPACE_KEY, &job.bookmark.url).unwrap();
+        let url = "https://b.dev/";
+        let key = bookmark_id(WORKSPACE_KEY, url).unwrap();
+        store
+            .apply_remote(
+                &[change(json!({
+                    "entity": "bookmark", "key": old_key, "version": 2, "deleted": true,
+                }))],
+                2,
+            )
+            .unwrap();
+        store
+            .apply_remote(
+                &[change(json!({
+                    "entity": "bookmark", "key": key, "version": 3, "deleted": false,
+                    "data": bookmark_row(&key, WORKSPACE_KEY, url, "B"),
+                }))],
+                3,
+            )
+            .unwrap();
+        let replacement = store.bookmark(id).unwrap().unwrap();
+        assert_eq!(replacement.url, url, "the pull reused the old rowid");
+        let mut answer = enrichment();
+        answer.tags = vec!["stale".into()];
+        let page = Page {
+            text: "A's page".into(),
+            ..Page::default()
+        };
+
+        let saved = store
+            .save_job(&job, |store| {
+                store.save_page(id, &page, 10)?;
+                store.finish_organized(id, &answer, 10)
+            })
+            .unwrap();
+
+        assert_eq!(saved, None);
+        assert_eq!(store.bookmark(id).unwrap().unwrap(), replacement);
+        assert_eq!(
+            store
+                .search(&Query::parse("page", None, Place::Everything), 1)
+                .unwrap(),
+            Vec::<Bookmark>::new()
+        );
+        assert_eq!(pushed(&store), Vec::<serde_json::Value>::new());
+    }
 
     #[test]
     fn queue_all_requeues_organized_bookmarks_but_not_trash() {

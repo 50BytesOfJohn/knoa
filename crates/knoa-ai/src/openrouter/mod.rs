@@ -15,6 +15,8 @@ use serde::{Deserialize, de::DeserializeOwned};
 use crate::{Error, usage::Meter};
 
 const BASE_URL: &str = "https://openrouter.ai";
+/// Set on each request, since a Worker's client has no client-wide timeout.
+const TIMEOUT: Duration = Duration::from_secs(60);
 
 pub struct OpenRouter {
     client: Client,
@@ -31,7 +33,6 @@ impl OpenRouter {
         classifier_model: Option<String>,
     ) -> Result<OpenRouter, Error> {
         let client = Client::builder()
-            .timeout(Duration::from_secs(60))
             .default_headers(attribution_headers())
             .build()?;
         Ok(OpenRouter {
@@ -53,6 +54,7 @@ impl OpenRouter {
             .client
             .get(format!("{BASE_URL}/api/v1/key"))
             .bearer_auth(&self.api_key)
+            .timeout(TIMEOUT)
             .send()
             .await?;
         read_json::<serde_json::Value>(response).await.map(drop)
@@ -68,6 +70,7 @@ impl OpenRouter {
             .post(format!("{BASE_URL}{path}"))
             .bearer_auth(&self.api_key)
             .json(body)
+            .timeout(TIMEOUT)
             .send()
             .await?;
         read_json(response).await

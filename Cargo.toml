@@ -33,10 +33,13 @@ knoa-browser = { path = "crates/knoa-browser" }
 knoa-core = { path = "crates/knoa-core" }
 knoa-fetch = { path = "crates/knoa-fetch" }
 knoa-store = { path = "crates/knoa-store" }
+knoa-sync = { path = "crates/knoa-sync" }
 
 anyhow = "1"
+base64 = "0.23"
 dirs = "6"
 futures = "0.3"
+getrandom = "0.4"
 imagesize = "0.15"
 jiff = "0.2"
 notify = "8"
@@ -65,6 +68,7 @@ rusqlite = { version = "0.40", features = ["bundled", "fallible_uint"] }
 scraper = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = [
@@ -73,9 +77,14 @@ tokio = { version = "1", features = [
   "time",
   "sync",
   "fs",
+  "net",
+  "io-util",
 ] }
+# The cloud socket. Native roots come from the macOS keychain, as reqwest's do.
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
 tracing = "0.1"
 url = "2"
+uuid = { version = "1", features = ["v4", "v5"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [workspace.lints.rust]

@@ -6,7 +6,7 @@ out=${1:?usage: screenshot.sh <out.png>}
 id=$(swift -e '
 import CoreGraphics
 let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as! [[String: Any]]
-let main = windows.first { $0["kCGWindowOwnerName"] as? String == "Knoa Dev" && $0["kCGWindowName"] as? String == "Knoa" && $0["kCGWindowLayer"] as? Int == 0 }
+let main = windows.first { $0["kCGWindowOwnerName"] as? String == "Knoa Dev" && $0["kCGWindowName"] as? String == "Knoa Dev" && $0["kCGWindowLayer"] as? Int == 0 }
 if let id = main?["kCGWindowNumber"] { print(id) }
 ')
 [ -n "$id" ] || { echo "Knoa Dev window not found. Is make dev running?" >&2; exit 1; }

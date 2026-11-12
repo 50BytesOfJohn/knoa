@@ -54,8 +54,14 @@ and Xcode 26 or later, whose icon compiler `make dev` and `make app` use. Option
 ```sh
 make dev     # Knoa Dev: debug build as an app bundle, verbose logs (RUST_LOG=knoa=debug)
 make run     # optimized build, without a bundle
-make app     # build and open the release Knoa.app
+make app     # build and open the optimized Knoa Dev bundle
+make dev-local # debug bundle against the local API at localhost:8787
 ```
+
+Development builds keep their own library in "Knoa Dev" and never touch the installed
+app's data, regardless of Cargo profile. `make run` and `make dev` use staging;
+`make dev-local` uses the local API with staging Clerk. `KNOA_DATA_DIR=/tmp/knoa-dev`
+puts a dev library under `/tmp/knoa-dev/support` and its cache under `/tmp/knoa-dev/cache`.
 
 The first build compiles GPUI and takes a few minutes; later builds are incremental.
 
@@ -65,7 +71,7 @@ The first build compiles GPUI and takes a few minutes; later builds are incremen
 make fmt     # format Rust + TOML
 make lint    # clippy, pedantic, warnings are errors
 make test    # tests
-make check   # everything CI runs: fmt-check + lint + test
+make check   # format, lint, tests, WebAssembly crates and SDK
 ```
 
 ### Releasing
@@ -80,6 +86,9 @@ in the repository's `release` environment. A version like `0.2.0-beta.1` becomes
 pre-release, which installed copies aren't offered. See
 [ADR 0014](docs/adr/0014-releases-and-updates.md).
 
+Run `cd sdk && pnpm install` once before `make check` (Node 22.12+ and pnpm 12.6.0).
+`make check-wasm` and `make check-sdk` also run those checks separately.
+
 `cargo lint` and `cargo fmt-check` are also available as cargo aliases
 ([`.cargo/config.toml`](.cargo/config.toml)). CI runs the same checks on every push and pull
 request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
@@ -91,6 +100,7 @@ crates/knoa/        the desktop app (binary)
   src/main.rs       entry point: logging, GPUI application
   src/app.rs        actions, key bindings, menus, main window
   src/ui/           views (one module per top-level view)
+sdk/                shared TypeScript sync client, protocol and fixtures
 docs/               vision, architecture, roadmap, ADRs
 ```
 

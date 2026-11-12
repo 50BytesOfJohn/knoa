@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use knoa_core::{NewBookmark, WorkspaceId, site_of};
 use rusqlite::{OptionalExtension as _, params};
 
-use crate::{Result, Store, search, trash};
+use crate::{Result, Store, search, sync::Recorder, trash};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ImportReport {
@@ -36,15 +36,17 @@ impl Store {
         new: NewBookmarks,
     ) -> Result<ImportReport> {
         let tx = self.conn.transaction()?;
+        let recorder = Recorder::user(&tx)?;
         let mut report = ImportReport::default();
         let mut seen = HashSet::new();
         for bookmark in bookmarks {
             if !seen.insert(bookmark.url.as_str()) {
                 continue;
             }
-            match upsert(&tx, workspace, source, bookmark, new)? {
+            match upsert(&tx, &recorder, workspace, source, bookmark, new)? {
                 Upserted::Added(id) => {
                     report.added += 1;
+                    recorder.created_bookmark(id)?;
                     search::reindex(&tx, id)?;
                 }
                 Upserted::Updated(id) => search::reindex(&tx, id)?,
@@ -81,23 +83,25 @@ enum Upserted {
 /// The browser-synced columns of a bookmark already in the workspace.
 struct Stored {
     id: i64,
-    title: String,
+    /// What this Mac's browser last said; the synced title and folder may be another's.
+    seen_title: Option<String>,
+    seen_folder: Option<String>,
     source: Option<String>,
     guid: Option<String>,
-    folder: Option<String>,
     removed_from_browser: bool,
     deleted: bool,
 }
 
 fn upsert(
     tx: &rusqlite::Transaction<'_>,
+    recorder: &Recorder<'_>,
     workspace: WorkspaceId,
     source: &str,
     bookmark: &NewBookmark,
     new: NewBookmarks,
 ) -> Result<Upserted> {
     if let Some(stored) = stored(tx, workspace, &bookmark.url)? {
-        return update(tx, &stored, source, bookmark);
+        return recorder.on_bookmark(stored.id, || update(tx, &stored, source, bookmark));
     }
     let guid = bookmark.browser_guid.as_deref();
     if let Some((old_source, old_guid)) = trash::deleted_url(tx, workspace, &bookmark.url)? {
@@ -116,17 +120,17 @@ fn stored(
     workspace: WorkspaceId,
     url: &str,
 ) -> Result<Option<Stored>> {
-    let sql = "SELECT id, title, source, browser_guid, browser_folder, removed_from_browser,
+    let sql = "SELECT id, seen_title, seen_folder, source, browser_guid, removed_from_browser,
                       deleted_at IS NOT NULL
                FROM bookmarks WHERE workspace_id = ?1 AND url = ?2";
     let stored = tx
         .query_row(sql, params![workspace.0, url], |row| {
             Ok(Stored {
                 id: row.get(0)?,
-                title: row.get(1)?,
-                source: row.get(2)?,
-                guid: row.get(3)?,
-                folder: row.get(4)?,
+                seen_title: row.get(1)?,
+                seen_folder: row.get(2)?,
+                source: row.get(3)?,
+                guid: row.get(4)?,
                 removed_from_browser: row.get(5)?,
                 deleted: row.get(6)?,
             })
@@ -151,18 +155,21 @@ fn update(
         source,
         guid,
     );
-    let unchanged = stored.title == bookmark.title
+    let new_title = stored.seen_title.as_deref() != Some(bookmark.title.as_str());
+    let new_folder = stored.seen_folder != bookmark.browser_folder;
+    let unchanged = !(new_title || new_folder)
         && stored.source.as_deref() == Some(source)
         && stored.guid.as_deref() == guid
-        && stored.folder == bookmark.browser_folder
         && !stored.removed_from_browser
         && !(again && stored.deleted);
     if unchanged {
         return Ok(Upserted::Unchanged);
     }
     tx.execute(
-        "UPDATE bookmarks SET title = ?2, source = ?3, browser_guid = ?4, browser_folder = ?5,
-         removed_from_browser = 0, deleted_at = CASE WHEN ?6 THEN NULL ELSE deleted_at END
+        "UPDATE bookmarks SET title = CASE WHEN ?7 THEN ?2 ELSE title END, seen_title = ?2,
+         browser_folder = CASE WHEN ?8 THEN ?5 ELSE browser_folder END, seen_folder = ?5,
+         source = ?3, browser_guid = ?4, removed_from_browser = 0,
+         deleted_at = CASE WHEN ?6 THEN NULL ELSE deleted_at END
          WHERE id = ?1",
         params![
             stored.id,
@@ -170,7 +177,9 @@ fn update(
             source,
             guid,
             bookmark.browser_folder,
-            again
+            again,
+            new_title,
+            new_folder,
         ],
     )?;
     Ok(Upserted::Updated(stored.id))
@@ -188,8 +197,9 @@ fn insert(
         NewBookmarks::Organize => "queued",
     };
     tx.execute(
-        "INSERT INTO bookmarks (workspace_id, url, title, site, added_at, status, source, browser_guid, browser_folder)
-         VALUES (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO bookmarks (workspace_id, url, title, site, added_at, status, source, browser_guid,
+                                browser_folder, seen_title, seen_folder)
+         VALUES (?9, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?2, ?8)",
         params![
             bookmark.url,
             bookmark.title,

@@ -3,7 +3,7 @@
 
 use gpui::{AppContext as _, Context, Entity, Focusable as _, Subscription, Window};
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{BookmarkId, Origin, normalize_tag};
+use knoa_core::{BookmarkId, Origin, normalize_tag, tag_fits};
 
 use crate::ui::main::MainView;
 
@@ -101,7 +101,7 @@ impl MainView {
         let names: Vec<String> = text
             .split(',')
             .map(normalize_tag)
-            .filter(|name| !name.is_empty())
+            .filter(|name| tag_fits(name))
             .collect();
         if names.is_empty() {
             return;

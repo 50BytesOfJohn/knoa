@@ -9,3 +9,9 @@ local.mk
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+/sdk/node_modules/
+/.pnpm-store/
+
+# Local launch configurations, with paths on one machine
+.claude/launch.json

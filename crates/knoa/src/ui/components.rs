@@ -7,7 +7,7 @@ use gpui::{
 };
 use gpui_component::tooltip::Tooltip;
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
-use knoa_core::{FolderIcon, Ink, Kind};
+use knoa_core::{FolderIcon, Ink, Kind, protocol::max_chars::fits};
 
 use crate::{
     assets::knoa_icon,
@@ -159,6 +159,26 @@ pub fn problem(text: impl Into<SharedString>, theme: &Theme) -> Div {
         .text_color(theme.danger)
         .child(icon("circle-alert", px(14.), theme.danger).mt(px(3.)))
         .child(div().flex_1().min_w_0().child(text.into()))
+}
+
+/// `100000` as `100,000`.
+pub fn grouped(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, digit) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(digit);
+    }
+    out
+}
+
+/// Why `text` can't be saved when it's past the server's `max` characters for its field,
+/// which would keep the change on this Mac only: "Instructions can be at most 10,000
+/// characters."
+pub fn too_long(what: &str, text: &str, max: usize) -> Option<String> {
+    (!fits(text, max)).then(|| format!("{what} can be at most {} characters.", grouped(max as u64)))
 }
 
 /// The site's first letter on a colored disc: a stand-in for favicons, which would mean

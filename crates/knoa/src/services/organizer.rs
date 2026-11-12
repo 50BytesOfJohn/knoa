@@ -7,6 +7,7 @@
 
 mod context;
 mod job;
+mod work;
 
 use std::{
     sync::Arc,
@@ -19,8 +20,14 @@ use knoa_ai::Provider;
 use knoa_fetch::Fetcher;
 use knoa_store::Job;
 
-use self::job::{Outcome, Work, process};
-use crate::state::{database::Database, library::Library};
+use self::{
+    job::{Outcome, process},
+    work::Work,
+};
+use crate::{
+    services::generation,
+    state::{database::Database, library::Library},
+};
 
 /// About four network requests at a time, as the architecture plans.
 const CONCURRENCY: usize = 4;
@@ -34,6 +41,8 @@ pub enum AiStatus {
     Ready,
     /// The provider refuses requests until the user acts (bad key, no credits).
     NeedsAttention(String),
+    /// The account's cloud organizer does the work; this Mac's queue waits.
+    Cloud,
 }
 
 pub struct Organizer {
@@ -42,6 +51,12 @@ pub struct Organizer {
     /// Set while the provider needs the user: the queue is paused, and at this time one
     /// job goes out as a probe to see whether it works again.
     probe_at: Option<Instant>,
+    /// The linked account's cloud organizer runs the queue instead (Pro). The provider and
+    /// its key stay, for when that ends.
+    cloud: bool,
+    /// The reason last given for `cloud`, so a new reason is logged once.
+    cloud_why: Option<&'static str>,
+    generation: generation::Generation,
     wake: mpsc::UnboundedSender<()>,
     _run: Task<()>,
 }
@@ -60,6 +75,9 @@ impl Organizer {
                 provider: None,
                 status: AiStatus::Off,
                 probe_at: None,
+                cloud: false,
+                cloud_why: None,
+                generation: generation::Generation::default(),
                 wake,
                 _run: run,
             }
@@ -90,8 +108,33 @@ impl Organizer {
         cx.notify();
     }
 
+    /// Hands the queue to the cloud organizer, or takes it back. `why` goes to the log
+    /// whenever it changes, even when the state doesn't, so "why is nothing organizing"
+    /// can be answered from it.
+    pub fn set_cloud(&mut self, cloud: bool, why: &'static str, cx: &mut Context<'_, Organizer>) {
+        let changed = self.cloud != cloud;
+        if changed || self.cloud_why != Some(why) {
+            match (cloud, changed) {
+                (true, _) => tracing::info!("local organizing paused: {why}"),
+                (false, true) => tracing::info!("local organizing resumed: {why}"),
+                (false, false) => tracing::info!("local organizing allowed: {why}"),
+            }
+            self.cloud_why = Some(why);
+        }
+        if changed {
+            self.generation.advance();
+            self.cloud = cloud;
+            self.status = self.connected_status();
+            self.probe_at = None;
+            let _ = self.wake.unbounded_send(());
+            cx.notify();
+        }
+    }
+
     fn connected_status(&self) -> AiStatus {
-        if self.provider.is_some() {
+        if self.cloud {
+            AiStatus::Cloud
+        } else if self.provider.is_some() {
             AiStatus::Ready
         } else {
             AiStatus::Off
@@ -101,6 +144,9 @@ impl Organizer {
     /// Decides how many jobs to start now. Taking a probe moves the next probe on, so
     /// one comes at most every `PROBE_EVERY`, even when the queue turns out empty.
     fn jobs_to_take_now(&mut self, in_flight: usize) -> usize {
+        if self.cloud {
+            return 0;
+        }
         let now = Instant::now();
         let take = jobs_to_take(CONCURRENCY - in_flight, in_flight, self.probe_at, now);
         if take > 0 && self.probe_at.is_some() {
@@ -115,7 +161,7 @@ impl Organizer {
         match outcome {
             // With AI turned off since the job started, the next run is page-only and needs
             // nothing from the user.
-            Outcome::NeedsAttention(message) if self.provider.is_some() => {
+            Outcome::NeedsAttention(message) if self.provider.is_some() && !self.cloud => {
                 self.status = AiStatus::NeedsAttention(message.clone());
                 self.probe_at = Some(Instant::now() + PROBE_EVERY);
                 cx.notify();
@@ -144,7 +190,13 @@ async fn run(
     let mut running = FuturesUnordered::new();
     loop {
         let Ok((work, take)) = this.update(cx, |this, cx| {
-            let work = Arc::new(Work::new(&database, &fetcher, this.provider.clone(), cx));
+            let work = Arc::new(Work::new(
+                &database,
+                &fetcher,
+                this.provider.clone(),
+                this.generation.ticket(),
+                cx,
+            ));
             (work, this.jobs_to_take_now(running.len()))
         }) else {
             return;

@@ -1,14 +1,18 @@
-//! Where API keys are kept (ADR 0008): the Keychain in release builds, a plain file in
-//! debug builds, because macOS re-prompts for the Keychain on every unsigned rebuild.
+//! Ordered credential access: Keychain in release builds, a private file in dev builds.
 
-use std::{collections::HashMap, path::PathBuf};
+mod dev_file;
+mod queue;
 
-use anyhow::Context as _;
+use std::path::PathBuf;
+
 use gpui::{App, AppContext as _, Global, Task};
 
-pub enum Credentials {
-    Keychain,
-    DevFile(PathBuf),
+use self::queue::{Operation, Queue};
+use crate::channel::Channel;
+
+pub struct Credentials {
+    queue: Queue,
+    _worker: Task<()>,
 }
 
 impl Global for Credentials {}
@@ -18,77 +22,68 @@ const ACCOUNT: &str = "api-key";
 
 impl Credentials {
     pub fn init(dev_file: PathBuf, cx: &mut App) {
-        let store = if cfg!(debug_assertions) {
-            Credentials::DevFile(dev_file)
-        } else {
-            Credentials::Keychain
-        };
-        cx.set_global(store);
+        let path = (Channel::current() == Channel::Dev).then_some(dev_file);
+        let (queue, mut requests) = Queue::new();
+        let worker = cx.spawn(async move |cx| {
+            use futures::StreamExt as _;
+
+            while let Some(request) = requests.next().await {
+                if let Some(path) = &path {
+                    let path = path.clone();
+                    cx.background_spawn(async move { request.on_dev_file(&path) })
+                        .await;
+                } else {
+                    on_keychain(request, cx).await;
+                }
+            }
+        });
+        cx.set_global(Credentials {
+            queue,
+            _worker: worker,
+        });
     }
 
     pub fn read(url: &str, cx: &App) -> Task<anyhow::Result<Option<String>>> {
-        match cx.global::<Credentials>() {
-            Credentials::Keychain => {
-                let task = cx.read_credentials(url);
-                cx.background_spawn(async move {
-                    Ok(task
-                        .await?
-                        .map(|(_, secret)| String::from_utf8_lossy(&secret).into_owned()))
-                })
-            }
-            Credentials::DevFile(path) => {
-                let (path, url) = (path.clone(), url.to_owned());
-                cx.background_spawn(async move { Ok(read_dev_file(&path)?.remove(&url)) })
-            }
-        }
+        let reply = cx
+            .global::<Credentials>()
+            .queue
+            .request(url, Operation::Read);
+        cx.background_spawn(async move { reply.await? })
     }
 
     pub fn write(url: &str, secret: &str, cx: &App) -> Task<anyhow::Result<()>> {
-        match cx.global::<Credentials>() {
-            Credentials::Keychain => cx.write_credentials(url, ACCOUNT, secret.as_bytes()),
-            Credentials::DevFile(path) => {
-                let (path, url, secret) = (path.clone(), url.to_owned(), secret.to_owned());
-                cx.background_spawn(async move {
-                    let mut all = read_dev_file(&path)?;
-                    all.insert(url, secret);
-                    write_dev_file(&path, &all)
-                })
-            }
-        }
+        Self::mutate(url, Operation::Write(secret.to_owned()), cx)
     }
 
     pub fn delete(url: &str, cx: &App) -> Task<anyhow::Result<()>> {
-        match cx.global::<Credentials>() {
-            Credentials::Keychain => cx.delete_credentials(url),
-            Credentials::DevFile(path) => {
-                let (path, url) = (path.clone(), url.to_owned());
-                cx.background_spawn(async move {
-                    let mut all = read_dev_file(&path)?;
-                    all.remove(&url);
-                    write_dev_file(&path, &all)
-                })
-            }
+        Self::mutate(url, Operation::Delete, cx)
+    }
+
+    fn mutate(url: &str, operation: Operation, cx: &App) -> Task<anyhow::Result<()>> {
+        // Enqueue now, not when the caller awaits: deletion is a barrier for prior writes.
+        let reply = cx.global::<Credentials>().queue.request(url, operation);
+        cx.background_spawn(async move { reply.await?.map(|_| ()) })
+    }
+}
+
+async fn on_keychain(request: queue::Request, cx: &gpui::AsyncApp) {
+    let task = cx.update(|cx| match &request.operation {
+        Operation::Read => {
+            let task = cx.read_credentials(&request.url);
+            cx.background_spawn(async move {
+                Ok(task
+                    .await?
+                    .map(|(_, secret)| String::from_utf8_lossy(&secret).into_owned()))
+            })
         }
-    }
-}
-
-fn read_dev_file(path: &PathBuf) -> anyhow::Result<HashMap<String, String>> {
-    match std::fs::read_to_string(path) {
-        Ok(text) => serde_json::from_str(&text).context("dev credentials file is invalid"),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
-        Err(err) => Err(err.into()),
-    }
-}
-
-fn write_dev_file(path: &PathBuf, all: &HashMap<String, String>) -> anyhow::Result<()> {
-    use std::{io::Write as _, os::unix::fs::OpenOptionsExt as _};
-    // 0600: the file holds a secret in plain text.
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)?;
-    file.write_all(&serde_json::to_vec_pretty(all)?)?;
-    Ok(())
+        Operation::Write(secret) => {
+            let task = cx.write_credentials(&request.url, ACCOUNT, secret.as_bytes());
+            cx.background_spawn(async move { task.await.map(|()| None) })
+        }
+        Operation::Delete => {
+            let task = cx.delete_credentials(&request.url);
+            cx.background_spawn(async move { task.await.map(|()| None) })
+        }
+    });
+    let _ = request.reply.send(task.await);
 }

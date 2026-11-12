@@ -13,13 +13,16 @@ use gpui_component::{
     slider::SliderState,
     switch::Switch,
 };
-use knoa_core::{Folder, FolderColor, FolderIcon, FolderId, Ink};
+use knoa_core::{
+    Folder, FolderColor, FolderIcon, FolderId, Ink,
+    protocol::max_chars::{self, fits},
+};
 
 use super::MainView;
 use crate::{
     state::library::Library,
     ui::{
-        components::{Tone, button},
+        components::{Tone, button, problem, too_long},
         theme::Theme,
     },
 };
@@ -35,7 +38,7 @@ pub struct FolderEditor {
     hue: Entity<SliderState>,
     library: Entity<Library>,
     main: WeakEntity<MainView>,
-    _hue_changes: Subscription,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl FolderEditor {
@@ -67,7 +70,12 @@ impl FolderEditor {
             auto_assign: existing.as_ref().is_none_or(|f| f.auto_assign),
             color,
             icon: existing.as_ref().and_then(|f| f.icon),
-            _hue_changes: color_picker::follow_hue(&hue, cx),
+            // The limits' messages follow the text as it's typed.
+            _subscriptions: vec![
+                color_picker::follow_hue(&hue, cx),
+                cx.observe(&name, |_, _, cx| cx.notify()),
+                cx.observe(&description, |_, _, cx| cx.notify()),
+            ],
             hue,
             existing,
             name,
@@ -79,10 +87,14 @@ impl FolderEditor {
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
         let name = self.name.read(cx).value().trim().to_owned();
-        if name.is_empty() {
+        let description = self.description.read(cx).value().trim().to_owned();
+        // The server would refuse the folder, leaving it on this Mac only.
+        if name.is_empty()
+            || !fits(&name, max_chars::folder::NAME)
+            || !fits(&description, max_chars::folder::DESCRIPTION)
+        {
             return;
         }
-        let description = self.description.read(cx).value().trim().to_owned();
         let (color, icon, auto_assign) = (self.color, self.icon, self.auto_assign);
         match &self.existing {
             Some(folder) => {
@@ -133,6 +145,17 @@ impl Render for FolderEditor {
             "New folder"
         };
         let existing = self.existing.as_ref().map(|f| f.id);
+        // Why Save does nothing: text the server would refuse.
+        let name_too_long = too_long(
+            "A name",
+            self.name.read(cx).value().trim(),
+            max_chars::folder::NAME,
+        );
+        let description_too_long = too_long(
+            "A description",
+            self.description.read(cx).value().trim(),
+            max_chars::folder::DESCRIPTION,
+        );
         div()
             .w(px(380.))
             .p_5()
@@ -147,7 +170,9 @@ impl Render for FolderEditor {
                     .child(title),
             )
             .child(Input::new(&self.name))
+            .children(name_too_long.map(|reason| problem(reason, &theme)))
             .child(Textarea::new(&self.description).h(px(84.)))
+            .children(description_too_long.map(|reason| problem(reason, &theme)))
             .child(
                 div()
                     .flex()

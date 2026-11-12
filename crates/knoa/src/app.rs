@@ -8,10 +8,11 @@ use gpui::{
 };
 
 use crate::{
+    channel::Channel,
     paths::Paths,
     services::{
-        ai, credentials::Credentials, housekeeping, network::Network, organizer::Organizer, sync,
-        thumbnails::Thumbnails, updates::Updates,
+        ai, cloud::Cloud, credentials::Credentials, housekeeping, network::Network,
+        organizer::Organizer, sync, thumbnails::Thumbnails, updates::Updates,
     },
     state::{
         database::Database,
@@ -21,13 +22,15 @@ use crate::{
     ui::{RootView, theme::Theme},
 };
 
-pub const APP_NAME: &str = "Knoa";
-const APP_ID: &str = "dev.knoa.Knoa";
+pub fn app_name() -> &'static str {
+    Channel::current().name()
+}
 
 pub fn init(cx: &mut App) -> anyhow::Result<()> {
     gpui_component::init(cx);
     let paths = Paths::new()?;
     cx.set_global(SettingsFile::load(paths.settings()));
+    skip_onboarding_in_dev(cx);
     Theme::apply(&SettingsFile::get(cx).theme.clone(), cx);
     Credentials::init(paths.dev_credentials(), cx);
     Network::init(cx)?;
@@ -41,6 +44,8 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     sync::init(&library, cx);
     let fetcher = Arc::new(knoa_fetch::Fetcher::new(paths.thumbnails())?);
     Organizer::init(library.clone(), fetcher.clone(), cx);
+    // Before the organizer's first round, so it knows whether the cloud has the queue.
+    Cloud::init(library.clone(), fetcher.clone(), cx);
     Thumbnails::init(library.clone(), fetcher, cx);
     ai::connect(cx);
     cx.set_global(paths);
@@ -62,6 +67,18 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Lets scripted and manual testing start on the main screen of a fresh library, as if
+/// onboarding was finished with no browsers chosen and the default workspace.
+fn skip_onboarding_in_dev(cx: &mut App) {
+    if Channel::current() == Channel::Dev
+        && std::env::var_os("KNOA_SKIP_ONBOARDING").is_some_and(|v| v == "1")
+        && !SettingsFile::get(cx).onboarded
+    {
+        tracing::info!("skipping onboarding: KNOA_SKIP_ONBOARDING=1");
+        SettingsFile::update(cx, |s| s.onboarded = true);
+    }
+}
+
 fn open_main_window(library: gpui::Entity<Library>, cx: &mut App) -> anyhow::Result<()> {
     let bounds = match SettingsFile::get(cx).window {
         Some(frame) => Bounds::new(
@@ -74,11 +91,11 @@ fn open_main_window(library: gpui::Entity<Library>, cx: &mut App) -> anyhow::Res
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         window_min_size: Some(size(px(900.), px(560.))),
         titlebar: Some(TitlebarOptions {
-            title: Some(APP_NAME.into()),
+            title: Some(app_name().into()),
             appears_transparent: true,
             traffic_light_position: Some(crate::ui::traffic_light_position()),
         }),
-        app_id: Some(APP_ID.into()),
+        app_id: Some(Channel::current().app_id().into()),
         ..Default::default()
     };
 

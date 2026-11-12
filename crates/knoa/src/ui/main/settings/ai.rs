@@ -1,6 +1,7 @@
 //! The AI page: connecting OpenRouter, the models in use, organizing the bookmarks that
 //! came in before AI was on, and what AI has cost.
 
+mod pro;
 mod usage;
 
 use gpui::{
@@ -17,6 +18,7 @@ use super::{
 use crate::{
     services::{
         ai,
+        cloud::Cloud,
         organizer::{AiStatus, Organizer},
         usage::{self as usage_service, UsageReport},
     },
@@ -60,6 +62,8 @@ impl AiPage {
         cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify())
             .detach();
         cx.observe(&library, |_, _, cx| cx.notify()).detach();
+        cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify())
+            .detach();
         // The library refreshes after every organized bookmark, which is when usage grows.
         cx.subscribe(&library, |this, _, _: &LibraryChanged, cx| {
             this.load_usage(cx);
@@ -152,10 +156,23 @@ impl Render for AiPage {
                 theme.panel,
             ));
         let mut page = div().flex().flex_col().gap_8().child(header);
+        if status != AiStatus::Cloud {
+            page = page.children(pro::card(&theme, cx));
+        }
         page = match &status {
             AiStatus::Off => page.child(self.connect_group(&theme, cx)),
             AiStatus::Ready | AiStatus::NeedsAttention(_) => page
                 .child(self.provider_group(&status, &theme, cx))
+                .child(self.backlog_group(&theme, cx)),
+            AiStatus::Cloud => page
+                .child(form::group(
+                    "Provider",
+                    vec![form::note(
+                        "With Pro, Knoa organizes your bookmarks in the cloud. A key you connected stays on this Mac for when you're not signed in.",
+                        theme.muted,
+                    )],
+                    &theme,
+                ))
                 .child(self.backlog_group(&theme, cx)),
         };
         // Usage from before a disconnect still counts, so it stays visible while AI is off.
@@ -240,9 +257,14 @@ impl AiPage {
             form::note(format!("Everything in {name} is organized."), theme.muted)
         } else {
             let cost = not_organized as f64 * DOLLARS_PER_BOOKMARK;
+            let about = if *Organizer::entity(cx).read(cx).status() == AiStatus::Cloud {
+                "Included in Pro, within its monthly allowance.".to_owned()
+            } else {
+                format!("About ${cost:.2} to do them all.")
+            };
             form::row(
                 &format!("{not_organized} bookmarks in {name} aren't organized yet"),
-                Some(&format!("About ${cost:.2} to do them all.")),
+                Some(&about),
                 button("organize-all", "Organize", Tone::Primary, cx)
                     .on_click(cx.listener(|this, _, _, cx| this.organize_existing(cx))),
                 theme,

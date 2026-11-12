@@ -4,8 +4,8 @@
 mod steps;
 
 use gpui::{
-    Animation, AnimationExt as _, AppContext as _, Context, Entity, FontWeight,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Animation, AnimationExt as _, AppContext as _, Context, Entity, FocusHandle, FontWeight,
+    InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Task, TaskExt as _, Window, div, ease_out_quint,
     prelude::FluentBuilder as _, px,
 };
@@ -69,6 +69,11 @@ pub struct Onboarding {
     name: Entity<InputState>,
     color: Ink,
     instructions: Entity<TextareaState>,
+    /// Holds focus so Tab can reach the Hello step's sign-in link.
+    focus: FocusHandle,
+    sign_in: FocusHandle,
+    /// Setup was skipped to sign in, so the main screen opens on the Account page.
+    wants_account: bool,
 }
 
 impl Onboarding {
@@ -110,6 +115,8 @@ impl Onboarding {
                 input.set_value(workspace.instructions.clone(), window, cx);
             });
         }
+        let focus = cx.focus_handle();
+        focus.focus(window, cx);
         Onboarding {
             library,
             step: Step::Hello,
@@ -121,7 +128,15 @@ impl Onboarding {
             name,
             color: workspace.map_or(Ink::default(), |w| w.color),
             instructions,
+            focus,
+            sign_in: cx.focus_handle().tab_stop(true),
+            wants_account: false,
         }
+    }
+
+    /// Whether setup was skipped to sign in to an existing account.
+    pub fn wants_account(&self) -> bool {
+        self.wants_account
     }
 
     fn go(&mut self, step: Step, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
@@ -204,6 +219,26 @@ impl Onboarding {
         self.finish(cx);
     }
 
+    /// Skips setup as "Use the defaults" does, then leaves for the Account page.
+    fn sign_in(&mut self, cx: &mut Context<'_, Onboarding>) {
+        self.wants_account = true;
+        self.skip_all(cx);
+    }
+
+    /// Tab moves between the Hello step's tab stops. Other steps leave Tab to their
+    /// inputs.
+    fn tab(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<'_, Self>) {
+        if self.step != Step::Hello || event.keystroke.key != "tab" {
+            return;
+        }
+        if event.keystroke.modifiers.shift {
+            window.focus_prev(cx);
+        } else {
+            window.focus_next(cx);
+        }
+        cx.stop_propagation();
+    }
+
     fn finish(&mut self, cx: &mut Context<'_, Onboarding>) {
         SettingsFile::update(cx, |s| s.onboarded = true);
         cx.refresh_windows();
@@ -241,6 +276,8 @@ impl Render for Onboarding {
         });
         div()
             .id("onboarding")
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::tab))
             .size_full()
             .relative()
             .bg(theme.canvas)

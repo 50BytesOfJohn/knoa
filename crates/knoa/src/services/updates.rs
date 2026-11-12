@@ -16,6 +16,8 @@ use objc2::{
 };
 use objc2_foundation::{NSBundle, NSDate, NSString};
 
+use crate::channel::Channel;
+
 pub struct Updates {
     /// The `SPUStandardUpdaterController`, which shows Sparkle's standard windows. It owns
     /// `updater` and has to live as long as the app.
@@ -29,6 +31,9 @@ impl Global for Updates {}
 impl Updates {
     /// Starts Sparkle when the bundle embeds it. From then on it checks on its own schedule.
     pub fn init(cx: &mut App) {
+        if Channel::current() != Channel::Release {
+            return;
+        }
         if let Some(updates) = start() {
             cx.set_global(updates);
         } else {

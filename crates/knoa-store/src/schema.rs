@@ -220,6 +220,67 @@ ALTER TABLE folders ADD COLUMN icon TEXT;
 UPDATE folders SET color = CASE WHEN color % 8 < 3 THEN color % 8 ELSE color % 8 + 1 END;
 UPDATE workspaces SET color = CASE WHEN color % 8 < 3 THEN color % 8 ELSE color % 8 + 1 END;
 ",
+    r"
+-- Cloud sync. The id the server knows a row by, set once the library is linked to an
+-- account; NULL in Local mode.
+ALTER TABLE workspaces ADD COLUMN sync_id TEXT;
+ALTER TABLE folders ADD COLUMN sync_id TEXT;
+ALTER TABLE bookmarks ADD COLUMN sync_id TEXT;
+CREATE UNIQUE INDEX workspaces_sync_id ON workspaces (sync_id);
+CREATE UNIQUE INDEX folders_sync_id ON folders (sync_id);
+CREATE UNIQUE INDEX bookmarks_sync_id ON bookmarks (sync_id);
+
+-- The server's thumbnail. `image_path` is this Mac's cached copy.
+ALTER TABLE bookmarks ADD COLUMN image_key TEXT;
+
+-- A local image stays pending across pulls until that exact image is uploaded. Every
+-- v0.1.5 row with an image needs one, since none has an `image_key` yet; this must run
+-- after both columns exist.
+ALTER TABLE bookmarks ADD COLUMN pending_image TEXT;
+UPDATE bookmarks SET pending_image = hex(randomblob(16))
+    WHERE image_path IS NOT NULL AND image_key IS NULL;
+
+-- The title and folder this Mac's browser last gave the bookmark. Imports compare against
+-- these, not the synced columns, so two Macs whose browsers disagree don't keep
+-- rewriting each other.
+ALTER TABLE bookmarks ADD COLUMN seen_title TEXT;
+ALTER TABLE bookmarks ADD COLUMN seen_folder TEXT;
+UPDATE bookmarks SET seen_title = title, seen_folder = browser_folder WHERE source IS NOT NULL;
+
+-- The account the library is linked to, and how far it has pulled. No row in Local mode.
+CREATE TABLE sync_state (
+    id      INTEGER PRIMARY KEY CHECK (id = 1),
+    user_id TEXT NOT NULL,
+    cursor  INTEGER NOT NULL DEFAULT 0
+);
+
+-- Local changes waiting to be pushed, oldest first. `data` is the JSON of the columns a
+-- `put` sets.
+CREATE TABLE outbox (
+    seq    INTEGER PRIMARY KEY AUTOINCREMENT,
+    mid    TEXT NOT NULL UNIQUE,
+    entity TEXT NOT NULL,
+    key    TEXT NOT NULL,
+    op     TEXT NOT NULL,
+    actor  TEXT NOT NULL,
+    data   TEXT
+);
+CREATE INDEX outbox_row ON outbox (entity, key);
+
+-- Pulled changes whose parent hasn't arrived yet, as the change's JSON.
+CREATE TABLE sync_inbox (
+    entity  TEXT NOT NULL,
+    key     TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    change  TEXT NOT NULL,
+    PRIMARY KEY (entity, key)
+);
+
+-- Bookmarks the account's plan refused, sent again once it has room.
+CREATE TABLE unsent_bookmarks (
+    bookmark_id INTEGER PRIMARY KEY REFERENCES bookmarks (id) ON DELETE CASCADE
+);
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -304,6 +365,63 @@ mod tests {
             color("SELECT color FROM folders WHERE id = 3"),
             Ink::Sky.index()
         );
+    }
+
+    #[test]
+    fn the_sync_migration_keeps_the_library_and_leaves_it_local() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        let before = 8;
+        for sql in &MIGRATIONS[..before] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", before).unwrap();
+        conn.execute_batch(
+            "INSERT INTO folders (id, name, position) VALUES (3, 'Reading', 1);
+             INSERT INTO bookmarks (id, workspace_id, url, title, site, added_at, source, browser_folder)
+                 VALUES (7, 1, 'https://a.dev/', 'A', 'a.dev', 1, 'helium:Default', 'Bar');
+             INSERT INTO bookmarks (id, workspace_id, url, title, site, added_at)
+                 VALUES (8, 1, 'https://b.dev/', 'https://b.dev/', 'b.dev', 2);
+             UPDATE bookmarks SET image_path = 'a.png' WHERE id = 7;
+             INSERT INTO bookmark_folders VALUES (7, 3, 'user', NULL);
+             INSERT INTO bookmark_tags VALUES (7, 'rust', 'ai');",
+        )
+        .unwrap();
+
+        migrate(&mut conn).unwrap();
+
+        let text =
+            |sql: &str| -> Option<String> { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(
+            text("SELECT seen_title FROM bookmarks WHERE id = 7").as_deref(),
+            Some("A")
+        );
+        assert_eq!(
+            text("SELECT seen_folder FROM bookmarks WHERE id = 7").as_deref(),
+            Some("Bar")
+        );
+        assert_eq!(
+            text("SELECT seen_title FROM bookmarks WHERE id = 8"),
+            None,
+            "added by hand"
+        );
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |row| row.get(0)).unwrap() };
+        assert_eq!(text("SELECT max(sync_id) FROM bookmarks"), None);
+        assert_eq!(
+            count("SELECT length(pending_image) FROM bookmarks WHERE id = 7"),
+            32,
+            "a v0.1.5 image still has to be uploaded"
+        );
+        assert_eq!(
+            text("SELECT pending_image FROM bookmarks WHERE id = 8"),
+            None
+        );
+        assert_eq!(
+            count("SELECT count(*) FROM sqlite_master WHERE name = 'unsent_bookmarks'"),
+            1
+        );
+        assert_eq!(count("SELECT count(*) FROM bookmark_folders"), 1);
+        assert_eq!(count("SELECT count(*) FROM bookmark_tags"), 1);
+        assert_eq!(count("SELECT count(*) FROM sync_state"), 0);
     }
 
     #[test]

@@ -1,9 +1,9 @@
 //! Tags on bookmarks.
 
-use knoa_core::{BookmarkId, Origin, WorkspaceId, normalize_tag};
+use knoa_core::{BookmarkId, Origin, WorkspaceId, normalize_tag, tag_fits};
 use rusqlite::params;
 
-use crate::{Result, Store, search};
+use crate::{Result, Store, search, sync::Recorder};
 
 impl Store {
     /// Every tag on the workspace's bookmarks outside Trash, most used first.
@@ -21,7 +21,8 @@ impl Store {
     /// back an AI tag that was removed by mistake.
     pub fn add_tag(&mut self, bookmark: BookmarkId, tag: &str, origin: Origin) -> Result<()> {
         let tag = normalize_tag(tag);
-        if tag.is_empty() {
+        // The server refuses a longer one, and the change would wait in the outbox for good.
+        if !tag_fits(&tag) {
             return Ok(());
         }
         let tx = self.conn.transaction()?;
@@ -33,6 +34,7 @@ impl Store {
             "INSERT INTO bookmark_tags VALUES (?1, ?2, ?3) ON CONFLICT DO UPDATE SET origin = ?3",
             params![bookmark.0, tag, origin.slug()],
         )?;
+        Recorder::user(&tx)?.tag(bookmark.0, &tag)?;
         search::reindex(&tx, bookmark.0)?;
         tx.commit()?;
         Ok(())
@@ -49,6 +51,7 @@ impl Store {
             "INSERT OR IGNORE INTO tag_exclusions VALUES (?1, ?2)",
             params![bookmark.0, tag],
         )?;
+        Recorder::user(&tx)?.tag(bookmark.0, tag)?;
         search::reindex(&tx, bookmark.0)?;
         tx.commit()?;
         Ok(())
@@ -57,9 +60,11 @@ impl Store {
     /// Replaces the AI's tags with `tags`, keeping user tags and skipping removed ones.
     pub(crate) fn replace_ai_tags(
         tx: &rusqlite::Transaction<'_>,
+        recorder: &Recorder<'_>,
         bookmark: BookmarkId,
         tags: &[String],
     ) -> Result<()> {
+        let before = recorder.tags_before(bookmark.0)?;
         tx.execute(
             "DELETE FROM bookmark_tags WHERE bookmark_id = ?1 AND origin = 'ai'",
             [bookmark.0],
@@ -73,7 +78,7 @@ impl Store {
                 params![bookmark.0, tag],
             )?;
         }
-        Ok(())
+        recorder.tags_changed(bookmark.0, before)
     }
 }
 

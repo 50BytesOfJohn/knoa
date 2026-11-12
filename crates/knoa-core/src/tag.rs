@@ -54,3 +54,9 @@ pub fn normalize_tag(tag: &str) -> String {
         .join("-")
         .to_lowercase()
 }
+
+/// Whether a normalized tag is one the protocol takes: not empty and at most
+/// `MAX_TAG_CHARS` characters, counted as the server counts them.
+pub fn tag_fits(tag: &str) -> bool {
+    !tag.is_empty() && tag.chars().count() <= MAX_TAG_CHARS
+}

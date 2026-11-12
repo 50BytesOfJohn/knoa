@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Knoa Brand Kit</title>
+<style>
+  :root {
+    --ink: #1f1d1a;
+    --paper: #f3eee4;
+    --canvas: #efece6;
+    --panel: #fbfaf7;
+    --line: #e2ddd4;
+    --muted: #6f6a61;
+    --faint: #a39d92;
+    --red: #e0573c;
+    --pine: #2f5d50;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1600px; height: 900px; overflow: hidden; }
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    padding: 48px 56px;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 28px;
+  }
+  .serif { font-family: Charter, "Bitstream Charter", Georgia, serif; }
+  .mono { font-family: Menlo, ui-monospace, monospace; }
+
+  header { display: flex; justify-content: space-between; align-items: end; }
+  header h1 { font-family: Charter, Georgia, serif; font-weight: 400; font-size: 44px; letter-spacing: -.01em; line-height: 1; }
+  header h1 i { color: var(--muted); }
+  header p { color: var(--muted); font-size: 17px; text-align: right; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr 1fr;
+    grid-template-rows: 1.15fr 1fr;
+    gap: 18px;
+    min-height: 0;
+  }
+  .tile {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+  }
+  .label {
+    position: absolute; left: 22px; top: 18px;
+    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--faint);
+  }
+  .tile.dark { background: #1c1b19; border-color: #2a2825; }
+  .tile.dark .label { color: #6d6860; }
+
+  /* Wordmark hero */
+  .hero { grid-row: 1; grid-column: 1; background: var(--paper); }
+  .hero svg { width: 74%; }
+  .hero .rule {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 100%;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 41px, rgba(130, 160, 200, .14) 41px 42px);
+    pointer-events: none;
+  }
+  .hero .margin { position: absolute; top: 0; bottom: 0; left: 64px; width: 1px; background: rgba(224, 87, 60, .18); }
+
+  .dark-mark { grid-row: 1; grid-column: 2; }
+  .dark-mark svg { width: 70%; }
+
+  /* App icons */
+  .icons { grid-row: 1; grid-column: 3; }
+  .icons .pair { display: flex; gap: 22px; align-items: center; }
+  .icon { overflow: hidden; width: 150px; height: 150px; border-radius: 34px; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 28px rgba(60, 45, 20, .16); }
+  .icon.small { width: 96px; height: 96px; border-radius: 22px; }
+
+  /* Colors */
+  .colors { grid-row: 2; grid-column: 1; place-items: stretch; padding: 56px 22px 22px; }
+  .swatches { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr 1fr; gap: 12px; height: 100%; }
+  .sw { border-radius: 14px; padding: 14px; display: flex; flex-direction: column; justify-content: end; gap: 2px; border: 1px solid rgba(0,0,0,.06); }
+  .sw b { font-size: 15px; font-weight: 600; }
+  .sw span { font: 12.5px Menlo, monospace; opacity: .72; }
+
+  /* Type */
+  .type { grid-row: 2; grid-column: 2 / span 2; place-items: stretch; padding: 56px 28px 26px; }
+  .faces { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 26px; height: 100%; }
+  .face { display: flex; flex-direction: column; justify-content: end; border-left: 1px solid var(--line); padding-left: 20px; }
+  .face:first-child { border-left: 0; padding-left: 0; }
+  .face .aa { font-size: 96px; line-height: 1; letter-spacing: -.02em; }
+  .face .name { margin-top: 14px; font-size: 16px; font-weight: 600; }
+  .face .use { color: var(--muted); font-size: 13.5px; }
+  .face .sample { margin-top: 10px; font-size: 15px; color: var(--ink); }
+  .face .sample em { color: var(--red); font-style: normal; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Knoa <i>brand kit</i></h1>
+    <p>An intelligent bookmark library for the desktop</p>
+  </header>
+
+  <div class="grid">
+    <section class="tile hero">
+      <div class="rule"></div><div class="margin"></div>
+      <span class="label">Wordmark</span>
+      <svg viewBox="49.5 29.5 227 95" role="img" aria-label="Knoa">
+        <g fill="none" stroke="#1f1d1a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M64 32 C62 62 57 95 52 122"/>
+          <path d="M100 32 C86 50 72 66 57 76 C70 80 80 100 90 115 C95 122 101 121 106 114 C110 100 113 90 116 82 C116 96 114 108 112 120 C116 96 126 82 136 82 C146 82 146 96 144 108 C143 116 148 120 156 116 C164 112 172 92 188 82 C174 80 168 98 170 110 C172 122 188 124 196 112 C203 100 200 82 188 82 C196 86 214 86 236 82 C220 80 212 96 214 108 C216 122 234 122 242 102 C244 94 246 86 246 82 C244 98 242 114 248 119 C251 123 257 121 261 117"/>
+        </g>
+        <circle cx="271.5" cy="118" r="5" fill="#e0573c"/>
+      </svg>
+    </section>
+
+    <section class="tile dark dark-mark">
+      <span class="label">On dark</span>
+      <svg viewBox="49.5 29.5 227 95" role="img" aria-label="Knoa">
+        <g fill="none" stroke="#f3eee4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M64 32 C62 62 57 95 52 122"/>
+          <path d="M100 32 C86 50 72 66 57 76 C70 80 80 100 90 115 C95 122 101 121 106 114 C110 100 113 90 116 82 C116 96 114 108 112 120 C116 96 126 82 136 82 C146 82 146 96 144 108 C143 116 148 120 156 116 C164 112 172 92 188 82 C174 80 168 98 170 110 C172 122 188 124 196 112 C203 100 200 82 188 82 C196 86 214 86 236 82 C220 80 212 96 214 108 C216 122 234 122 242 102 C244 94 246 86 246 82 C244 98 242 114 248 119 C251 123 257 121 261 117"/>
+        </g>
+        <circle cx="271.5" cy="118" r="5" fill="#e0573c"/>
+      </svg>
+    </section>
+
+    <section class="tile icons">
+      <span class="label">App icon</span>
+      <div class="pair">
+        <svg class="icon" viewBox="0 0 1024 1024">
+          <defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdfbf7"/><stop offset="1" stop-color="#ebe4d6"/></linearGradient></defs>
+          <rect width="1024" height="1024" fill="url(#gl)"/>
+          <use href="#k" fill="#1f1d1a"/>
+          <circle cx="698.88" cy="754.36" r="35.04" fill="#e0573c"/>
+        </svg>
+        <svg class="icon small" viewBox="0 0 1024 1024">
+          <defs>
+            <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d2b28"/><stop offset="1" stop-color="#191816"/></linearGradient>
+            <path id="k" d="M620.34 265.33Q496.02 425.18 398.25 502.350Q425.66 521.68 453.20 555.24Q480.33 588.29 529.38 666.63Q551.70 702.28 562.82 718.97Q575.69 736.84 587.19 736.84Q597.48 736.84 608.28 723.34Q611.54 719.26 616.12 716.74Q620.70 714.22 625.90 713.64Q631.09 713.06 636.11 714.52Q641.14 715.97 645.22 719.24Q649.30 722.50 651.82 727.08Q654.34 731.66 654.92 736.86Q655.50 742.05 654.04 747.07Q652.59 752.09 649.32 756.18Q622.74 789.40 587.19 789.40Q548.53 789.40 519.82 749.19Q519.75 749.11 519.69 749.02Q519.63 748.94 519.57 748.85Q519.51 748.76 519.45 748.67Q519.39 748.59 519.33 748.50Q507.80 731.20 484.830 694.52Q437.57 619.04 412.58 588.59Q396.94 569.54 382.21 556.52Q366.71 663.00 345.12 779.59Q344.65 782.13 343.69 784.53Q342.73 786.94 341.32 789.11Q339.91 791.28 338.11 793.14Q336.30 794.99 334.17 796.46Q332.04 797.92 329.66 798.94Q327.28 799.97 324.75 800.50Q322.22 801.04 319.63 801.08Q317.04 801.11 314.49 800.64Q309.35 799.69 304.97 796.84Q300.59 794.00 297.62 789.69Q294.66 785.38 293.58 780.27Q292.49 775.15 293.44 770.01Q317.03 642.64 333.26 527.58Q332.28 526.89 331.37 526.11Q330.46 525.32 329.62 524.46Q328.79 523.60 328.03 522.67Q327.28 521.74 326.61 520.74Q325.18 518.58 324.19 516.19Q323.20 513.80 322.70 511.26Q322.20 508.72 322.20 506.13Q322.20 503.54 322.71 501.01Q323.22 498.47 324.21 496.08Q325.20 493.69 326.64 491.54Q328.08 489.39 329.92 487.56Q331.75 485.73 333.90 484.29Q336.77 482.38 339.67 480.38Q355.87 356.43 363.14 247.45Q363.49 242.24 365.80 237.55Q368.12 232.86 372.05 229.42Q375.99 225.98 380.94 224.31Q385.89 222.63 391.11 222.98Q393.69 223.15 396.19 223.82Q398.69 224.50 401.01 225.64Q403.33 226.79 405.38 228.37Q407.43 229.95 409.14 231.89Q410.84 233.84 412.13 236.09Q413.43 238.33 414.25 240.78Q415.08 243.23 415.42 245.80Q415.75 248.37 415.58 250.95Q409.80 337.62 398.48 433.49Q479.00 361.45 578.86 233.07Q582.07 228.94 586.61 226.36Q591.15 223.77 596.34 223.12Q601.53 222.47 606.57 223.86Q611.61 225.25 615.73 228.46Q619.86 231.67 622.44 236.21Q625.03 240.75 625.68 245.94Q626.33 251.13 624.94 256.17Q623.55 261.21 620.34 265.330Z"/>
+          </defs>
+          <rect width="1024" height="1024" fill="url(#gd)"/>
+          <use href="#k" fill="#f3eee4"/>
+          <circle cx="698.88" cy="754.36" r="35.04" fill="#e0573c"/>
+        </svg>
+      </div>
+    </section>
+
+    <section class="tile colors">
+      <span class="label">Color</span>
+      <div class="swatches">
+        <div class="sw" style="background:#e0573c;color:#fff"><b>Knoa Red</b><span>#E0573C</span></div>
+        <div class="sw" style="background:#1f1d1a;color:#f3eee4"><b>Ink</b><span>#1F1D1A</span></div>
+        <div class="sw" style="background:#f3eee4"><b>Paper</b><span>#F3EEE4</span></div>
+        <div class="sw" style="background:#2f5d50;color:#fff"><b>Pine</b><span>#2F5D50</span></div>
+        <div class="sw" style="background:#6f6a61;color:#fbfaf7"><b>Stone</b><span>#6F6A61</span></div>
+      </div>
+    </section>
+
+    <section class="tile type">
+      <span class="label">Type</span>
+      <div class="faces">
+        <div class="face">
+          <div class="aa serif">Aa</div>
+          <div class="name serif">Charter</div>
+          <div class="use">Titles and summaries</div>
+          <div class="sample serif">Everything you saved, <em>finally</em> in order.</div>
+        </div>
+        <div class="face">
+          <div class="aa">Aa</div>
+          <div class="name">SF Pro</div>
+          <div class="use">Interface</div>
+          <div class="sample">Library · Folders · Tags</div>
+        </div>
+        <div class="face">
+          <div class="aa mono" style="font-size:84px">Aa</div>
+          <div class="name mono" style="font-size:15px">Menlo</div>
+          <div class="use">Code and URLs</div>
+          <div class="sample mono" style="font-size:13px">github.com/50BytesOfJohn/knoa</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

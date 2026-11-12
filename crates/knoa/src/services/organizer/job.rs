@@ -3,59 +3,30 @@
 
 use std::{sync::Arc, time::Duration};
 
-use gpui::{App, BackgroundExecutor};
-use knoa_ai::{BookmarkInput, FilingInput, OrganizeInput, Provider};
+use knoa_ai::{BookmarkInput, FilingInput, OrganizeInput};
 use knoa_core::{BookmarkId, Enrichment, FolderId, Page};
-use knoa_fetch::Fetcher;
 use knoa_store::{Job, Store};
-use tokio::runtime::Handle;
 
-use super::{context::WorkspaceContext, now};
-use crate::{
-    services::{network::Network, usage},
-    state::database::Database,
-};
+use super::{context::WorkspaceContext, now, work::Work};
+use crate::services::usage;
 
 const MAX_ATTEMPTS: u32 = 5;
 /// The most a provider's Retry-After can hold a job back, in case it asks for days.
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(3600);
 
-/// Everything one job needs, owned so it can move to other threads.
-pub(super) struct Work {
-    database: Arc<Database>,
-    fetcher: Arc<Fetcher>,
-    provider: Option<Arc<Provider>>,
-    background: BackgroundExecutor,
-    network: Handle,
-}
-
 pub(super) enum Outcome {
     Done,
+    Superseded,
     Retry { error: String, after: Duration },
     Failed(String),
     NeedsAttention(String),
 }
 
-impl Work {
-    pub(super) fn new(
-        database: &Arc<Database>,
-        fetcher: &Arc<Fetcher>,
-        provider: Option<Arc<Provider>>,
-        cx: &App,
-    ) -> Work {
-        Work {
-            database: database.clone(),
-            fetcher: fetcher.clone(),
-            provider,
-            background: cx.background_executor().clone(),
-            network: Network::handle(cx),
-        }
-    }
-}
-
 pub(super) async fn process(job: Job, work: Arc<Work>) -> Outcome {
     let id = job.bookmark.id;
-    let outcome = if job.folders_only {
+    let outcome = if !work.current() {
+        Outcome::Superseded
+    } else if job.folders_only {
         file_one(&job, &work).await
     } else {
         organize_one(&job, &work).await
@@ -64,21 +35,21 @@ pub(super) async fn process(job: Job, work: Arc<Work>) -> Outcome {
     if let Some(provider) = &work.provider {
         usage::save(provider, work.database.clone(), &work.background).await;
     }
-    let database = work.database.clone();
     let next = next_step(&outcome, &job);
-    let saved = work
-        .background
-        .spawn(async move { record(&mut database.write(), id, next) })
-        .await;
-    if let Err(err) = saved {
+    if let Outcome::Failed(err) = work.save(&job, move |store| record(store, id, next)).await {
         tracing::error!(?id, "can't update the queue: {err}");
     }
-    outcome
+    if work.current() {
+        outcome
+    } else {
+        Outcome::Superseded
+    }
 }
 
 /// What becomes of the job's row once the job ends.
 enum NextStep {
     Finished,
+    Superseded,
     RetryAfter(String, Duration),
     /// Back on the queue as it was: the organizer's pause holds it back, not the job.
     PutBack(String),
@@ -91,6 +62,7 @@ enum NextStep {
 fn next_step(outcome: &Outcome, job: &Job) -> NextStep {
     match outcome {
         Outcome::Done => NextStep::Finished,
+        Outcome::Superseded => NextStep::Superseded,
         Outcome::Retry { error, after } if job.attempts + 1 < MAX_ATTEMPTS => {
             NextStep::RetryAfter(error.clone(), *after)
         }
@@ -106,6 +78,7 @@ fn next_step(outcome: &Outcome, job: &Job) -> NextStep {
 fn record(store: &mut Store, id: BookmarkId, next: NextStep) -> knoa_store::Result<()> {
     match next {
         NextStep::Finished => Ok(()),
+        NextStep::Superseded => store.return_interrupted_job(id),
         NextStep::RetryAfter(error, after) => {
             store.retry_job(id, &error, now() + after.as_secs() as i64)
         }
@@ -139,26 +112,23 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         },
         Err(err) => return Outcome::Failed(format!("fetch task failed: {err}")),
     };
-    let (database, id, saved_page) = (work.database.clone(), bookmark.id, page.clone());
-    let saved = work
-        .background
-        .spawn(async move { database.write().save_page(id, &saved_page, now()) })
-        .await;
-    if let Err(err) = saved {
-        return Outcome::Failed(err.to_string());
+    let (id, saved_page) = (bookmark.id, page.clone());
+    match work
+        .save(job, move |store| store.save_page(id, &saved_page, now()))
+        .await
+    {
+        Outcome::Done => {}
+        outcome => return outcome,
+    }
+    if !work.current() {
+        return Outcome::Superseded;
     }
 
     let Some(provider) = work.provider.clone() else {
-        let database = work.database.clone();
         let id = bookmark.id;
-        return match work
-            .background
-            .spawn(async move { database.write().finish_page_only(id) })
-            .await
-        {
-            Ok(()) => Outcome::Done,
-            Err(err) => Outcome::Failed(err.to_string()),
-        };
+        return work
+            .save(job, move |store| store.finish_page_only(id))
+            .await;
     };
 
     let database = work.database.clone();
@@ -177,6 +147,9 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         _ => bookmark.title.clone(),
     };
     let (url, browser_folder) = (bookmark.url.clone(), bookmark.browser_folder.clone());
+    if !work.current() {
+        return Outcome::Superseded;
+    }
     let answer = work
         .network
         .spawn(async move {
@@ -198,7 +171,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         })
         .await;
     match answer {
-        Ok(Ok(enrichment)) => save_enrichment(work, bookmark.id, enrichment).await,
+        Ok(Ok(enrichment)) => save_enrichment(work, job, enrichment).await,
         Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
     }
@@ -211,7 +184,7 @@ async fn file_one(job: &Job, work: &Work) -> Outcome {
     let bookmark = &job.bookmark;
     let Some(provider) = work.provider.clone() else {
         // AI was turned off after queuing: nothing to ask, and the bookmark stays as it is.
-        return finish_filed(work, bookmark.id, Vec::new()).await;
+        return finish_filed(work, job, Vec::new()).await;
     };
     let (Some(kind), Some(_)) = (bookmark.kind, provider.classifier()) else {
         return organize_one(job, work).await;
@@ -227,6 +200,9 @@ async fn file_one(job: &Job, work: &Work) -> Outcome {
         Err(err) => return Outcome::Failed(err.to_string()),
     };
     let bookmark = bookmark.clone();
+    if !work.current() {
+        return Outcome::Superseded;
+    }
     let answer = work
         .network
         .spawn(async move {
@@ -245,7 +221,7 @@ async fn file_one(job: &Job, work: &Work) -> Outcome {
         })
         .await;
     match answer {
-        Ok(Ok(folders)) => finish_filed(work, job.bookmark.id, folders).await,
+        Ok(Ok(folders)) => finish_filed(work, job, folders).await,
         Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("folder task failed: {err}")),
     }
@@ -269,28 +245,18 @@ fn ai_failure(err: &knoa_ai::Error, attempts: u32) -> Outcome {
     }
 }
 
-async fn save_enrichment(work: &Work, id: BookmarkId, enrichment: Enrichment) -> Outcome {
-    let database = work.database.clone();
-    match work
-        .background
-        .spawn(async move { database.write().finish_organized(id, &enrichment, now()) })
-        .await
-    {
-        Ok(()) => Outcome::Done,
-        Err(err) => Outcome::Failed(err.to_string()),
-    }
+async fn save_enrichment(work: &Work, job: &Job, enrichment: Enrichment) -> Outcome {
+    let id = job.bookmark.id;
+    work.save(job, move |store| {
+        store.finish_organized(id, &enrichment, now())
+    })
+    .await
 }
 
-async fn finish_filed(work: &Work, id: BookmarkId, folders: Vec<(FolderId, f32)>) -> Outcome {
-    let database = work.database.clone();
-    match work
-        .background
-        .spawn(async move { database.write().finish_filed(id, &folders) })
+async fn finish_filed(work: &Work, job: &Job, folders: Vec<(FolderId, f32)>) -> Outcome {
+    let id = job.bookmark.id;
+    work.save(job, move |store| store.finish_filed(id, &folders))
         .await
-    {
-        Ok(()) => Outcome::Done,
-        Err(err) => Outcome::Failed(err.to_string()),
-    }
 }
 
 fn retry(error: String, attempts: u32) -> Outcome {

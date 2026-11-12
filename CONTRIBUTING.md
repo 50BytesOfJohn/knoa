@@ -15,8 +15,13 @@ bug reports, ideas, docs, code.
 ## Making a change
 
 1. Fork and branch from `main`.
-2. `make dev` runs the app; `make fmt` formats.
-3. `make check` must pass. It's exactly what CI runs.
+2. `make dev` runs the app against staging; `make dev-local` uses the API at
+   `localhost:8787` with staging Clerk. Development builds keep their own library in
+   "Knoa Dev" and never touch the installed app's data, including with `make run` or
+   `cargo run --release`. `KNOA_DATA_DIR` can isolate support and cache files in a scratch
+   directory. `make fmt` formats.
+3. Run `cd sdk && pnpm install` once (Node 22.12+, pnpm 12.6.0).
+   `make check` must pass: format, clippy, tests, WebAssembly crates and the SDK.
 
    `make` builds at background priority, one job per efficiency core, so your Mac stays
    cool and quiet. Builds take longer this way. To change that on your machine, put any

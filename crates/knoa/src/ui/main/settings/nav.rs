@@ -39,6 +39,7 @@ impl SettingsView {
                 "AI",
                 ai_mark(px(15.), theme.ai).into_any_element(),
             ),
+            (Page::Account, "Account", icon_mark(Page::Account, "cloud")),
         ] {
             app_pages = app_pages.child(self.nav_row(page, label, mark, cx));
         }

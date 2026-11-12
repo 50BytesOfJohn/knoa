@@ -12,7 +12,7 @@ use gpui_component::{
     switch::Switch,
 };
 use knoa_core::{
-    ListedTag, MAX_LISTED_TAGS, MAX_TAG_CHARS, MAX_TAG_DESCRIPTION_CHARS, TagList, normalize_tag,
+    ListedTag, MAX_LISTED_TAGS, MAX_TAG_DESCRIPTION_CHARS, TagList, normalize_tag, tag_fits,
 };
 
 use super::form;
@@ -77,8 +77,7 @@ impl TagListEditor {
     fn add(&mut self, text: &str, window: &mut Window, cx: &mut Context<'_, TagListEditor>) {
         let mut added = false;
         for name in text.split(',').map(normalize_tag) {
-            let fits = !name.is_empty() && name.len() <= MAX_TAG_CHARS;
-            if !fits || self.is_full() || self.rows.iter().any(|r| r.name == name) {
+            if !tag_fits(&name) || self.is_full() || self.rows.iter().any(|r| r.name == name) {
                 continue;
             }
             let tag = ListedTag {

@@ -76,7 +76,17 @@ impl MainView {
         self.show_settings(page, window, cx);
     }
 
-    fn show_settings(&mut self, page: Page, window: &mut Window, cx: &mut Context<'_, MainView>) {
+    /// Opens settings on the Account page, to sign in.
+    pub fn open_account(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.show_settings(Page::Account, window, cx);
+    }
+
+    pub(super) fn show_settings(
+        &mut self,
+        page: Page,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
         if let Some(Overlay::Settings(settings)) = &self.overlay {
             settings.update(cx, |settings, cx| settings.show(page, window, cx));
             return;
