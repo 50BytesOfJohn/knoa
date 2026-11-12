@@ -74,24 +74,24 @@ impl Thumbnails {
             }
             let sends = wanted.into_iter().map(|upload| {
                 let api = engine.api.clone();
-                let (id, path) = (upload.id, upload.path.clone());
+                let (id, pending_image) = (upload.id, upload.pending_image.clone());
                 let send = net(cx, async move {
                     let bytes = tokio::fs::read(&upload.path).await?;
                     api.upload_image(&upload.bookmark, bytes, upload.width, upload.height)
                         .await
                 });
-                async move { (id, path, send.await) }
+                async move { (id, pending_image, send.await) }
             });
             let sent: Vec<_> = stream::iter(sends)
                 .buffer_unordered(AT_ONCE)
                 .collect()
                 .await;
-            for (id, path, answer) in sent {
+            for (id, pending_image, answer) in sent {
                 match answer {
                     Ok(answer) => {
                         engine
                             .store(cx, move |store| {
-                                store.set_image_key(id, &path, &answer.image_key)
+                                store.set_image_key(id, &pending_image, &answer.image_key)
                             })
                             .await?;
                     }

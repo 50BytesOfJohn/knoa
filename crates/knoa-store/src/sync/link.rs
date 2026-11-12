@@ -62,7 +62,8 @@ impl Store {
              DELETE FROM sync_inbox;
              UPDATE workspaces SET sync_id = NULL;
              UPDATE folders SET sync_id = NULL;
-             UPDATE bookmarks SET sync_id = NULL, image_key = NULL;
+             UPDATE bookmarks SET sync_id = NULL, image_key = NULL,
+                 pending_image = CASE WHEN image_path IS NOT NULL THEN hex(randomblob(16)) END;
              -- Waiting for the cloud organizer, which no longer runs for this library.
              UPDATE bookmarks SET status = 'new'
                  WHERE status = 'queued' AND id NOT IN (SELECT bookmark_id FROM jobs);",

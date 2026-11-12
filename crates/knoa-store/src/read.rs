@@ -122,7 +122,7 @@ impl Store {
     pub fn set_image(&mut self, id: BookmarkId, image: &Image) -> Result<()> {
         self.conn.execute(
             "UPDATE bookmarks SET image_path = ?2, image_width = ?3, image_height = ?4,
-                image_key = NULL
+                image_key = NULL, pending_image = hex(randomblob(16))
              WHERE id = ?1",
             rusqlite::params![
                 id.0,

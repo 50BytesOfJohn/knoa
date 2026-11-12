@@ -144,7 +144,7 @@ fn set_status(conn: &Connection, id: i64, status: BookmarkStatus) -> Result<()> 
 }
 
 /// A cached thumbnail of an older server image is dropped, so it is fetched again. One
-/// this Mac fetched itself, before the server had any, stays. The size describes the
+/// this Mac fetched itself and has not uploaded yet stays. The size describes the
 /// cached file, so it changes only while there is none.
 fn set_image(
     conn: &Connection,
@@ -154,7 +154,8 @@ fn set_image(
 ) -> Result<()> {
     conn.execute(
         "UPDATE bookmarks SET image_key = ?2, image_path = CASE
-            WHEN image_key IS NOT NULL AND image_key IS NOT ?2 THEN NULL ELSE image_path END
+            WHEN pending_image IS NULL AND image_key IS NOT NULL AND image_key IS NOT ?2
+            THEN NULL ELSE image_path END
          WHERE id = ?1",
         params![id, image_key],
     )?;

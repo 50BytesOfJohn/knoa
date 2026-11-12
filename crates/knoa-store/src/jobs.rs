@@ -152,6 +152,7 @@ impl Store {
                 image_path = coalesce(?5, image_path), image_width = coalesce(?6, image_width),
                 image_height = coalesce(?7, image_height),
                 image_key = CASE WHEN ?5 IS NULL THEN image_key END,
+                pending_image = CASE WHEN ?5 IS NULL THEN pending_image ELSE hex(randomblob(16)) END,
                 summary = CASE WHEN model IS NULL THEN coalesce(?8, summary) ELSE summary END,
                 kind = CASE WHEN model IS NULL THEN coalesce(?9, kind) ELSE kind END,
                 fields = CASE WHEN model IS NULL THEN ?10 ELSE fields END,

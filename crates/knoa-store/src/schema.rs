@@ -269,6 +269,12 @@ CREATE TABLE sync_inbox (
     PRIMARY KEY (entity, key)
 );
 ",
+    r"
+-- A local image stays pending across pulls until that exact image is uploaded.
+ALTER TABLE bookmarks ADD COLUMN pending_image TEXT;
+UPDATE bookmarks SET pending_image = hex(randomblob(16))
+    WHERE image_path IS NOT NULL AND image_key IS NULL;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

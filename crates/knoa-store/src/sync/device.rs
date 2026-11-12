@@ -2,7 +2,7 @@
 //! organizing queue to the cloud organizer, and moving thumbnails to and from the server.
 //! None of it is recorded in the outbox; the server learns about it its own way.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use knoa_core::{BookmarkId, Image};
 use rusqlite::params;
@@ -24,6 +24,7 @@ pub struct ThumbnailUpload {
     /// The bookmark's sync id.
     pub bookmark: String,
     pub path: PathBuf,
+    pub pending_image: String,
     pub width: u32,
     pub height: u32,
 }
@@ -75,11 +76,11 @@ impl Store {
         Ok(())
     }
 
-    /// Up to `limit` cached thumbnails the server has no image for.
+    /// Up to `limit` local thumbnails waiting for upload.
     pub fn thumbnail_uploads(&self, limit: usize) -> Result<Vec<ThumbnailUpload>> {
         let mut stmt = self.conn.prepare(&format!(
-            "SELECT b.id, b.sync_id, b.image_path, b.image_width, b.image_height FROM bookmarks b
-             WHERE b.image_path IS NOT NULL AND b.image_key IS NULL AND b.deleted_at IS NULL
+            "SELECT b.id, b.sync_id, b.image_path, b.image_width, b.image_height, b.pending_image FROM bookmarks b
+             WHERE b.image_path IS NOT NULL AND b.pending_image IS NOT NULL AND b.deleted_at IS NULL
                AND b.image_width IS NOT NULL AND b.image_height IS NOT NULL AND {ON_SERVER}
              ORDER BY b.added_at DESC LIMIT ?1"
         ))?;
@@ -90,6 +91,7 @@ impl Store {
                 path: PathBuf::from(row.get::<_, String>(2)?),
                 width: row.get(3)?,
                 height: row.get(4)?,
+                pending_image: row.get(5)?,
             })
         })?;
         Ok(uploads.collect::<rusqlite::Result<_>>()?)
@@ -99,7 +101,7 @@ impl Store {
     pub fn thumbnail_downloads(&self, limit: usize) -> Result<Vec<ThumbnailDownload>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, image_key FROM bookmarks
-             WHERE image_key IS NOT NULL AND image_path IS NULL AND deleted_at IS NULL
+             WHERE image_key IS NOT NULL AND image_path IS NULL AND pending_image IS NULL AND deleted_at IS NULL
              ORDER BY added_at DESC LIMIT ?1",
         )?;
         let downloads = stmt.query_map([limit], |row| {
@@ -121,7 +123,7 @@ impl Store {
     ) -> Result<()> {
         self.conn.execute(
             "UPDATE bookmarks SET image_path = ?3, image_width = ?4, image_height = ?5
-             WHERE id = ?1 AND image_key = ?2",
+             WHERE id = ?1 AND image_key = ?2 AND pending_image IS NULL",
             params![
                 id.0,
                 image_key,
@@ -134,18 +136,18 @@ impl Store {
     }
 
     /// Records the key the server stored an uploaded thumbnail under, so the cached file
-    /// counts as the server's image. A thumbnail replaced while `uploaded` was on its way
-    /// keeps no key, so it is uploaded in turn.
+    /// counts as the server's image. A replacement keeps its pending token, so an older
+    /// upload cannot acknowledge it, even if the cache reused the same path.
     pub fn set_image_key(
         &mut self,
         id: BookmarkId,
-        uploaded: &Path,
+        pending_image: &str,
         image_key: &str,
     ) -> Result<()> {
         self.conn.execute(
-            "UPDATE bookmarks SET image_key = ?3
-             WHERE id = ?1 AND image_path = ?2 AND image_key IS NULL",
-            params![id.0, uploaded.to_string_lossy(), image_key],
+            "UPDATE bookmarks SET image_key = ?3, pending_image = NULL
+             WHERE id = ?1 AND pending_image = ?2",
+            params![id.0, pending_image, image_key],
         )?;
         Ok(())
     }
@@ -206,13 +208,60 @@ mod tests {
         store.set_image(added.id, &image("/cache/old.png")).unwrap();
         let uploading = store.thumbnail_uploads(10).unwrap().remove(0);
 
-        store.set_image(added.id, &image("/cache/new.png")).unwrap();
+        store.set_image(added.id, &image("/cache/old.png")).unwrap();
         store
-            .set_image_key(added.id, &uploading.path, "key-of-old")
+            .set_image_key(added.id, &uploading.pending_image, "key-of-old")
             .unwrap();
 
         let next = store.thumbnail_uploads(10).unwrap();
         assert_eq!(next.len(), 1);
-        assert_eq!(next[0].path, PathBuf::from("/cache/new.png"));
+        assert_eq!(next[0].path, PathBuf::from("/cache/old.png"));
+        assert_ne!(next[0].pending_image, uploading.pending_image);
+    }
+
+    #[test]
+    fn a_pull_does_not_clear_a_pending_local_image() {
+        use serde_json::json;
+
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let url = "https://a.dev/";
+        let added = store.add_link(WORKSPACE, url, 10).unwrap();
+        let mids: Vec<_> = store
+            .next_push()
+            .unwrap()
+            .into_iter()
+            .map(|m| m.mid)
+            .collect();
+        store.acknowledge(&mids).unwrap();
+        let image = Image {
+            path: "/cache/new.png".into(),
+            width: 10,
+            height: 10,
+        };
+        store.set_image(added.id, &image).unwrap();
+        let uploading = store.thumbnail_uploads(10).unwrap().remove(0);
+        let mut row = bookmark_row(&uploading.bookmark, WORKSPACE_KEY, url, "A");
+        for version in 2..=3 {
+            row["image_key"] = json!(format!("old-server-key-{version}"));
+            store
+                .apply_remote(
+                    &[change(
+                        json!({ "entity": "bookmark", "key": uploading.bookmark,
+                "version": version, "deleted": false, "data": row }),
+                    )],
+                    version,
+                )
+                .unwrap();
+        }
+
+        assert_eq!(
+            store.thumbnail_uploads(10).unwrap(),
+            vec![uploading.clone()]
+        );
+        store
+            .set_image_key(added.id, &uploading.pending_image, "new-server-key")
+            .unwrap();
+        assert_eq!(store.thumbnail_uploads(10).unwrap(), []);
     }
 }
