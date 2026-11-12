@@ -12,3 +12,6 @@ local.mk
 
 /sdk/node_modules/
 /.pnpm-store/
+
+# Local launch configurations, with paths on one machine
+.claude/launch.json
