@@ -1,4 +1,4 @@
-//! Invalidates local work when organizing moves between this Mac and the cloud.
+//! Invalidates work and guards writes tied to one generation of a service.
 
 use std::sync::{Arc, Mutex};
 
@@ -13,13 +13,13 @@ pub(super) struct Ticket {
 
 impl Generation {
     pub fn advance(&self) {
-        *self.0.lock().expect("organizer generation poisoned") += 1;
+        *self.0.lock().expect("service generation poisoned") += 1;
     }
 
     pub fn ticket(&self) -> Ticket {
         Ticket {
             generation: self.0.clone(),
-            started: *self.0.lock().expect("organizer generation poisoned"),
+            started: *self.0.lock().expect("service generation poisoned"),
         }
     }
 }
@@ -27,10 +27,7 @@ impl Generation {
 impl Ticket {
     // Keep the check and the write together: a switch must not slip between them.
     pub fn if_current<T>(&self, action: impl FnOnce() -> T) -> Option<T> {
-        let current = self
-            .generation
-            .lock()
-            .expect("organizer generation poisoned");
+        let current = self.generation.lock().expect("service generation poisoned");
         (*current == self.started).then(action)
     }
 }

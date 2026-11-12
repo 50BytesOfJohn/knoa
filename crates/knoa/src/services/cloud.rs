@@ -9,6 +9,7 @@ mod config;
 mod connection;
 mod engine;
 mod link;
+mod replacement;
 mod thumbnails;
 
 use std::sync::Arc;
@@ -21,7 +22,7 @@ use knoa_sync::Api;
 
 pub use self::config::CloudConfig;
 use crate::{
-    services::organizer::Organizer,
+    services::{generation::Generation, organizer::Organizer},
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -34,6 +35,7 @@ pub struct Cloud {
     fetcher: Arc<Fetcher>,
     http: reqwest::Client,
     phase: Phase,
+    generation: Generation,
     sync: SyncStatus,
     last_synced: Option<jiff::Timestamp>,
     /// What the last push kept off the server: bookmarks past the plan's limit, or
@@ -64,6 +66,7 @@ pub struct Connection {
     wake: UnboundedSender<Wake>,
     socket: tokio::task::AbortHandle,
     _tasks: Vec<Task<()>>,
+    replacement: Option<Task<()>>,
 }
 
 impl Drop for Connection {
@@ -115,6 +118,7 @@ impl Cloud {
                 fetcher,
                 http,
                 phase: Phase::SignedOut,
+                generation: Generation::default(),
                 sync: SyncStatus::Starting,
                 last_synced: None,
                 push_notice: None,

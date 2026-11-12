@@ -9,8 +9,11 @@ use knoa_fetch::Fetcher;
 use knoa_store::Store;
 use tokio::runtime::Handle;
 
-use super::{generation::Ticket, job::Outcome};
-use crate::{services::network::Network, state::database::Database};
+use super::job::Outcome;
+use crate::{
+    services::{generation::Ticket, network::Network},
+    state::database::Database,
+};
 
 /// Everything one job needs, owned so it can move to other threads.
 pub(super) struct Work {

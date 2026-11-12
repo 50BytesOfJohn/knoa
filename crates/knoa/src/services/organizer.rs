@@ -6,7 +6,6 @@
 //! the key or has no credits, the queue pauses and tries one job every `PROBE_EVERY`.
 
 mod context;
-mod generation;
 mod job;
 mod work;
 
@@ -25,7 +24,10 @@ use self::{
     job::{Outcome, process},
     work::Work,
 };
-use crate::state::{database::Database, library::Library};
+use crate::{
+    services::generation,
+    state::{database::Database, library::Library},
+};
 
 /// About four network requests at a time, as the architecture plans.
 const CONCURRENCY: usize = 4;

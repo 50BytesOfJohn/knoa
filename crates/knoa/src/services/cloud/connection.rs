@@ -4,13 +4,13 @@
 use std::sync::Arc;
 
 use futures::{StreamExt as _, channel::mpsc};
-use gpui::{AppContext as _, AsyncApp, Context, TaskExt as _, WeakEntity};
+use gpui::{AsyncApp, Context, TaskExt as _, WeakEntity};
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
 use super::{Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
 use crate::{
     channel::Channel,
-    services::{credentials::Credentials, network::Network},
+    services::{credentials::Credentials, generation::Ticket, network::Network},
 };
 
 impl Cloud {
@@ -26,22 +26,28 @@ impl Cloud {
         if cached.is_some() {
             set_cloud_organizes(true, cx);
         }
+        let generation = self.generation.ticket();
         let read = Credentials::read(config.credential_url(), cx);
         cx.spawn(async move |this, cx| {
             let read = read.await;
-            let _ = this.update(cx, |this, cx| match read {
-                Ok(Some(token)) => this.connect(token, None, cached, cx),
-                Ok(None) => {
-                    this.forget_account(cx);
-                    if scripted_sign_in() {
-                        this.sign_in(cx);
-                    }
+            let _ = this.update(cx, |this, cx| {
+                if generation.if_current(|| ()).is_none() {
+                    return;
                 }
-                // Signed out for this launch only: a Keychain that didn't answer is no
-                // reason to delete the sign-in it holds.
-                Err(err) => {
-                    tracing::error!("can't read the cloud sign-in: {err:#}");
-                    set_cloud_organizes(false, cx);
+                match read {
+                    Ok(Some(token)) => this.connect(token, None, cached, cx),
+                    Ok(None) => {
+                        this.forget_account(cx);
+                        if scripted_sign_in() {
+                            this.sign_in(cx);
+                        }
+                    }
+                    // Signed out for this launch only: a Keychain that didn't answer is no
+                    // reason to delete the sign-in it holds.
+                    Err(err) => {
+                        tracing::error!("can't read the cloud sign-in: {err:#}");
+                        set_cloud_organizes(false, cx);
+                    }
                 }
             });
         })
@@ -56,6 +62,7 @@ impl Cloud {
         if !matches!(self.phase, Phase::SignedOut) {
             return;
         }
+        self.generation.advance();
         self.problem = None;
         let http = self.http.clone();
         let start = Network::spawn(cx, async move { SignIn::start(&config.sync).await });
@@ -73,6 +80,7 @@ impl Cloud {
 
     pub fn cancel_sign_in(&mut self, cx: &mut Context<'_, Cloud>) {
         if matches!(self.phase, Phase::SigningIn(_)) {
+            self.generation.advance();
             self.phase = Phase::SignedOut;
             cx.notify();
         }
@@ -81,6 +89,7 @@ impl Cloud {
     /// Signs out here and at Clerk. The library stays linked to the account, so signing
     /// in to the same account again carries on where it left off.
     pub fn sign_out(&mut self, cx: &mut Context<'_, Cloud>) {
+        self.forget_account(cx);
         let phase = std::mem::replace(&mut self.phase, Phase::SignedOut);
         if let Phase::SignedIn(connection) | Phase::OtherAccount(connection) = phase {
             let session = connection.api.session().clone();
@@ -90,29 +99,7 @@ impl Cloud {
                 }
             });
         }
-        self.forget_account(cx);
         cx.notify();
-    }
-
-    /// The user agreed to replace the other account's link: this library becomes the
-    /// signed-in account's, merged with what it already has.
-    pub fn replace_other_account(&mut self, cx: &mut Context<'_, Cloud>) {
-        let Phase::OtherAccount(connection) = &self.phase else {
-            return;
-        };
-        let api = connection.api.clone();
-        let account = connection.account.clone();
-        let database = self.library.read(cx).database();
-        cx.spawn(async move |this, cx| {
-            let unlinked = cx
-                .background_spawn(async move { database.write().unlink() })
-                .await;
-            let _ = this.update(cx, |this, cx| match unlinked {
-                Ok(()) => this.start(api, account, cx),
-                Err(err) => this.problem = Some(format!("Couldn't unlink the library: {err}")),
-            });
-        })
-        .detach();
     }
 
     /// The sync loop found the library linked to another account than `account`, which
@@ -169,19 +156,21 @@ impl Cloud {
         let Some(config) = self.config.clone() else {
             return;
         };
+        self.generation.advance();
         // A fresh sign-in has no entitlement yet; its queue must wait for /me.
         set_cloud_organizes(true, cx);
         let (events, events_rx) = mpsc::unbounded();
         let session = Session::new(self.http.clone(), config.sync, refresh, tokens, events);
         let api = Arc::new(Api::new(Arc::new(session)));
-        self.session_events = Some(cx.spawn(async move |this, cx| {
-            on_session_events(this, events_rx, cx).await;
-        }));
         self.start(api, account, cx);
+        let generation = self.generation.ticket();
+        self.session_events = Some(cx.spawn(async move |this, cx| {
+            on_session_events(this, events_rx, generation, cx).await;
+        }));
     }
 
     /// Starts syncing as `api`'s account.
-    fn start(
+    pub(super) fn start(
         &mut self,
         api: Arc<Api>,
         account: Option<knoa_core::protocol::Account>,
@@ -205,12 +194,14 @@ impl Cloud {
             wake,
             socket: socket.abort_handle(),
             _tasks: vec![engine, socket_task],
+            replacement: None,
         });
         cx.notify();
     }
 
     /// Forgets the token and the account. The library and its link stay.
     fn forget_account(&mut self, cx: &mut Context<'_, Cloud>) {
+        self.generation.advance();
         if let Some(config) = &self.config {
             Credentials::delete(config.credential_url(), cx).detach_and_log_err(cx);
         }
@@ -265,22 +256,29 @@ impl Drop for AbortOnDrop {
 async fn on_session_events(
     this: WeakEntity<Cloud>,
     mut events: mpsc::UnboundedReceiver<SessionEvent>,
+    generation: Ticket,
     cx: &mut AsyncApp,
 ) {
     while let Some(event) = events.next().await {
-        let _ = this.update(cx, |this, cx| match event {
-            SessionEvent::Rotated(refresh) => {
-                if let Some(config) = &this.config {
-                    Credentials::write(config.credential_url(), &refresh, cx)
-                        .detach_and_log_err(cx);
-                }
+        let _ = this.update(cx, |this, cx| {
+            if generation.if_current(|| ()).is_none() {
+                return;
             }
-            SessionEvent::SignedOut => {
-                tracing::warn!("the cloud sign-in was refused; signed out");
-                this.phase = Phase::SignedOut;
-                this.forget_account(cx);
-                this.problem = Some("You were signed out. Sign in again to keep syncing.".into());
-                cx.notify();
+            match event {
+                SessionEvent::Rotated(refresh) => {
+                    if let Some(config) = &this.config {
+                        Credentials::write(config.credential_url(), &refresh, cx)
+                            .detach_and_log_err(cx);
+                    }
+                }
+                SessionEvent::SignedOut => {
+                    tracing::warn!("the cloud sign-in was refused; signed out");
+                    this.forget_account(cx);
+                    this.phase = Phase::SignedOut;
+                    this.problem =
+                        Some("You were signed out. Sign in again to keep syncing.".into());
+                    cx.notify();
+                }
             }
         });
     }

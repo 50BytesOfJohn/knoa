@@ -5,6 +5,7 @@
 pub mod ai;
 pub mod cloud;
 pub mod credentials;
+mod generation;
 pub mod housekeeping;
 pub mod links;
 pub mod network;
