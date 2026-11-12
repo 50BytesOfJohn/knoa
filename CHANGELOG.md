@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.1.5](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.5) - 2026-11-11
+
+### Changed
+
+- Draw Knoa's own folder icon, with glyphs and more colors ([#23](https://github.com/50BytesOfJohn/knoa/pull/23))
 ## [0.1.4](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.4) - 2026-11-10
 
 ### Added
