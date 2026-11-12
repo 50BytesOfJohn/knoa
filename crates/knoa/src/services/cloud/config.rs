@@ -20,13 +20,11 @@ pub struct CloudConfig {
 
 impl CloudConfig {
     /// `None` when this build has no cloud to sign in to.
-    pub fn load() -> Option<CloudConfig> {
+    pub fn load() -> Result<Option<CloudConfig>, url::ParseError> {
         if Channel::current() == Channel::Dev {
-            staging()
-                .inspect_err(|err| tracing::error!("cloud configuration is invalid: {err}"))
-                .ok()
+            staging().map(Some)
         } else {
-            production()
+            Ok(production())
         }
     }
 

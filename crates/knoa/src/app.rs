@@ -44,7 +44,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     let fetcher = Arc::new(knoa_fetch::Fetcher::new(paths.thumbnails())?);
     Organizer::init(library.clone(), fetcher.clone(), cx);
     // Before the organizer's first round, so it knows whether the cloud has the queue.
-    Cloud::init(library.clone(), fetcher.clone(), cx)?;
+    Cloud::init(library.clone(), fetcher.clone(), cx);
     Thumbnails::init(library.clone(), fetcher, cx);
     ai::connect(cx);
     cx.set_global(paths);

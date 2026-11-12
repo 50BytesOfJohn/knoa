@@ -39,14 +39,17 @@ impl Render for AccountPage {
         let header = form::header("Account", "Sync your library with a Knoa account.", &theme);
         let mut page = div().flex().flex_col().gap_8().child(header);
         if cloud.config().is_none() {
-            return page.child(form::group(
-                "Cloud mode",
-                vec![form::note(
-                    "Cloud sync isn't available in this build.",
-                    theme.muted,
-                )],
-                &theme,
-            ));
+            let mut rows = vec![form::note(
+                "Cloud sync isn't available in this build.",
+                theme.muted,
+            )];
+            if let Some(reason) = cloud.unavailable() {
+                rows.push(form::problem_note(
+                    format!("It couldn't start: {reason}"),
+                    &theme,
+                ));
+            }
+            return page.child(form::group("Cloud mode", rows, &theme));
         }
         page = match cloud.phase() {
             Phase::SignedOut | Phase::SigningIn(_) => page.child(self.signed_out(&theme, cx)),

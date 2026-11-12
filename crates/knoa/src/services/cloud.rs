@@ -30,10 +30,12 @@ use crate::{
 };
 
 pub struct Cloud {
-    config: Option<CloudConfig>,
+    /// `None` in a build without a cloud, or one whose cloud setup is broken.
+    backend: Option<Backend>,
+    /// Why Cloud mode couldn't start, when the build has a cloud.
+    unavailable: Option<String>,
     library: Entity<Library>,
     fetcher: Arc<Fetcher>,
-    http: reqwest::Client,
     phase: Phase,
     generation: Generation,
     sync: SyncStatus,
@@ -46,6 +48,24 @@ pub struct Cloud {
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
     session_events: Option<Task<()>>,
     _library_changes: Subscription,
+}
+
+/// The cloud this build talks to, and the client that reaches it.
+#[derive(Clone)]
+struct Backend {
+    config: CloudConfig,
+    http: reqwest::Client,
+}
+
+impl Backend {
+    /// `None` when this build has no cloud to sign in to.
+    fn load() -> anyhow::Result<Option<Backend>> {
+        let Some(config) = CloudConfig::load()? else {
+            return Ok(None);
+        };
+        let http = knoa_sync::http_client()?;
+        Ok(Some(Backend { config, http }))
+    }
 }
 
 /// Where signing in stands.
@@ -102,30 +122,34 @@ struct CloudGlobal(Entity<Cloud>);
 impl Global for CloudGlobal {}
 
 impl Cloud {
-    pub fn init(
-        library: Entity<Library>,
-        fetcher: Arc<Fetcher>,
-        cx: &mut App,
-    ) -> anyhow::Result<()> {
-        let http = knoa_sync::http_client()?;
-        let config = CloudConfig::load();
-        match &config {
-            Some(config) => tracing::info!(
+    /// Cloud mode is optional: a broken cloud setup leaves it unavailable, with the
+    /// reason on the Account page, and the app starts as in Local mode.
+    pub fn init(library: Entity<Library>, fetcher: Arc<Fetcher>, cx: &mut App) {
+        let (backend, unavailable) = match Backend::load() {
+            Ok(backend) => (backend, None),
+            Err(err) => {
+                tracing::error!("cloud mode can't start: {err:#}");
+                (None, Some(err.to_string()))
+            }
+        };
+        if let Some(Backend { config, .. }) = &backend {
+            tracing::info!(
                 api = config.sync.api.origin().ascii_serialization(),
                 issuer = %config.sync.issuer,
                 "cloud mode is available"
-            ),
-            None => tracing::info!("cloud mode isn't available in this build"),
+            );
+        } else if unavailable.is_none() {
+            tracing::info!("cloud mode isn't available in this build");
         }
         let cloud = cx.new(|cx| {
             let changes = cx.subscribe(&library, |this: &mut Cloud, _, _: &LibraryChanged, _| {
                 this.wake(Wake::Push);
             });
             Cloud {
-                config,
+                backend,
+                unavailable,
                 library,
                 fetcher,
-                http,
                 phase: Phase::SignedOut,
                 generation: Generation::default(),
                 sync: SyncStatus::Starting,
@@ -138,16 +162,20 @@ impl Cloud {
         });
         cx.set_global(CloudGlobal(cloud.clone()));
         cloud.update(cx, Cloud::restore);
-        Ok(())
     }
 
     pub fn entity(cx: &App) -> Entity<Cloud> {
         cx.global::<CloudGlobal>().0.clone()
     }
 
-    /// `None` in a build that has no cloud to sign in to.
+    /// `None` in a build that has no cloud to sign in to, or when it couldn't start.
     pub fn config(&self) -> Option<&CloudConfig> {
-        self.config.as_ref()
+        self.backend.as_ref().map(|backend| &backend.config)
+    }
+
+    /// Why Cloud mode couldn't start in a build that has it.
+    pub fn unavailable(&self) -> Option<&str> {
+        self.unavailable.as_deref()
     }
 
     pub fn phase(&self) -> &Phase {

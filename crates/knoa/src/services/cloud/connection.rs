@@ -8,7 +8,7 @@ use gpui::{AsyncApp, Context, TaskExt as _, WeakEntity};
 use knoa_core::protocol::Organizer as Who;
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
-use super::{Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
+use super::{Backend, Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
 use crate::{
     channel::Channel,
     services::{credentials::Credentials, generation::Ticket, network::Network},
@@ -18,7 +18,7 @@ impl Cloud {
     /// At launch: signed in if a refresh token is stored. A remembered account that the
     /// cloud organized holds the local queue until its current entitlement is known.
     pub(super) fn restore(&mut self, cx: &mut Context<'_, Cloud>) {
-        let Some(config) = self.config.clone() else {
+        let Some(config) = self.config().cloned() else {
             return;
         };
         let cached = crate::state::settings::SettingsFile::get(cx)
@@ -57,7 +57,7 @@ impl Cloud {
 
     /// Opens the browser to sign in, and finishes signing in when it comes back.
     pub fn sign_in(&mut self, cx: &mut Context<'_, Cloud>) {
-        let Some(config) = self.config.clone() else {
+        let Some(Backend { config, http }) = self.backend.clone() else {
             return;
         };
         if !matches!(self.phase, Phase::SignedOut) {
@@ -65,7 +65,6 @@ impl Cloud {
         }
         self.generation.advance();
         self.problem = None;
-        let http = self.http.clone();
         let start = Network::spawn(cx, async move { SignIn::start(&config.sync).await });
         let task = cx.spawn(async move |this, cx| {
             let tokens = match start.await {
@@ -126,7 +125,7 @@ impl Cloud {
             return;
         }
         self.phase = Phase::SignedOut;
-        let Some(config) = self.config.clone() else {
+        let Some(config) = self.config().cloned() else {
             return;
         };
         match tokens {
@@ -154,13 +153,13 @@ impl Cloud {
         account: Option<knoa_core::protocol::Account>,
         cx: &mut Context<'_, Cloud>,
     ) {
-        let Some(config) = self.config.clone() else {
+        let Some(Backend { config, http }) = self.backend.clone() else {
             return;
         };
         self.generation.advance();
         hold_until_known(account.as_ref().map(|account| account.organizer), cx);
         let (events, events_rx) = mpsc::unbounded();
-        let session = Session::new(self.http.clone(), config.sync, refresh, tokens, events);
+        let session = Session::new(http, config.sync, refresh, tokens, events);
         let api = Arc::new(Api::new(Arc::new(session)));
         self.start(api, account, cx);
         let generation = self.generation.ticket();
@@ -202,7 +201,7 @@ impl Cloud {
     /// Forgets the token and the account. The library and its link stay.
     fn forget_account(&mut self, cx: &mut Context<'_, Cloud>) {
         self.generation.advance();
-        if let Some(config) = &self.config {
+        if let Some(config) = self.config() {
             Credentials::delete(config.credential_url(), cx).detach_and_log_err(cx);
         }
         crate::state::settings::SettingsFile::update(cx, |s| s.account = None);
@@ -283,7 +282,7 @@ async fn on_session_events(
             }
             match event {
                 SessionEvent::Rotated(refresh) => {
-                    if let Some(config) = &this.config {
+                    if let Some(config) = this.config() {
                         Credentials::write(config.credential_url(), &refresh, cx)
                             .detach_and_log_err(cx);
                     }
