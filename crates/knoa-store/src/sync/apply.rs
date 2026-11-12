@@ -187,6 +187,19 @@ mod tests {
         store.acknowledge(&mids).unwrap();
     }
 
+    fn organized(tags: &[&str]) -> Enrichment {
+        Enrichment {
+            kind: Kind::Article,
+            summary: None,
+            fields: knoa_core::Fields::new(),
+            extras: Vec::new(),
+            tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
+            folders: Vec::new(),
+            set_aside: None,
+            model: "test".into(),
+        }
+    }
+
     fn import(store: &mut Store, title: &str) {
         let links = [bookmark(URL, title, 1)];
         store
@@ -301,19 +314,35 @@ mod tests {
             .apply_remote(&[pulled_tag(2, "rust", true)], 2)
             .unwrap();
         store.take_jobs(0, 1).unwrap();
-        let enrichment = Enrichment {
-            kind: Kind::Article,
-            summary: None,
-            fields: knoa_core::Fields::new(),
-            extras: Vec::new(),
-            tags: vec!["rust".into()],
-            folders: Vec::new(),
-            set_aside: None,
-            model: "test".into(),
-        };
-        store.finish_organized(id, &enrichment, 10).unwrap();
+        store
+            .finish_organized(id, &organized(&["rust"]), 10)
+            .unwrap();
 
         assert_eq!(only_bookmark(&store).unwrap().tags, []);
+    }
+
+    #[test]
+    fn a_pulled_exclusion_beats_a_pending_ai_tag_and_drops_it() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        import(&mut store, "A");
+        push_all(&mut store);
+        let id = only_bookmark(&store).unwrap().id;
+        store.take_jobs(0, 1).unwrap();
+        store
+            .finish_organized(id, &organized(&["rust"]), 10)
+            .unwrap();
+
+        store
+            .apply_remote(&[pulled_tag(2, "rust", true)], 2)
+            .unwrap();
+
+        assert_eq!(only_bookmark(&store).unwrap().tags, []);
+        let tags: Vec<Value> = pushed(&store)
+            .into_iter()
+            .filter(|m| m["entity"] == "bookmark_tag")
+            .collect();
+        assert_eq!(tags, Vec::<Value>::new());
     }
 
     #[test]

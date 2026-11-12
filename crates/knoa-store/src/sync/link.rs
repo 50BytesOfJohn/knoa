@@ -265,7 +265,9 @@ mod tests {
     use super::*;
     use crate::{
         NewBookmarks,
-        test_support::{WORKSPACE, WORKSPACE_KEY, bookmark, change, pushed, workspace_row},
+        test_support::{
+            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, pushed, workspace_row,
+        },
     };
 
     #[test]
@@ -303,6 +305,42 @@ mod tests {
         let workspace = store.workspace(WORKSPACE).unwrap().unwrap();
         assert_eq!(workspace.name, " personal ", "the account's values win");
         assert_eq!(store.cursor().unwrap(), Some(3));
+    }
+
+    #[test]
+    fn linking_keeps_the_accounts_exclusion_over_a_local_ai_tag() {
+        let mut store = Store::open_in_memory().unwrap();
+        let url = "https://a.dev/";
+        store
+            .import(
+                WORKSPACE,
+                "helium:Default",
+                &[bookmark(url, "A", 1)],
+                NewBookmarks::Organize,
+            )
+            .unwrap();
+        let id = store.search(&Query::default(), 1).unwrap()[0].id;
+        store.add_tag(id, "rust", Origin::Ai).unwrap();
+        let key = bookmark_id(WORKSPACE_KEY, url).unwrap();
+        let remote = [
+            json!({ "entity": "workspace", "key": WORKSPACE_KEY, "version": 1, "deleted": false,
+                    "data": workspace_row(WORKSPACE_KEY, "Personal") }),
+            json!({ "entity": "bookmark", "key": key, "version": 2, "deleted": false,
+                    "data": bookmark_row(&key, WORKSPACE_KEY, url, "A") }),
+            json!({ "entity": "bookmark_tag", "key": format!("{key}/rust"), "version": 3,
+                    "deleted": false, "data": { "bookmark_id": key, "tag": "rust",
+                    "origin": "user", "excluded": true } }),
+        ]
+        .map(change);
+
+        store.link("user-1", &remote, 3).unwrap();
+
+        assert_eq!(store.search(&Query::default(), 1).unwrap()[0].tags, []);
+        let entities: Vec<Value> = pushed(&store)
+            .into_iter()
+            .map(|m| m["entity"].clone())
+            .collect();
+        assert!(!entities.contains(&json!("bookmark_tag")), "{entities:?}");
     }
 
     #[test]

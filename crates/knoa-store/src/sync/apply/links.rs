@@ -1,9 +1,14 @@
 //! Pulled tags, folder links and page text. Locally a removed tag or folder is a row in
 //! the exclusion tables, not a link with `excluded` set.
 //!
-//! These rows are always pushed whole, so any pending local change to one wins outright.
+//! These rows are always pushed whole, so any pending local change to one wins outright,
+//! except an AI change to a link the pulled row says the user owns: the server will ignore
+//! it, so the pulled row wins and the AI change is dropped.
 
-use knoa_core::protocol::{BookmarkFolder, BookmarkTag, Entity};
+use knoa_core::{
+    Origin,
+    protocol::{BookmarkFolder, BookmarkTag, Entity},
+};
 use rusqlite::{Connection, params};
 
 use super::Outcome;
@@ -19,7 +24,8 @@ pub(super) fn put_tag(conn: &Connection, key: &str, row: &BookmarkTag) -> Result
     let Some(bookmark) = ids::local_id(conn, Table::Bookmarks, &row.bookmark_id)? else {
         return Ok(Outcome::WaitsForParent);
     };
-    if has_pending(conn, Entity::BookmarkTag, key)? {
+    let user_owned = row.excluded || row.origin == Origin::User;
+    if kept_by_pending(conn, Entity::BookmarkTag, key, user_owned)? {
         return Ok(Outcome::Done);
     }
     let pair = params![bookmark, row.tag];
@@ -73,7 +79,8 @@ pub(super) fn put_folder_link(
     let (Some(bookmark), Some(folder)) = (bookmark, folder) else {
         return Ok(Outcome::WaitsForParent);
     };
-    if has_pending(conn, Entity::BookmarkFolder, key)? {
+    let user_owned = row.excluded || row.origin == Origin::User;
+    if kept_by_pending(conn, Entity::BookmarkFolder, key, user_owned)? {
         return Ok(Outcome::Done);
     }
     let pair = params![bookmark, folder];
@@ -149,6 +156,16 @@ fn set_text(
     )?;
     search::reindex(conn, bookmark)?;
     Ok(Outcome::Done)
+}
+
+/// Whether a pending local change keeps a pulled link out. Pending AI changes to a link
+/// the user owns are dropped first, since the server answers them `ignored`.
+fn kept_by_pending(conn: &Connection, entity: Entity, key: &str, user_owned: bool) -> Result<bool> {
+    if user_owned && !outbox::has_user_changes(conn, entity, key)? {
+        outbox::forget(conn, entity, key)?;
+        return Ok(false);
+    }
+    has_pending(conn, entity, key)
 }
 
 fn has_pending(conn: &Connection, entity: Entity, key: &str) -> Result<bool> {

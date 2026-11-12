@@ -129,7 +129,16 @@ pub(crate) fn pending_for(conn: &Connection, entity: Entity, key: &str) -> Resul
     Ok(pending)
 }
 
-/// Forgets what the outbox holds for a row the server deleted.
+/// Whether any of what the outbox holds for a row was made by the user.
+pub(crate) fn has_user_changes(conn: &Connection, entity: Entity, key: &str) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM outbox WHERE entity = ?1 AND key = ?2 AND actor = ?3)",
+        params![entity.slug(), key, Origin::User.slug()],
+        |row| row.get(0),
+    )?)
+}
+
+/// Forgets what the outbox holds for a row the server deleted, or will refuse.
 pub(crate) fn forget(conn: &Connection, entity: Entity, key: &str) -> Result<()> {
     conn.execute(
         "DELETE FROM outbox WHERE entity = ?1 AND key = ?2",
