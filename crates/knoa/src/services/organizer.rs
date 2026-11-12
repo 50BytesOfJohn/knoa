@@ -6,7 +6,9 @@
 //! the key or has no credits, the queue pauses and tries one job every `PROBE_EVERY`.
 
 mod context;
+mod generation;
 mod job;
+mod work;
 
 use std::{
     sync::Arc,
@@ -19,7 +21,10 @@ use knoa_ai::Provider;
 use knoa_fetch::Fetcher;
 use knoa_store::Job;
 
-use self::job::{Outcome, Work, process};
+use self::{
+    job::{Outcome, process},
+    work::Work,
+};
 use crate::state::{database::Database, library::Library};
 
 /// About four network requests at a time, as the architecture plans.
@@ -47,6 +52,7 @@ pub struct Organizer {
     /// The linked account's cloud organizer runs the queue instead (Pro). The provider and
     /// its key stay, for when that ends.
     cloud: bool,
+    generation: generation::Generation,
     wake: mpsc::UnboundedSender<()>,
     _run: Task<()>,
 }
@@ -66,6 +72,7 @@ impl Organizer {
                 status: AiStatus::Off,
                 probe_at: None,
                 cloud: false,
+                generation: generation::Generation::default(),
                 wake,
                 _run: run,
             }
@@ -99,6 +106,7 @@ impl Organizer {
     /// Hands the queue to the cloud organizer, or takes it back.
     pub fn set_cloud(&mut self, cloud: bool, cx: &mut Context<'_, Organizer>) {
         if self.cloud != cloud {
+            self.generation.advance();
             self.cloud = cloud;
             self.status = self.connected_status();
             self.probe_at = None;
@@ -166,7 +174,13 @@ async fn run(
     let mut running = FuturesUnordered::new();
     loop {
         let Ok((work, take)) = this.update(cx, |this, cx| {
-            let work = Arc::new(Work::new(&database, &fetcher, this.provider.clone(), cx));
+            let work = Arc::new(Work::new(
+                &database,
+                &fetcher,
+                this.provider.clone(),
+                this.generation.ticket(),
+                cx,
+            ));
             (work, this.jobs_to_take_now(running.len()))
         }) else {
             return;

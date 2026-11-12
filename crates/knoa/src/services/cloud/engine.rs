@@ -238,12 +238,12 @@ impl Engine {
     ) -> Result<Round, Failure> {
         if wanted.account || self.account.is_none() {
             let account = self.fetch_account(cx).await?;
-            if link::ensure(self, &account, cx).await? == link::Linked::OtherAccount {
-                return Ok(Round::OtherAccount(account));
-            }
             self.this
                 .update(cx, |this, cx| this.set_account(account.clone(), cx))
                 .map_err(|_| Failure::Stopped)?;
+            if link::ensure(self, &account, cx).await? == link::Linked::OtherAccount {
+                return Ok(Round::OtherAccount(account));
+            }
             self.account = Some(account);
         }
         // A push that keeps failing mustn't keep this Mac from hearing what changed elsewhere.

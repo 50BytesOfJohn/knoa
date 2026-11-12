@@ -14,9 +14,8 @@ use crate::{
 };
 
 impl Cloud {
-    /// At launch: signed in if a refresh token is stored. Until the server answers, the
-    /// account last seen decides who organizes, so the local queue doesn't start on work
-    /// the cloud does.
+    /// At launch: signed in if a refresh token is stored. A remembered account holds
+    /// the local queue until its current entitlement is known.
     pub(super) fn restore(&mut self, cx: &mut Context<'_, Cloud>) {
         let Some(config) = self.config.clone() else {
             return;
@@ -24,11 +23,8 @@ impl Cloud {
         let cached = crate::state::settings::SettingsFile::get(cx)
             .account
             .clone();
-        if let Some(account) = &cached {
-            set_cloud_organizes(
-                account.organizer == knoa_core::protocol::Organizer::Cloud,
-                cx,
-            );
+        if cached.is_some() {
+            set_cloud_organizes(true, cx);
         }
         let read = Credentials::read(config.credential_url(), cx);
         cx.spawn(async move |this, cx| {
@@ -134,7 +130,6 @@ impl Cloud {
             }
             other => other,
         };
-        set_cloud_organizes(false, cx);
         cx.notify();
     }
 
@@ -174,6 +169,8 @@ impl Cloud {
         let Some(config) = self.config.clone() else {
             return;
         };
+        // A fresh sign-in has no entitlement yet; its queue must wait for /me.
+        set_cloud_organizes(true, cx);
         let (events, events_rx) = mpsc::unbounded();
         let session = Session::new(self.http.clone(), config.sync, refresh, tokens, events);
         let api = Arc::new(Api::new(Arc::new(session)));

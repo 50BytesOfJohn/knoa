@@ -138,6 +138,16 @@ impl Store {
         Ok(())
     }
 
+    /// Returns invalidated local work without changing results pulled from the cloud.
+    pub fn return_interrupted_job(&mut self, id: BookmarkId) -> Result<()> {
+        self.conn.execute(
+            "UPDATE bookmarks SET status = 'queued' WHERE id = ?1 AND status = 'organizing'
+             AND EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1)",
+            [id.0],
+        )?;
+        Ok(())
+    }
+
     /// Stores what the page fetch found. Values read from the page fill in kind, fields and
     /// summary until the AI provides its own, and the title of a link added by hand.
     pub fn save_page(&mut self, id: BookmarkId, page: &Page, now: i64) -> Result<()> {
