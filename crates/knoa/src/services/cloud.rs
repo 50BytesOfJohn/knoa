@@ -263,6 +263,6 @@ impl Cloud {
     }
 }
 
-fn set_cloud_organizes(cloud: bool, why: &str, cx: &mut App) {
+fn set_cloud_organizes(cloud: bool, why: &'static str, cx: &mut App) {
     Organizer::entity(cx).update(cx, |organizer, cx| organizer.set_cloud(cloud, why, cx));
 }

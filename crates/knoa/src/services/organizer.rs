@@ -54,6 +54,8 @@ pub struct Organizer {
     /// The linked account's cloud organizer runs the queue instead (Pro). The provider and
     /// its key stay, for when that ends.
     cloud: bool,
+    /// The reason last given for `cloud`, so a new reason is logged once.
+    cloud_why: Option<&'static str>,
     generation: generation::Generation,
     wake: mpsc::UnboundedSender<()>,
     _run: Task<()>,
@@ -74,6 +76,7 @@ impl Organizer {
                 status: AiStatus::Off,
                 probe_at: None,
                 cloud: false,
+                cloud_why: None,
                 generation: generation::Generation::default(),
                 wake,
                 _run: run,
@@ -105,15 +108,20 @@ impl Organizer {
         cx.notify();
     }
 
-    /// Hands the queue to the cloud organizer, or takes it back. `why` goes to the log,
-    /// so "why is nothing organizing" can be answered from it.
-    pub fn set_cloud(&mut self, cloud: bool, why: &str, cx: &mut Context<'_, Organizer>) {
-        if self.cloud != cloud {
-            if cloud {
-                tracing::info!("local organizing paused: {why}");
-            } else {
-                tracing::info!("local organizing resumed: {why}");
+    /// Hands the queue to the cloud organizer, or takes it back. `why` goes to the log
+    /// whenever it changes, even when the state doesn't, so "why is nothing organizing"
+    /// can be answered from it.
+    pub fn set_cloud(&mut self, cloud: bool, why: &'static str, cx: &mut Context<'_, Organizer>) {
+        let changed = self.cloud != cloud;
+        if changed || self.cloud_why != Some(why) {
+            match (cloud, changed) {
+                (true, _) => tracing::info!("local organizing paused: {why}"),
+                (false, true) => tracing::info!("local organizing resumed: {why}"),
+                (false, false) => tracing::info!("local organizing allowed: {why}"),
             }
+            self.cloud_why = Some(why);
+        }
+        if changed {
             self.generation.advance();
             self.cloud = cloud;
             self.status = self.connected_status();

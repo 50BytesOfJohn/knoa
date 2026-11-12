@@ -219,7 +219,7 @@ fn hold_until_known(cached: Option<Who>, cx: &mut gpui::App) {
     if holds_queue(cached) {
         set_cloud_organizes(true, "waiting for the account to say who organizes", cx);
     } else {
-        set_cloud_organizes(false, "the account was last seen organized on this Mac", cx);
+        set_cloud_organizes(false, "the last known plan organizes on this Mac", cx);
     }
 }
 
