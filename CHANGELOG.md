@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.2.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.2.0) - 2026-11-12
+
+### Added
+
+- Add Cloud mode: sign in and sync the library ([#26](https://github.com/50BytesOfJohn/knoa/pull/26))
 ## [0.1.5](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.1.5) - 2026-11-11
 
 ### Changed
