@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use futures::{StreamExt as _, channel::mpsc};
 use gpui::{AsyncApp, Context, TaskExt as _, WeakEntity};
+use knoa_core::protocol::Organizer as Who;
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
 use super::{Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
@@ -14,8 +15,8 @@ use crate::{
 };
 
 impl Cloud {
-    /// At launch: signed in if a refresh token is stored. A remembered account holds
-    /// the local queue until its current entitlement is known.
+    /// At launch: signed in if a refresh token is stored. A remembered account that the
+    /// cloud organized holds the local queue until its current entitlement is known.
     pub(super) fn restore(&mut self, cx: &mut Context<'_, Cloud>) {
         let Some(config) = self.config.clone() else {
             return;
@@ -23,8 +24,8 @@ impl Cloud {
         let cached = crate::state::settings::SettingsFile::get(cx)
             .account
             .clone();
-        if cached.is_some() {
-            set_cloud_organizes(true, "waiting for the account to say who organizes", cx);
+        if let Some(account) = &cached {
+            hold_until_known(Some(account.organizer), cx);
         }
         let generation = self.generation.ticket();
         let read = Credentials::read(config.credential_url(), cx);
@@ -157,8 +158,7 @@ impl Cloud {
             return;
         };
         self.generation.advance();
-        // A fresh sign-in has no entitlement yet; its queue must wait for /me.
-        set_cloud_organizes(true, "waiting for the account to say who organizes", cx);
+        hold_until_known(account.as_ref().map(|account| account.organizer), cx);
         let (events, events_rx) = mpsc::unbounded();
         let session = Session::new(self.http.clone(), config.sync, refresh, tokens, events);
         let api = Arc::new(Api::new(Arc::new(session)));
@@ -212,6 +212,23 @@ impl Cloud {
         self.last_synced = None;
         self.push_notice = None;
     }
+}
+
+/// Sets the local queue going or holds it until `/v1/me` says who organizes, from what
+/// the account was when last seen.
+fn hold_until_known(cached: Option<Who>, cx: &mut gpui::App) {
+    if holds_queue(cached) {
+        set_cloud_organizes(true, "waiting for the account to say who organizes", cx);
+    } else {
+        set_cloud_organizes(false, "the account was last seen organized on this Mac", cx);
+    }
+}
+
+/// Whether the local queue waits for the account. An account last seen organized on this
+/// Mac keeps organizing, so a free account still works while the API can't be reached;
+/// any other may have the cloud organizer, which must not race this Mac's.
+fn holds_queue(cached: Option<Who>) -> bool {
+    cached != Some(Who::Device)
 }
 
 async fn wait_for_browser(
@@ -298,5 +315,17 @@ async fn forward_socket(
         if wake.unbounded_send(wake_for).is_err() {
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_an_account_last_organized_here_starts_organizing_before_the_api_answers() {
+        assert!(!holds_queue(Some(Who::Device)));
+        assert!(holds_queue(Some(Who::Cloud)));
+        assert!(holds_queue(None));
     }
 }
