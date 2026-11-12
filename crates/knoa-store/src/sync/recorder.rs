@@ -4,26 +4,24 @@
 //! a row it created or is about to delete, a snapshot of a row before an update, or a
 //! tag or folder link whose state may have changed. In Local mode every call is a no-op.
 
-use std::collections::BTreeMap;
+mod keys;
+mod links;
 
 use knoa_core::{
     Origin,
-    protocol::{
-        BookmarkFolder, BookmarkPatch, BookmarkTag, BookmarkText, Entity, FolderPatch,
-        WorkspacePatch, bookmark_id, folder_link_key, new_id, tag_key,
-    },
+    protocol::{BookmarkPatch, Entity, FolderPatch, WorkspacePatch},
 };
-use rusqlite::{Connection, OptionalExtension as _};
+use rusqlite::Connection;
 use serde::Serialize;
 use serde_json::{Map, Value};
 
 use super::{
     ids::{self, Table},
     linked, outbox,
-    rows::{self, Link, Synced},
+    rows::{self, Synced},
     unsent,
 };
-use crate::{Error, Result};
+use crate::Result;
 
 pub(crate) struct Recorder<'c> {
     conn: &'c Connection,
@@ -112,104 +110,6 @@ impl<'c> Recorder<'c> {
         Ok(result)
     }
 
-    /// The bookmark's tags, to compare with after a change that may touch several.
-    pub fn tags_before(&self, bookmark: i64) -> Result<Option<BTreeMap<String, Origin>>> {
-        if !self.linked {
-            return Ok(None);
-        }
-        rows::tags(self.conn, bookmark).map(Some)
-    }
-
-    /// Records each tag that was added, removed or changed origin since `before`.
-    pub fn tags_changed(
-        &self,
-        bookmark: i64,
-        before: Option<BTreeMap<String, Origin>>,
-    ) -> Result<()> {
-        let Some(before) = before else {
-            return Ok(());
-        };
-        let after = rows::tags(self.conn, bookmark)?;
-        let touched = before.keys().chain(after.keys());
-        for tag in touched.filter(|tag| before.get(*tag) != after.get(*tag)) {
-            self.tag(bookmark, tag)?;
-        }
-        Ok(())
-    }
-
-    /// Records the tag as the bookmark has it now: on it, removed by the user, or gone.
-    pub fn tag(&self, bookmark: i64, tag: &str) -> Result<()> {
-        if !self.linked {
-            return Ok(());
-        }
-        let Some(bookmark_key) = self.bookmark_key(bookmark)? else {
-            return Ok(());
-        };
-        let key = tag_key(&bookmark_key, tag);
-        let (origin, excluded) = match rows::tag(self.conn, bookmark, tag)? {
-            Link::On { origin, .. } => (origin, false),
-            Link::Excluded => (Origin::User, true),
-            Link::Gone => return outbox::delete(self.conn, Entity::BookmarkTag, &key, self.actor),
-        };
-        let row = BookmarkTag {
-            bookmark_id: bookmark_key,
-            tag: tag.to_owned(),
-            origin,
-            excluded,
-        };
-        self.put(Entity::BookmarkTag, &key, &row)
-    }
-
-    /// Records the folder link as the bookmark has it now, like [`Recorder::tag`].
-    pub fn folder_link(&self, bookmark: i64, folder: i64) -> Result<()> {
-        if !self.linked {
-            return Ok(());
-        }
-        let (Some(bookmark_key), Some(folder_key)) =
-            (self.bookmark_key(bookmark)?, self.folder_key(folder)?)
-        else {
-            return Ok(());
-        };
-        let key = folder_link_key(&bookmark_key, &folder_key);
-        let (origin, probability, excluded) = match rows::folder_link(self.conn, bookmark, folder)?
-        {
-            Link::On {
-                origin,
-                probability,
-            } => (origin, probability, false),
-            Link::Excluded => (Origin::User, None, true),
-            Link::Gone => {
-                return outbox::delete(self.conn, Entity::BookmarkFolder, &key, self.actor);
-            }
-        };
-        let row = BookmarkFolder {
-            bookmark_id: bookmark_key,
-            folder_id: folder_key,
-            origin,
-            probability,
-            excluded,
-        };
-        self.put(Entity::BookmarkFolder, &key, &row)
-    }
-
-    /// Records the bookmark's page text, if it has any.
-    pub fn text(&self, bookmark: i64) -> Result<()> {
-        if !self.linked {
-            return Ok(());
-        }
-        let (Some(key), Some(text)) = (
-            self.bookmark_key(bookmark)?,
-            rows::page_text(self.conn, bookmark)?,
-        ) else {
-            return Ok(());
-        };
-        let row = BookmarkText {
-            bookmark_id: key.clone(),
-            text,
-        };
-        self.put(Entity::BookmarkText, &key, &row)
-    }
-
     /// Call before deleting: the server deletes the workspace's folders and bookmarks too.
     pub fn deleting_workspace(&self, id: i64) -> Result<()> {
         self.deleting(Entity::Workspace, Table::Workspaces, id)
@@ -289,78 +189,6 @@ impl<'c> Recorder<'c> {
     fn put(&self, entity: Entity, key: &str, row: &impl Serialize) -> Result<()> {
         outbox::put(self.conn, entity, key, self.actor, &columns(row)?)
     }
-
-    /// The workspace's sync id, minted and sent whole if it had none. `None` when there is
-    /// no such workspace.
-    fn workspace_key(&self, id: i64) -> Result<Option<String>> {
-        if !self.linked {
-            return Ok(None);
-        }
-        if let Some(key) = ids::sync_id(self.conn, Table::Workspaces, id)? {
-            return Ok(Some(key));
-        }
-        let key = new_id();
-        if !ids::set_sync_id(self.conn, Table::Workspaces, id, &key)? {
-            return Ok(None);
-        }
-        self.put_whole_workspace(id)?;
-        Ok(Some(key))
-    }
-
-    fn folder_key(&self, id: i64) -> Result<Option<String>> {
-        if !self.linked {
-            return Ok(None);
-        }
-        if let Some(key) = ids::sync_id(self.conn, Table::Folders, id)? {
-            return Ok(Some(key));
-        }
-        let Some(workspace) = self.parent(Table::Folders, id)? else {
-            return Ok(None);
-        };
-        self.workspace_key(workspace)?;
-        let key = new_id();
-        ids::set_sync_id(self.conn, Table::Folders, id, &key)?;
-        self.put_whole_folder(id)?;
-        Ok(Some(key))
-    }
-
-    /// `None` too while the bookmark waits for room on the account: it goes again whole.
-    fn bookmark_key(&self, id: i64) -> Result<Option<String>> {
-        if !self.linked || unsent::is_unsent(self.conn, id)? {
-            return Ok(None);
-        }
-        if let Some(key) = ids::sync_id(self.conn, Table::Bookmarks, id)? {
-            return Ok(Some(key));
-        }
-        let Some(workspace) = self.parent(Table::Bookmarks, id)? else {
-            return Ok(None);
-        };
-        let Some(namespace) = self.workspace_key(workspace)? else {
-            return Ok(None);
-        };
-        let url: String =
-            self.conn
-                .query_row("SELECT url FROM bookmarks WHERE id = ?1", [id], |row| {
-                    row.get(0)
-                })?;
-        let key = bookmark_id(&namespace, &url).ok_or(Error::InvalidSyncId(namespace))?;
-        ids::set_sync_id(self.conn, Table::Bookmarks, id, &key)?;
-        self.put_whole_bookmark(id)?;
-        Ok(Some(key))
-    }
-
-    /// The workspace a folder or bookmark belongs to.
-    fn parent(&self, table: Table, id: i64) -> Result<Option<i64>> {
-        let sql = match table {
-            Table::Folders => "SELECT workspace_id FROM folders WHERE id = ?1",
-            Table::Bookmarks => "SELECT workspace_id FROM bookmarks WHERE id = ?1",
-            Table::Workspaces => return Ok(None),
-        };
-        Ok(self
-            .conn
-            .query_row(sql, [id], |row| row.get(0))
-            .optional()?)
-    }
 }
 
 fn columns(row: &impl Serialize) -> Result<Map<String, Value>> {
@@ -381,40 +209,14 @@ fn changed_columns<P: Serialize>(before: &P, after: &P) -> Result<Map<String, Va
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{BookmarkId, Enrichment, FolderColor, Ink, Kind, Query};
+    use knoa_core::{FolderColor, Ink, protocol::bookmark_id};
     use serde_json::json;
 
     use super::*;
     use crate::{
         NewBookmarks, Store,
-        test_support::{WORKSPACE, WORKSPACE_KEY, bookmark, linked, pushed},
+        test_support::{WORKSPACE, WORKSPACE_KEY, bookmark, import_one, linked, mids, pushed},
     };
-
-    fn organized(tags: &[&str]) -> Enrichment {
-        Enrichment {
-            kind: Kind::Article,
-            summary: Some("About Rust".into()),
-            fields: knoa_core::Fields::new(),
-            extras: Vec::new(),
-            tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
-            folders: Vec::new(),
-            set_aside: None,
-            model: "test".into(),
-        }
-    }
-
-    /// Imports one bookmark for organizing and returns its id.
-    fn import_one(store: &mut Store) -> BookmarkId {
-        store
-            .import(
-                WORKSPACE,
-                "helium:Default",
-                &[bookmark("https://a.dev/", "A", 1)],
-                NewBookmarks::Organize,
-            )
-            .unwrap();
-        store.search(&Query::default(), 1).unwrap()[0].id
-    }
 
     #[test]
     fn local_mode_records_nothing() {
@@ -471,64 +273,6 @@ mod tests {
     }
 
     #[test]
-    fn a_rerun_sends_only_the_tags_that_changed() {
-        let mut store = Store::open_in_memory().unwrap();
-        linked(&mut store);
-        let id = import_one(&mut store);
-        store.take_jobs(0, 1).unwrap();
-        store
-            .finish_organized(id, &organized(&["rust", "web"]), 10)
-            .unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
-
-        store.queue(id).unwrap();
-        store.take_jobs(0, 1).unwrap();
-        store
-            .finish_organized(id, &organized(&["web", "cli"]), 20)
-            .unwrap();
-
-        let tags: Vec<(String, String, Value)> = pushed(&store)
-            .into_iter()
-            .filter(|m| m["entity"] == "bookmark_tag")
-            .map(|m| {
-                (
-                    m["key"]
-                        .as_str()
-                        .unwrap()
-                        .rsplit('/')
-                        .next()
-                        .unwrap()
-                        .to_owned(),
-                    m["op"].as_str().unwrap().to_owned(),
-                    m["actor"].clone(),
-                )
-            })
-            .collect();
-        assert_eq!(
-            tags,
-            [
-                ("rust".to_owned(), "delete".to_owned(), json!("ai")),
-                ("cli".to_owned(), "put".to_owned(), json!("ai")),
-            ]
-        );
-    }
-
-    #[test]
-    fn removing_a_tag_sends_it_excluded() {
-        let mut store = Store::open_in_memory().unwrap();
-        linked(&mut store);
-        let id = import_one(&mut store);
-        store.add_tag(id, "rust", Origin::Ai).unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
-
-        store.remove_tag(id, "rust").unwrap();
-
-        let [put] = <[Value; 1]>::try_from(pushed(&store)).unwrap();
-        assert_eq!(put["actor"], json!("user"));
-        assert_eq!(put["data"]["excluded"], json!(true));
-    }
-
-    #[test]
     fn deleting_a_workspace_sends_one_delete_for_all_it_holds() {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
@@ -553,14 +297,5 @@ mod tests {
             (&delete["entity"], &delete["op"]),
             (&json!("workspace"), &json!("delete"))
         );
-    }
-
-    fn mids(store: &Store) -> Vec<String> {
-        store
-            .next_push()
-            .unwrap()
-            .into_iter()
-            .map(|m| m.mid)
-            .collect()
     }
 }

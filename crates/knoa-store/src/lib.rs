@@ -113,12 +113,12 @@ impl Store {
 #[cfg(test)]
 pub(crate) mod test_support {
     use knoa_core::{
-        NewBookmark, WorkspaceId,
+        BookmarkId, NewBookmark, Query, WorkspaceId,
         protocol::{Change, Mutation},
     };
     use serde_json::{Value, json};
 
-    use crate::Store;
+    use crate::{NewBookmarks, Store};
 
     /// The workspace every database starts with.
     pub const WORKSPACE: WorkspaceId = WorkspaceId(1);
@@ -161,6 +161,29 @@ pub(crate) mod test_support {
             .iter()
             .map(|mutation: &Mutation| serde_json::to_value(mutation).unwrap())
             .collect()
+    }
+
+    /// The ids of everything waiting to be pushed.
+    pub fn mids(store: &Store) -> Vec<String> {
+        store
+            .next_push()
+            .unwrap()
+            .into_iter()
+            .map(|m| m.mid)
+            .collect()
+    }
+
+    /// Imports one bookmark for organizing and returns its id.
+    pub fn import_one(store: &mut Store) -> BookmarkId {
+        store
+            .import(
+                WORKSPACE,
+                "helium:Default",
+                &[bookmark("https://a.dev/", "A", 1)],
+                NewBookmarks::Organize,
+            )
+            .unwrap();
+        store.search(&Query::default(), 1).unwrap()[0].id
     }
 
     pub fn bookmark(url: &str, title: &str, added_at: i64) -> NewBookmark {
