@@ -17,7 +17,10 @@ use gpui::{
 };
 use gpui_component::input::{InputEvent, InputState, TextareaState};
 use knoa_browser::{Browser, Profile};
-use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceId};
+use knoa_core::{
+    Ink, Screening, TagList, Workspace, WorkspaceId,
+    protocol::max_chars::{self, fits},
+};
 
 use super::{
     form,
@@ -137,10 +140,7 @@ impl WorkspacePage {
             return;
         };
         let mut workspace = self.workspace(id, cx);
-        // An emptied name field keeps the old name rather than saving none.
-        if workspace.name.is_empty() {
-            workspace.name.clone_from(&stored.name);
-        }
+        keep_stored_where_refused(&mut workspace, &stored);
         if workspace != stored {
             self.library.update(cx, |library, cx| {
                 library.change(cx, move |store| store.update_workspace(&workspace));
@@ -191,11 +191,13 @@ impl WorkspacePage {
 
     /// Creates the workspace, switches to it, and turns this page into its page.
     fn create(&mut self, window: &mut Window, cx: &mut Context<'_, WorkspacePage>) {
-        if self.name.read(cx).value().trim().is_empty() {
+        let mut workspace = self.workspace(WorkspaceId(0), cx);
+        if workspace.name.is_empty() || !fits(&workspace.name, max_chars::workspace::NAME) {
             self.name.update(cx, |input, cx| input.focus(window, cx));
             return;
         }
-        let mut workspace = self.workspace(WorkspaceId(0), cx);
+        let blank = blank_workspace(workspace.color);
+        keep_stored_where_refused(&mut workspace, &blank);
         let database = self.library.read(cx).database();
         let task = cx.background_spawn(async move {
             let mut store = database.write();
@@ -296,6 +298,24 @@ fn new_reorganize(
 ) -> Entity<Reorganize> {
     let library = library.clone();
     cx.new(|_| Reorganize::new(Scope::Workspace(id), library))
+}
+
+/// Puts back the stored value of a text field the server would refuse: an emptied name,
+/// or text past its limit, which would keep the whole change on this Mac only.
+fn keep_stored_where_refused(workspace: &mut Workspace, stored: &Workspace) {
+    use max_chars::workspace::{GUIDELINE, INSTRUCTIONS, NAME};
+    if workspace.name.is_empty() || !fits(&workspace.name, NAME) {
+        workspace.name.clone_from(&stored.name);
+    }
+    if !fits(&workspace.instructions, INSTRUCTIONS) {
+        workspace.instructions.clone_from(&stored.instructions);
+    }
+    if !fits(&workspace.screening.guideline, GUIDELINE) {
+        workspace
+            .screening
+            .guideline
+            .clone_from(&stored.screening.guideline);
+    }
 }
 
 fn blank_workspace(color: Ink) -> Workspace {

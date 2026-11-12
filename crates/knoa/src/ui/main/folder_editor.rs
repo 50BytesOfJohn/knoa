@@ -13,7 +13,10 @@ use gpui_component::{
     slider::SliderState,
     switch::Switch,
 };
-use knoa_core::{Folder, FolderColor, FolderIcon, FolderId, Ink};
+use knoa_core::{
+    Folder, FolderColor, FolderIcon, FolderId, Ink,
+    protocol::max_chars::{self, fits},
+};
 
 use super::MainView;
 use crate::{
@@ -79,10 +82,14 @@ impl FolderEditor {
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
         let name = self.name.read(cx).value().trim().to_owned();
-        if name.is_empty() {
+        let description = self.description.read(cx).value().trim().to_owned();
+        // The server would refuse the folder, leaving it on this Mac only.
+        if name.is_empty()
+            || !fits(&name, max_chars::folder::NAME)
+            || !fits(&description, max_chars::folder::DESCRIPTION)
+        {
             return;
         }
-        let description = self.description.read(cx).value().trim().to_owned();
         let (color, icon, auto_assign) = (self.color, self.icon, self.auto_assign);
         match &self.existing {
             Some(folder) => {

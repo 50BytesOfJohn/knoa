@@ -4,6 +4,7 @@
 //! contract. Wire format: `snake_case` names, Unix seconds, lowercase UUID strings.
 
 mod account;
+pub mod max_chars;
 mod rows;
 mod sync;
 

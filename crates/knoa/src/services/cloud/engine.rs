@@ -223,9 +223,16 @@ struct Refused {
     quota: usize,
     /// Some change was too large for the server even alone.
     too_large: bool,
+    /// Some change broke the server's rules, like a value past its column's limit.
+    invalid: bool,
 }
 
 impl Refused {
+    /// Whether this push kept anything off the server so far.
+    fn kept_any(&self) -> bool {
+        self.quota > 0 || self.too_large || self.invalid
+    }
+
     fn notice(&self, limit: u64) -> Option<String> {
         let quota = (self.quota > 0).then(|| {
             format!(
@@ -233,12 +240,16 @@ impl Refused {
                 self.quota
             )
         });
-        let too_large = self
-            .too_large
-            .then(|| "Some changes were too large to sync and stayed on this Mac only.".to_owned());
-        match (quota, too_large) {
-            (Some(quota), Some(too_large)) => Some(format!("{quota} {too_large}")),
-            (quota, too_large) => quota.or(too_large),
+        let other = if self.invalid {
+            Some("Some changes couldn't be synced and stayed on this Mac only.")
+        } else if self.too_large {
+            Some("Some changes were too large to sync and stayed on this Mac only.")
+        } else {
+            None
+        };
+        match (quota, other) {
+            (Some(quota), Some(other)) => Some(format!("{quota} {other}")),
+            (quota, other) => quota.or(other.map(str::to_owned)),
         }
     }
 }
@@ -337,7 +348,14 @@ impl Engine {
                     refused.too_large = true;
                     sent.into_iter().collect()
                 }
-                Err(failure) => return Err(failure),
+                Err(failure) => {
+                    // The batches before this one were answered, and what they kept off
+                    // the server stays off it.
+                    if refused.kept_any() {
+                        self.refused(&refused, cx)?;
+                    }
+                    return Err(failure);
+                }
             };
             refused.sent = true;
             // Acknowledging nothing would send the same batch again right away, forever.
@@ -351,7 +369,7 @@ impl Engine {
     }
 
     /// The ids of the answers that belong to `sent`, after logging the rejections and
-    /// counting the ones the plan's limit refused.
+    /// counting them in `refused`.
     fn read_answers(
         &self,
         sent: &HashSet<String>,
@@ -370,7 +388,10 @@ impl Engine {
             if result.status == MutationStatus::Rejected {
                 match result.reason {
                     Some(RejectReason::Quota) => refused.quota += 1,
-                    reason => tracing::warn!(mid = result.mid, ?reason, "push rejected"),
+                    reason => {
+                        tracing::warn!(mid = result.mid, ?reason, "push rejected");
+                        refused.invalid = true;
+                    }
                 }
             }
             answered.push(result.mid);
