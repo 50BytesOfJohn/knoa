@@ -116,6 +116,12 @@ export class FakeServer {
 				organized_per_month: pro ? 1000 : 0,
 			},
 			usage: { bookmarks, organized_this_month: 0 },
+			billing: {
+				status: pro ? "active" : "none",
+				period_end: null,
+				cancel_at_period_end: false,
+				trial_available: !pro,
+			},
 		};
 	}
 

@@ -302,6 +302,19 @@ export interface Account {
 	organizer: "cloud" | "device";
 	limits: { bookmarks: number; organized_per_month: number };
 	usage: { bookmarks: number; organized_this_month: number };
+	billing: Billing;
+}
+
+/** The account's Pro subscription, for showing it and for offering one. */
+export interface Billing {
+	/** `none` without Pro. A trial is Pro, with smaller limits until it converts. */
+	status: "none" | "trialing" | "active";
+	/** Unix seconds when the trial or the paid period ends; null without Pro. */
+	period_end: number | null;
+	/** Pro ends at `period_end` instead of renewing. */
+	cancel_at_period_end: boolean;
+	/** A checkout now starts with a free trial: the account has never had Pro. */
+	trial_available: boolean;
 }
 
 /**
