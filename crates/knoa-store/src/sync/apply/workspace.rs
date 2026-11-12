@@ -53,14 +53,15 @@ pub(super) fn put(conn: &Connection, key: &str, row: Workspace) -> Result<Outcom
     Ok(Outcome::Done)
 }
 
-/// The last workspace stays, since the app always needs one.
+/// The app always needs a workspace, so the last one's deletion waits in the inbox until
+/// another arrives or is created here.
 pub(super) fn delete(conn: &Connection, key: &str) -> Result<Outcome> {
     let Some(id) = ids::local_id(conn, Table::Workspaces, key)? else {
         return Ok(Outcome::Done);
     };
     let count: usize = conn.query_row("SELECT count(*) FROM workspaces", [], |row| row.get(0))?;
     if count <= 1 {
-        return Ok(Outcome::Done);
+        return Ok(Outcome::WaitsForParent);
     }
     workspaces::delete(conn, id)?;
     outbox::forget(conn, Entity::Workspace, key)?;

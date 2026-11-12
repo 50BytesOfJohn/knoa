@@ -15,6 +15,7 @@ mod rows;
 use knoa_core::protocol::{MAX_PUSH, MAX_PUSH_BYTES, Mutation};
 use rusqlite::{Connection, OptionalExtension as _};
 
+pub(crate) use apply::apply_held;
 pub use device::{CloudJob, ThumbnailDownload, ThumbnailUpload};
 pub(crate) use recorder::Recorder;
 pub(crate) use rows::page_text;

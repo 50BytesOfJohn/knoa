@@ -33,7 +33,8 @@ impl Store {
     }
 }
 
-/// Whether a change could be applied, or waits for its parent.
+/// Whether a change could be applied, or waits in the inbox: for its parent, or, for the
+/// last workspace's deletion, for another workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Outcome {
     Done,
@@ -53,6 +54,12 @@ pub(super) fn apply(conn: &Connection, changes: &[Change]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Applies what still waits in the inbox, for a local change that lets it through: a new
+/// workspace lets the last one's deletion apply.
+pub(crate) fn apply_held(conn: &Connection) -> Result<()> {
+    apply(conn, &[])
 }
 
 pub(super) fn set_cursor(conn: &Connection, cursor: i64) -> Result<()> {
@@ -95,8 +102,12 @@ fn hold(conn: &Connection, change: &Change) -> Result<()> {
 }
 
 fn held(conn: &Connection, entity: Entity) -> Result<Vec<Change>> {
-    let mut stmt =
-        conn.prepare_cached("SELECT change FROM sync_inbox WHERE entity = ?1 ORDER BY version")?;
+    // Deletions last: rows of one entity don't depend on each other, except that the last
+    // workspace's deletion waits for another workspace, which may come in the same page.
+    let mut stmt = conn.prepare_cached(
+        "SELECT change FROM sync_inbox WHERE entity = ?1
+         ORDER BY json_extract(change, '$.deleted'), version",
+    )?;
     let rows = stmt.query_map([entity.slug()], |row| row.get::<_, String>(0))?;
     rows.map(|change| Ok(serde_json::from_str(&change?)?))
         .collect()
@@ -343,6 +354,52 @@ mod tests {
             .filter(|m| m["entity"] == "bookmark_tag")
             .collect();
         assert_eq!(tags, Vec::<Value>::new());
+    }
+
+    #[test]
+    fn the_last_workspaces_deletion_waits_for_another_workspace() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        store
+            .apply_remote(&[tombstone("workspace", WORKSPACE_KEY, 2)], 2)
+            .unwrap();
+        assert_eq!(store.workspaces().unwrap().len(), 1, "the app needs one");
+
+        let work = "a1b2c3d4-0000-4000-8000-000000000001";
+        let arrived = change(
+            json!({ "entity": "workspace", "key": work, "version": 3, "deleted": false,
+                    "data": crate::test_support::workspace_row(work, "Work") }),
+        );
+        store.apply_remote(&[arrived], 3).unwrap();
+
+        let names: Vec<String> = store
+            .workspaces()
+            .unwrap()
+            .into_iter()
+            .map(|w| w.name)
+            .collect();
+        assert_eq!(names, ["Work"]);
+    }
+
+    #[test]
+    fn a_workspace_made_here_lets_the_last_ones_deletion_through() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        store
+            .apply_remote(&[tombstone("workspace", WORKSPACE_KEY, 2)], 2)
+            .unwrap();
+
+        let work = store
+            .create_workspace("Work", knoa_core::Ink::Moss)
+            .unwrap();
+
+        let ids: Vec<_> = store
+            .workspaces()
+            .unwrap()
+            .into_iter()
+            .map(|w| w.id)
+            .collect();
+        assert_eq!(ids, [work]);
     }
 
     #[test]

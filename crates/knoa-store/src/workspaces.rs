@@ -3,7 +3,12 @@
 use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceId};
 use rusqlite::{Connection, Transaction, params};
 
-use crate::{Result, Store, folders::stored_ink, sync::Recorder, tag_list};
+use crate::{
+    Result, Store,
+    folders::stored_ink,
+    sync::{self, Recorder},
+    tag_list,
+};
 
 impl Store {
     /// All workspaces in switcher order. There is always at least one.
@@ -63,6 +68,7 @@ impl Store {
         )?;
         let id = tx.last_insert_rowid();
         Recorder::user(&tx)?.created_workspace(id)?;
+        sync::apply_held(&tx)?;
         tx.commit()?;
         Ok(WorkspaceId(id))
     }
