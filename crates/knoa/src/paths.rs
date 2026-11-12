@@ -1,13 +1,15 @@
 //! Where Knoa keeps its files.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use gpui::Global;
 
+use crate::channel::Channel;
+
 #[derive(Debug, Clone)]
 pub struct Paths {
-    /// `~/Library/Application Support/Knoa`, or `Knoa Dev` for debug builds: the database,
+    /// `~/Library/Application Support/Knoa`, or `Knoa Dev` for dev builds: the database,
     /// settings and dev credentials.
     pub support: PathBuf,
     /// `~/Library/Caches/Knoa` (or `Knoa Dev`): thumbnails, safe to delete.
@@ -16,26 +18,31 @@ pub struct Paths {
 
 impl Global for Paths {}
 
-/// Debug builds keep their own library. A branch's newer schema would otherwise migrate
-/// the installed release's database, which then refuses to open it.
-const FOLDER: &str = if cfg!(debug_assertions) {
-    "Knoa Dev"
-} else {
-    "Knoa"
-};
-
 impl Paths {
     pub fn new() -> anyhow::Result<Paths> {
-        let support = dirs::data_dir()
-            .context("no Application Support directory")?
-            .join(FOLDER);
-        let cache = dirs::cache_dir()
-            .context("no Caches directory")?
-            .join(FOLDER);
-        for dir in [&support, &cache] {
+        let paths = Self::select(
+            Channel::current(),
+            &dirs::data_dir().context("no Application Support directory")?,
+            &dirs::cache_dir().context("no Caches directory")?,
+            std::env::var_os("KNOA_DATA_DIR").as_deref().map(Path::new),
+        );
+        for dir in [&paths.support, &paths.cache] {
             std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
         }
-        Ok(Paths { support, cache })
+        Ok(paths)
+    }
+
+    fn select(channel: Channel, support: &Path, cache: &Path, data_dir: Option<&Path>) -> Self {
+        if let (Channel::Dev, Some(root)) = (channel, data_dir) {
+            return Self {
+                support: root.join("support"),
+                cache: root.join("cache"),
+            };
+        }
+        Self {
+            support: support.join(channel.name()),
+            cache: cache.join(channel.name()),
+        }
     }
 
     pub fn database(&self) -> PathBuf {
@@ -52,5 +59,30 @@ impl Paths {
 
     pub fn thumbnails(&self) -> PathBuf {
         self.cache.join("thumbnails")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn development_paths_never_share_the_release_library() {
+        let support = Path::new("/home/test/Library/Application Support");
+        let cache = Path::new("/home/test/Library/Caches");
+        let scratch = Path::new("/scratch");
+        let dev = Paths::select(Channel::Dev, support, cache, None);
+        assert_eq!(dev.support, support.join("Knoa Dev"));
+        assert_eq!(dev.cache, cache.join("Knoa Dev"));
+
+        let isolated = Paths::select(Channel::Dev, support, cache, Some(scratch));
+        assert_eq!(isolated.support, scratch.join("support"));
+        assert_eq!(isolated.cache, scratch.join("cache"));
+
+        for override_dir in [None, Some(scratch)] {
+            let release = Paths::select(Channel::Release, support, cache, override_dir);
+            assert_eq!(release.support, support.join("Knoa"));
+            assert_eq!(release.cache, cache.join("Knoa"));
+        }
     }
 }

@@ -23,7 +23,7 @@ APP=target/release/Knoa.app
 DIST=target/dist
 VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
 
-KNOA_UNIVERSAL=1 scripts/bundle.sh
+KNOA_CHANNEL=release KNOA_DEV=0 KNOA_UNIVERSAL=1 scripts/bundle.sh
 rm -rf "$DIST"
 mkdir -p "$DIST"
 

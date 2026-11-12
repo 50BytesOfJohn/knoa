@@ -1,0 +1,28 @@
+{
+  "name": "@knoa/sync",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fake-server": "./src/fake-server.ts",
+    "./protocol": "./src/protocol.ts",
+    "./indexeddb": "./src/indexeddb.ts",
+    "./kinds": "./src/kinds.ts"
+  },
+  "scripts": {
+    "test": "node scripts/check-kinds.mjs && vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "uuid": "^14.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2",
+    "vitest": "^5.1.0"
+  },
+  "packageManager": "pnpm@12.6.0",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

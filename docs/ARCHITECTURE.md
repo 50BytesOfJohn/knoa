@@ -39,6 +39,10 @@ One process. The UI thread only renders and handles input:
 | `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
 | `knoa-sync` | Cloud mode's client: Clerk sign-in, the Knoa API and its socket | no |
 
+`sdk/` is the shared `@knoa/sync` TypeScript package for the web app, browser extension,
+phone app and API repository. `sdk/src/protocol.ts` is the wire contract mirrored by
+Rust; `sdk/fixtures/` supplies the shared protocol examples used by the Rust tests.
+
 ## Data model
 
 See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md).
@@ -67,8 +71,10 @@ SQLite via `rusqlite` (`bundled`), WAL mode, embedded versioned migrations. The 
 `~/Library/Application Support/Knoa/knoa.db`. Thumbnails are cached as files in the app's
 cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
 
-Debug builds keep their files under `Knoa Dev` instead of `Knoa`, so a branch with a newer
-schema never migrates the installed release's library, which would then refuse to open it.
+Only distribution builds made with `KNOA_CHANNEL=release` use `Knoa`. All other builds,
+including optimized builds, keep their library and file credentials in `Knoa Dev` and
+disable self-updates, so development never migrates the installed app's library. In the dev
+channel, `KNOA_DATA_DIR` puts support files in `<dir>/support` and caches in `<dir>/cache`.
 
 The app opens the file twice: one connection writes, and a read-only one serves the UI's
 reads, so loading the library and saving the organizer's results don't wait for each
@@ -101,7 +107,7 @@ Knoa, a native alert shows the reason and the app quits when it is dismissed.
 ## Cloud mode
 
 Signed in to a Knoa account, the library also syncs with the account's copy on the server
-(the Knoa API, in the private `knoa-web` repository), which the web app and other devices
+(the Knoa API, in its private API repository), which the web app and other devices
 share. Signed out, the app is Local mode and none of this runs.
 
 - **Sign-in:** Clerk is the OAuth provider. The app opens the system browser on Clerk's
@@ -125,7 +131,8 @@ share. Signed out, the app is Local mode and none of this runs.
   `deleted_urls` and AI usage. Thumbnails go through the server's image store instead of
   the rows.
 - **Who organizes:** the account says. With Pro, the server's organizer (the same
-  `knoa-fetch` and `knoa-ai` code compiled to WASM, in `cloud/organizer`) does it, and this
+  `knoa-core`, `knoa-fetch` and `knoa-ai` crates compiled to WebAssembly by the
+  Cloudflare Worker in the private API repository) does it, and this
   Mac hands its queue to the server instead of running it. On the free plan this Mac
   organizes with the user's own key, pushes the results and uploads the thumbnails.
 - **Account page** in Settings: sign in and out, the plan and its usage, and how sync is
@@ -183,7 +190,7 @@ classifier gives those bookmarks a full run.
 AI providers sit behind two traits in `knoa-ai`
 ([ADR 0009](adr/0009-provider-neutral-ai.md)); OpenRouter is a small hand-written client
 ([ADR 0003](adr/0003-openrouter-thin-client.md)). The API key is stored in the macOS
-Keychain in release builds and in a plain file in dev builds
+Keychain in release-channel builds and in a plain file in dev builds
 ([ADR 0008](adr/0008-credential-storage.md)).
 
 ## Search
@@ -215,11 +222,11 @@ Keychain in release builds and in a plain file in dev builds
 
 macOS only. The alpha is distributed as a signed and notarized app bundle.
 
-`scripts/bundle.sh` (`make bundle`) builds `Knoa.app` from the release binary and
+`scripts/bundle.sh` (`make bundle`) builds an optimized `Knoa Dev` bundle from the binary and
 `crates/knoa/bundle/`: the `Info.plist` and `AppIcon.icon`, the Icon Composer source of the
 app icon. Xcode's `actool` compiles the icon into `Assets.car`, which macOS 26+ shows in
-every icon appearance, and `AppIcon.icns` for older systems. The bundle is signed ad hoc
-for now.
+every icon appearance, and `AppIcon.icns` for older systems. Local bundles are signed ad hoc
+and omit Sparkle. `KNOA_DEV=1` selects the debug profile; `scripts/package.sh` explicitly sets `KNOA_CHANNEL=release` for distribution.
 
 ## Releases and updates
 

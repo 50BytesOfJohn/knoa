@@ -1,9 +1,12 @@
-//! Which servers Cloud mode talks to. Debug builds use staging, which `KNOA_API_URL`,
-//! `KNOA_CLERK_ISSUER` and `KNOA_CLERK_CLIENT_ID` can override. Release builds use
+//! Which servers Cloud mode talks to. Dev builds use staging, which `KNOA_API_URL`,
+//! `KNOA_CLERK_ISSUER` and `KNOA_CLERK_CLIENT_ID` can override. `KNOA_WEB_URL` sets
+//! the web app (default <http://localhost:3210>). Release-channel builds use
 //! production, and only when the build was given its OAuth client id.
 
 use knoa_sync::Config;
 use url::Url;
+
+use crate::channel::Channel;
 
 /// Everything Cloud mode needs to know about where the account lives.
 #[derive(Debug, Clone)]
@@ -18,7 +21,7 @@ pub struct CloudConfig {
 impl CloudConfig {
     /// `None` when this build has no cloud to sign in to.
     pub fn load() -> Option<CloudConfig> {
-        if cfg!(debug_assertions) {
+        if Channel::current() == Channel::Dev {
             staging()
                 .inspect_err(|err| tracing::error!("cloud configuration is invalid: {err}"))
                 .ok()
@@ -35,6 +38,8 @@ impl CloudConfig {
 
 fn staging() -> Result<CloudConfig, url::ParseError> {
     let var = |name: &str, default: &str| std::env::var(name).unwrap_or_else(|_| default.into());
+    let web = var("KNOA_WEB_URL", "http://localhost:3210");
+    let web = web.trim_end_matches('/');
     Ok(CloudConfig {
         sync: Config {
             api: Url::parse(&var(
@@ -47,8 +52,8 @@ fn staging() -> Result<CloudConfig, url::ParseError> {
             ))?,
             client_id: var("KNOA_CLERK_CLIENT_ID", "C8fhAQh3MI0bMg9O"),
         },
-        pricing: Url::parse("http://localhost:3001/pricing")?,
-        web_app: Url::parse("http://localhost:3001/app")?,
+        pricing: Url::parse(&format!("{web}/pricing"))?,
+        web_app: Url::parse(&format!("{web}/app"))?,
     })
 }
 

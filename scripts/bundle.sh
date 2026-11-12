@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Builds target/release/Knoa.app: the release binary, its Info.plist, the app icon and the
-# Sparkle framework, signed inside out.
+# Builds target/release/Knoa.app as Knoa Dev unless KNOA_CHANNEL=release.
 #
-#   KNOA_DEV=1          build target/debug/Knoa.app instead: Knoa Dev, the debug binary
-#                       without Sparkle, so it never updates itself.
+#   KNOA_CHANNEL=release  distribution identity, real library and Sparkle (package.sh).
+#   KNOA_DEV=1           debug profile in target/debug/Knoa.app instead of release.
 #   KNOA_SIGN_IDENTITY  codesign identity, like "Developer ID Application". Default: ad hoc.
 #   KNOA_UNIVERSAL=1    build for Apple silicon and Intel, not just this Mac.
 #   KNOA_BUILD          CFBundleVersion. Default: the number of commits on this branch.
@@ -53,10 +52,13 @@ build_binary() {
 write_info_plist() {
     local plist=$APP/Contents/Info.plist
     sed -e "s/@VERSION@/$VERSION/" -e "s/@BUILD@/$BUILD/" "$BUNDLE/Info.plist" > "$plist"
-    if [[ $DEV == 1 ]]; then
+    if [[ ${KNOA_CHANNEL:-} != release ]]; then
         plutil -replace CFBundleIdentifier -string dev.knoa.Knoa-Dev "$plist"
         plutil -replace CFBundleName -string "Knoa Dev" "$plist"
         plutil -replace CFBundleDisplayName -string "Knoa Dev" "$plist"
+        for key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks SURequireSignedFeed SUVerifyUpdateBeforeExtraction; do
+            plutil -remove "$key" "$plist"
+        done
     fi
 }
 
@@ -107,7 +109,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 build_binary "$APP/Contents/MacOS/Knoa"
 write_info_plist
 compile_icon
-if [[ $DEV != 1 ]]; then
+if [[ ${KNOA_CHANNEL:-} == release ]]; then
     embed_sparkle
 fi
 sign

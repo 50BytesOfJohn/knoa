@@ -2,6 +2,10 @@
 [toolchain]
 channel = "1.99"
 components = ["rustfmt", "clippy"]
-# Release builds are universal: Apple silicon and Intel.
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+# Distribution builds are universal; the API consumes the shared crates as WebAssembly.
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "wasm32-unknown-unknown",
+]
 profile = "minimal"

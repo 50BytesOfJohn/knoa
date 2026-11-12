@@ -1,10 +1,12 @@
-//! Where API keys are kept (ADR 0008): the Keychain in release builds, a plain file in
-//! debug builds, because macOS re-prompts for the Keychain on every unsigned rebuild.
+//! Where API keys are kept (ADR 0008): the Keychain in release-channel builds, a plain file in
+//! dev builds, because macOS re-prompts for the Keychain on every unsigned rebuild.
 
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Context as _;
 use gpui::{App, AppContext as _, Global, Task};
+
+use crate::channel::Channel;
 
 pub enum Credentials {
     Keychain,
@@ -18,7 +20,7 @@ const ACCOUNT: &str = "api-key";
 
 impl Credentials {
     pub fn init(dev_file: PathBuf, cx: &mut App) {
-        let store = if cfg!(debug_assertions) {
+        let store = if Channel::current() == Channel::Dev {
             Credentials::DevFile(dev_file)
         } else {
             Credentials::Keychain

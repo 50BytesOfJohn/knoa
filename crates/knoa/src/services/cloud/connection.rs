@@ -8,7 +8,10 @@ use gpui::{AppContext as _, AsyncApp, Context, TaskExt as _, WeakEntity};
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
 use super::{Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
-use crate::services::{credentials::Credentials, network::Network};
+use crate::{
+    channel::Channel,
+    services::{credentials::Credentials, network::Network},
+};
 
 impl Cloud {
     /// At launch: signed in if a refresh token is stored. Until the server answers, the
@@ -229,8 +232,8 @@ async fn wait_for_browser(
     cx: &mut AsyncApp,
 ) -> Result<Tokens, String> {
     let url = sign_in.authorize_url().to_string();
-    // Lets a debug build be signed in from a browser other than the default one.
-    if cfg!(debug_assertions) {
+    // Lets a dev build be signed in from a browser other than the default one.
+    if Channel::current() == Channel::Dev {
         tracing::info!("sign-in page: {url}");
     }
     if !scripted_sign_in() {
@@ -247,11 +250,11 @@ async fn wait_for_browser(
     tokens
 }
 
-/// Debug builds only: `KNOA_SCRIPTED_SIGN_IN=1` starts signing in at launch and leaves
+/// Dev builds only: `KNOA_SCRIPTED_SIGN_IN=1` starts signing in at launch and leaves
 /// opening the logged page to whoever runs the test, so sign-in can be checked end to end
 /// without clicking through the app or the default browser.
 fn scripted_sign_in() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("KNOA_SCRIPTED_SIGN_IN").is_some()
+    Channel::current() == Channel::Dev && std::env::var_os("KNOA_SCRIPTED_SIGN_IN").is_some()
 }
 
 struct AbortOnDrop(tokio::task::AbortHandle);

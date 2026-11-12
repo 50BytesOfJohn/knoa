@@ -3,7 +3,7 @@
 use gpui::{App, KeyBinding, Menu, MenuItem, SystemMenuType, actions};
 use objc2_foundation::NSProcessInfo;
 
-use crate::{app::APP_NAME, services::updates::Updates, ui::OpenSettings};
+use crate::{app::app_name, services::updates::Updates, ui::OpenSettings};
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -50,25 +50,27 @@ pub fn init(cx: &mut App) {
 }
 
 fn app_menu() -> Menu {
-    Menu::new(APP_NAME).items([
-        MenuItem::action(format!("About {APP_NAME}"), About),
+    let name = app_name();
+    Menu::new(name).items([
+        MenuItem::action(format!("About {name}"), About),
         MenuItem::action("Check for Updates…", CheckForUpdates),
         MenuItem::separator(),
         MenuItem::action("Settings…", OpenSettings),
         MenuItem::separator(),
         MenuItem::os_submenu("Services", SystemMenuType::Services),
         MenuItem::separator(),
-        MenuItem::action(format!("Hide {APP_NAME}"), Hide),
+        MenuItem::action(format!("Hide {name}"), Hide),
         MenuItem::action("Hide Others", HideOthers),
         MenuItem::action("Show All", ShowAll),
         MenuItem::separator(),
-        MenuItem::action(format!("Quit {APP_NAME}"), Quit),
+        MenuItem::action(format!("Quit {name}"), Quit),
     ])
 }
 
 fn help_menu() -> Menu {
+    let name = app_name();
     Menu::new("Help").items([
-        MenuItem::action(format!("What's New in {APP_NAME} {VERSION}"), ReleaseNotes),
+        MenuItem::action(format!("What's New in {name} {VERSION}"), ReleaseNotes),
         MenuItem::action("Report an Issue…", ReportIssue),
     ])
 }

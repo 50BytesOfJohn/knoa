@@ -1,4 +1,4 @@
-.PHONY: run dev bundle app dist changelog release fmt fmt-check lint test check
+.PHONY: run dev dev-local bundle app dist changelog release fmt fmt-check lint test check check-wasm check-sdk
 
 # Settings for this machine only, like FAST = 1. Git ignores the file.
 -include local.mk
@@ -16,19 +16,22 @@ export CARGO_BUILD_JOBS
 endif
 
 # The app itself runs at normal priority, so only the build step goes through $(COOL).
-run: ## Run the app (release build)
-	$(COOL) cargo build --release
-	cargo run --release
+run: ## Run Knoa Dev against staging (optimized, without a bundle)
+	$(COOL) env KNOA_CHANNEL=dev cargo build --release
+	KNOA_CHANNEL=dev cargo run --release
 
 # Running the bundle's executable directly keeps the logs here and Ctrl-C quits the app.
-dev: ## Run Knoa Dev: the debug build as an app bundle, verbose logs (needs Xcode)
-	$(COOL) env KNOA_DEV=1 scripts/bundle.sh
+dev: ## Run Knoa Dev against staging (debug bundle, verbose logs; needs Xcode)
+	$(COOL) env KNOA_CHANNEL=dev KNOA_DEV=1 scripts/bundle.sh
 	RUST_LOG=knoa=debug target/debug/Knoa.app/Contents/MacOS/Knoa
 
-bundle: ## Build target/release/Knoa.app with its icon and Sparkle (needs Xcode)
-	$(COOL) scripts/bundle.sh
+dev-local: ## Run Knoa Dev against the local API, with staging Clerk
+	KNOA_API_URL=http://localhost:8787 $(MAKE) dev
 
-app: bundle ## Build and open Knoa.app
+bundle: ## Build optimized Knoa Dev in target/release/Knoa.app (needs Xcode)
+	$(COOL) env KNOA_CHANNEL=dev scripts/bundle.sh
+
+app: bundle ## Build and open the optimized Knoa Dev bundle
 	open target/release/Knoa.app
 
 dist: ## Signed, notarized Knoa.dmg and update zip in target/dist (see scripts/package.sh)
@@ -57,4 +60,10 @@ lint: ## Clippy with warnings as errors
 test: ## Run all tests
 	$(COOL) cargo test --workspace --locked
 
-check: fmt-check lint test ## Everything CI runs
+check-wasm: ## Check the crates used by the API Worker for WebAssembly
+	$(COOL) cargo check --target wasm32-unknown-unknown -p knoa-core -p knoa-fetch -p knoa-ai --locked
+
+check-sdk: ## Test and typecheck the shared TypeScript package (pnpm install in sdk/ first)
+	cd sdk && pnpm test && pnpm typecheck
+
+check: fmt-check lint test check-wasm check-sdk ## Format, lint, tests, WebAssembly and SDK

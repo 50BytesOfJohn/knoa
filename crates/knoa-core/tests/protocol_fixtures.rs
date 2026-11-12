@@ -1,6 +1,4 @@
-//! The server's answers in the shared protocol fixtures, copied from `knoa-web`'s
-//! `api/test/fixtures`, read into the Rust types and written back unchanged. Copy them
-//! again when they change there.
+//! Shared SDK fixtures read into the Rust protocol types and written back unchanged.
 
 use knoa_core::protocol::{PullResponse, PushResponse};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -21,9 +19,18 @@ struct Step {
 #[test]
 fn every_server_answer_in_the_fixtures_round_trips() {
     let files = [
-        include_str!("fixtures/create-and-pull.json"),
-        include_str!("fixtures/tombstone-revive.json"),
-        include_str!("fixtures/user-beats-ai.json"),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/create-and-pull.json"
+        )),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/tombstone-revive.json"
+        )),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/user-beats-ai.json"
+        )),
     ];
     for file in files {
         let fixture: Fixture = serde_json::from_str(file).unwrap();

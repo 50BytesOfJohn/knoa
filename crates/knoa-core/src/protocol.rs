@@ -1,6 +1,6 @@
 //! The cloud sync protocol, version 1: the JSON the desktop app exchanges with the API.
 //!
-//! These types mirror `packages/protocol` in the `knoa-web` repository, which is the
+//! These types mirror `sdk/src/protocol.ts` in this repository, which is the
 //! contract. Wire format: `snake_case` names, Unix seconds, lowercase UUID strings.
 
 mod account;

@@ -5,7 +5,7 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::NSAlert;
 use objc2_foundation::NSString;
 
-use crate::app::APP_NAME;
+use crate::app::app_name;
 
 /// Shows `err` in an app-modal alert and quits once the user dismisses it.
 ///
@@ -28,7 +28,7 @@ pub fn report(err: &anyhow::Error, cx: &mut App) {
 fn run_alert(message: &str) {
     let mtm = MainThreadMarker::new().expect("GPUI runs foreground tasks on the main thread");
     let alert = NSAlert::new(mtm);
-    alert.setMessageText(&NSString::from_str(&format!("{APP_NAME} can't start")));
+    alert.setMessageText(&NSString::from_str(&format!("{} can't start", app_name())));
     alert.setInformativeText(&NSString::from_str(message));
     alert.addButtonWithTitle(&NSString::from_str("Quit"));
     alert.runModal();

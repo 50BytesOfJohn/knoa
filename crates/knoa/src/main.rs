@@ -2,6 +2,7 @@
 
 mod app;
 mod assets;
+mod channel;
 mod menus;
 mod paths;
 mod services;
@@ -11,7 +12,7 @@ mod ui;
 
 fn main() {
     init_tracing();
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting Knoa");
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), channel = ?channel::Channel::current(), "starting Knoa");
 
     gpui_platform::application()
         .with_assets(assets::Assets)

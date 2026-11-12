@@ -8,6 +8,7 @@ use gpui::{
 };
 
 use crate::{
+    channel::Channel,
     paths::Paths,
     services::{
         ai, cloud::Cloud, credentials::Credentials, housekeeping, network::Network,
@@ -21,8 +22,9 @@ use crate::{
     ui::{RootView, theme::Theme},
 };
 
-pub const APP_NAME: &str = "Knoa";
-const APP_ID: &str = "dev.knoa.Knoa";
+pub fn app_name() -> &'static str {
+    Channel::current().name()
+}
 
 pub fn init(cx: &mut App) -> anyhow::Result<()> {
     gpui_component::init(cx);
@@ -76,11 +78,11 @@ fn open_main_window(library: gpui::Entity<Library>, cx: &mut App) -> anyhow::Res
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         window_min_size: Some(size(px(900.), px(560.))),
         titlebar: Some(TitlebarOptions {
-            title: Some(APP_NAME.into()),
+            title: Some(app_name().into()),
             appears_transparent: true,
             traffic_light_position: Some(crate::ui::traffic_light_position()),
         }),
-        app_id: Some(APP_ID.into()),
+        app_id: Some(Channel::current().app_id().into()),
         ..Default::default()
     };
 
