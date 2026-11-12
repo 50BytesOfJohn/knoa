@@ -1,7 +1,7 @@
 //! Validating the model's answer. Strict schemas aren't a guarantee, so everything is
 //! checked and coerced here, never trusted.
 
-use knoa_core::{Fields, FolderId, Kind, MAX_AI_TAGS, MAX_TAG_CHARS, TagList, normalize_tag};
+use knoa_core::{Fields, FolderId, Kind, MAX_AI_TAGS, TagList, normalize_tag, tag_fits};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -126,7 +126,7 @@ fn clean_tags(tags: &[String], kind: Kind, tag_list: &TagList) -> Vec<String> {
 /// list, nothing else does; otherwise a tag stays unless it's too long or only repeats
 /// the kind.
 fn keeps(tag: &str, kind: Kind, tag_list: &TagList) -> bool {
-    if tag.is_empty() || tag.len() > MAX_TAG_CHARS {
+    if !tag_fits(tag) {
         return false;
     }
     if tag_list.contains(tag) {
