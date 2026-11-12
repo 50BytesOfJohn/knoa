@@ -108,12 +108,21 @@ impl Cloud {
         cx: &mut App,
     ) -> anyhow::Result<()> {
         let http = knoa_sync::http_client()?;
+        let config = CloudConfig::load();
+        match &config {
+            Some(config) => tracing::info!(
+                api = config.sync.api.origin().ascii_serialization(),
+                issuer = %config.sync.issuer,
+                "cloud mode is available"
+            ),
+            None => tracing::info!("cloud mode isn't available in this build"),
+        }
         let cloud = cx.new(|cx| {
             let changes = cx.subscribe(&library, |this: &mut Cloud, _, _: &LibraryChanged, _| {
                 this.wake(Wake::Push);
             });
             Cloud {
-                config: CloudConfig::load(),
+                config,
                 library,
                 fetcher,
                 http,
@@ -193,7 +202,10 @@ impl Cloud {
     /// The server said who the account is and what it has. Asked on every pull, so this
     /// only writes and redraws when something changed.
     fn set_account(&mut self, account: Account, cx: &mut Context<'_, Cloud>) {
-        set_cloud_organizes(account.organizer == Who::Cloud, cx);
+        match account.organizer {
+            Who::Cloud => set_cloud_organizes(true, "the account is organized in the cloud", cx),
+            Who::Device => set_cloud_organizes(false, "the account is organized on this Mac", cx),
+        }
         if SettingsFile::get(cx).account.as_ref() != Some(&account) {
             SettingsFile::update(cx, |s| s.account = Some(account.clone()));
         }
@@ -223,6 +235,6 @@ impl Cloud {
     }
 }
 
-fn set_cloud_organizes(cloud: bool, cx: &mut App) {
-    Organizer::entity(cx).update(cx, |organizer, cx| organizer.set_cloud(cloud, cx));
+fn set_cloud_organizes(cloud: bool, why: &str, cx: &mut App) {
+    Organizer::entity(cx).update(cx, |organizer, cx| organizer.set_cloud(cloud, why, cx));
 }

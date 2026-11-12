@@ -24,7 +24,7 @@ impl Cloud {
             .account
             .clone();
         if cached.is_some() {
-            set_cloud_organizes(true, cx);
+            set_cloud_organizes(true, "waiting for the account to say who organizes", cx);
         }
         let generation = self.generation.ticket();
         let read = Credentials::read(config.credential_url(), cx);
@@ -46,7 +46,7 @@ impl Cloud {
                     // reason to delete the sign-in it holds.
                     Err(err) => {
                         tracing::error!("can't read the cloud sign-in: {err:#}");
-                        set_cloud_organizes(false, cx);
+                        set_cloud_organizes(false, "the cloud sign-in can't be read", cx);
                     }
                 }
             });
@@ -158,7 +158,7 @@ impl Cloud {
         };
         self.generation.advance();
         // A fresh sign-in has no entitlement yet; its queue must wait for /me.
-        set_cloud_organizes(true, cx);
+        set_cloud_organizes(true, "waiting for the account to say who organizes", cx);
         let (events, events_rx) = mpsc::unbounded();
         let session = Session::new(self.http.clone(), config.sync, refresh, tokens, events);
         let api = Arc::new(Api::new(Arc::new(session)));
@@ -206,7 +206,7 @@ impl Cloud {
             Credentials::delete(config.credential_url(), cx).detach_and_log_err(cx);
         }
         crate::state::settings::SettingsFile::update(cx, |s| s.account = None);
-        set_cloud_organizes(false, cx);
+        set_cloud_organizes(false, "signed out of the cloud", cx);
         self.session_events = None;
         self.sync = SyncStatus::Starting;
         self.last_synced = None;

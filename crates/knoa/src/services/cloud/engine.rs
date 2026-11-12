@@ -8,7 +8,7 @@ use futures::{FutureExt as _, StreamExt as _, channel::mpsc::UnboundedReceiver};
 use gpui::{AppContext as _, AsyncApp, Entity, WeakEntity};
 use knoa_core::protocol::{
     Account, MAX_PUSH, MutationResult, MutationStatus, OrganizeRequest, OrganizeScope,
-    Organizer as Who, RejectReason,
+    Organizer as Who, Plan, RejectReason,
 };
 use knoa_fetch::Fetcher;
 use knoa_store::Store;
@@ -183,6 +183,26 @@ fn status_of(failure: &Failure) -> SyncStatus {
     }
 }
 
+/// Says once per connection, and on every change, what the account has and who
+/// organizes it. No email: the log may be shared.
+fn log_account(previous: Option<&Account>, account: &Account) {
+    let same = previous.is_some_and(|previous| {
+        (previous.plan, previous.organizer) == (account.plan, account.organizer)
+    });
+    if same {
+        return;
+    }
+    let plan = match account.plan {
+        Plan::Free => "free",
+        Plan::Pro => "pro",
+    };
+    let organizer = match account.organizer {
+        Who::Cloud => "cloud",
+        Who::Device => "device",
+    };
+    tracing::info!(plan, organizer, "cloud account");
+}
+
 fn is_too_large(err: &knoa_sync::Error) -> bool {
     matches!(err, knoa_sync::Error::Server { status: 413, .. })
 }
@@ -238,6 +258,7 @@ impl Engine {
     ) -> Result<Round, Failure> {
         if wanted.account || self.account.is_none() {
             let account = self.fetch_account(cx).await?;
+            log_account(self.account.as_ref(), &account);
             self.this
                 .update(cx, |this, cx| this.set_account(account.clone(), cx))
                 .map_err(|_| Failure::Stopped)?;

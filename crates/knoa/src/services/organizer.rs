@@ -105,9 +105,15 @@ impl Organizer {
         cx.notify();
     }
 
-    /// Hands the queue to the cloud organizer, or takes it back.
-    pub fn set_cloud(&mut self, cloud: bool, cx: &mut Context<'_, Organizer>) {
+    /// Hands the queue to the cloud organizer, or takes it back. `why` goes to the log,
+    /// so "why is nothing organizing" can be answered from it.
+    pub fn set_cloud(&mut self, cloud: bool, why: &str, cx: &mut Context<'_, Organizer>) {
         if self.cloud != cloud {
+            if cloud {
+                tracing::info!("local organizing paused: {why}");
+            } else {
+                tracing::info!("local organizing resumed: {why}");
+            }
             self.generation.advance();
             self.cloud = cloud;
             self.status = self.connected_status();
