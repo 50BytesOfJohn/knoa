@@ -1,18 +1,21 @@
 //! The Account page: what Cloud mode is and signing in, or the signed-in account, its
-//! plan, how sync is doing, and signing out.
+//! plan, AI access, how sync is doing, and signing out.
+
+mod ai_access;
+mod plan;
 
 use gpui::{
     AnyElement, Context, Div, Entity, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Window, div,
 };
-use jiff::{Timestamp, Zoned, tz::TimeZone};
-use knoa_core::protocol::{Account, BillingStatus, Organizer, Plan};
+use jiff::Zoned;
 
 use super::{form, updates::when};
 use crate::{
     services::cloud::{Cloud, Phase, SyncStatus},
+    state::library::Library,
     ui::{
-        components::{Tone, button, grouped},
+        components::{Tone, button},
         theme::Theme,
     },
 };
@@ -22,18 +25,25 @@ const PRIVACY: &str = "In Cloud mode your library is kept on Knoa's servers, whi
 
 pub struct AccountPage {
     cloud: Entity<Cloud>,
+    library: Entity<Library>,
 }
 
 impl AccountPage {
-    pub fn new(cx: &mut Context<'_, AccountPage>) -> AccountPage {
+    pub fn new(library: Entity<Library>, cx: &mut Context<'_, AccountPage>) -> AccountPage {
         let cloud = Cloud::entity(cx);
         cx.observe(&cloud, |_, _, cx| cx.notify()).detach();
-        AccountPage { cloud }
+        cx.observe(&library, |_, _, cx| cx.notify()).detach();
+        AccountPage { cloud, library }
+    }
+
+    pub fn load(&mut self, cx: &mut Context<'_, AccountPage>) {
+        self.cloud.update(cx, Cloud::load_mcp_settings);
     }
 }
 
 impl Render for AccountPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        self.cloud.update(cx, Cloud::ensure_mcp_settings);
         let theme = Theme::get(cx).clone();
         let cloud = self.cloud.read(cx);
         let header = form::header("Account", "Sync your library with a Knoa account.", &theme);
@@ -56,7 +66,8 @@ impl Render for AccountPage {
             Phase::OtherAccount(_) => page.child(self.other_account(&theme, cx)),
             Phase::SignedIn(_) => page
                 .child(self.account_group(&theme, cx))
-                .child(self.sync_group(&theme, cx)),
+                .child(self.sync_group(&theme, cx))
+                .child(self.ai_access_group(&theme, cx)),
         };
         page
     }
@@ -122,27 +133,11 @@ impl AccountPage {
         let config = cloud.config().cloned();
         let plan_row = match (&account, config) {
             (Some(account), Some(config)) => {
-                let about = plan_description(account);
-                let (label, url) = match account.plan {
-                    Plan::Free => (
-                        if account
-                            .billing
-                            .as_ref()
-                            .is_some_and(|billing| billing.trial_available)
-                        {
-                            "Start free trial"
-                        } else {
-                            "Upgrade"
-                        },
-                        config.pricing,
-                    ),
-                    Plan::Pro => ("Manage subscription", config.billing),
-                };
+                let about = plan::description(account);
                 form::row(
                     &self.email(cx),
                     Some(&about),
-                    button("plan", label, Tone::Soft, cx)
-                        .on_click(move |_, _, cx| cx.open_url(url.as_str())),
+                    plan::button("plan", account, &config, cx),
                     theme,
                 )
             }
@@ -152,7 +147,11 @@ impl AccountPage {
             ),
         };
         let mut rows = vec![plan_row];
-        rows.extend(account.as_ref().map(|account| usage_row(account, theme)));
+        rows.extend(
+            account
+                .as_ref()
+                .map(|account| plan::usage_row(account, theme)),
+        );
         rows.push(self.sign_out_row(theme, cx));
         form::group("Account", rows, theme)
     }
@@ -194,56 +193,4 @@ impl AccountPage {
             .and_then(|account| account.email.clone())
             .unwrap_or_else(|| "this account".to_owned())
     }
-}
-
-fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
-    let (usage, limits) = (account.usage, account.limits);
-    let bookmarks = format!(
-        "{} of {} bookmarks",
-        grouped(usage.bookmarks),
-        grouped(limits.bookmarks)
-    );
-    let about = match account.organizer {
-        Organizer::Device => bookmarks,
-        Organizer::Cloud => format!(
-            "{bookmarks}, {} of {} organized this month",
-            grouped(usage.organized_this_month),
-            grouped(limits.organized_per_month)
-        ),
-    };
-    form::row("Usage", Some(&about), gpui::Empty, theme)
-}
-
-fn plan_description(account: &Account) -> String {
-    use std::fmt::Write as _;
-
-    let mut about = match (
-        account.plan,
-        account.billing.as_ref().map(|billing| billing.status),
-    ) {
-        (Plan::Free, _) => "Free plan.".to_owned(),
-        (Plan::Pro, Some(BillingStatus::Trialing)) => "Pro trial.".to_owned(),
-        (Plan::Pro, _) => "Pro plan.".to_owned(),
-    };
-    if let Some(billing) = &account.billing
-        && billing.status != BillingStatus::None
-        && let Some(end) = billing
-            .period_end
-            .and_then(|end| Timestamp::from_second(end).ok())
-    {
-        let date = end.to_zoned(TimeZone::system()).strftime("%b %-d, %Y");
-        let action = if billing.cancel_at_period_end {
-            "Ends"
-        } else if billing.status == BillingStatus::Trialing {
-            "Trial ends"
-        } else {
-            "Renews"
-        };
-        let _ = write!(about, " {action} {date}.");
-    }
-    about.push_str(match account.organizer {
-        Organizer::Device => " Organizing uses your own AI key, on this Mac.",
-        Organizer::Cloud => " Knoa organizes your bookmarks in the cloud.",
-    });
-    about
 }

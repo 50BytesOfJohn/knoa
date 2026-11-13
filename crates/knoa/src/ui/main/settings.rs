@@ -61,7 +61,7 @@ impl SettingsView {
         cx: &mut Context<'_, SettingsView>,
     ) -> SettingsView {
         let ai = cx.new(|cx| AiPage::new(library.clone(), window, cx));
-        let account = cx.new(AccountPage::new);
+        let account = cx.new(|cx| AccountPage::new(library.clone(), cx));
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         // However the sheet closes (Esc, a click outside, the close button), edits not yet
@@ -98,6 +98,9 @@ impl SettingsView {
             Page::NewWorkspace => Some(self.workspace_page(None, window, cx)),
             _ => None,
         };
+        if page == Page::Account {
+            self.account.update(cx, AccountPage::load);
+        }
         self.page = page;
         cx.notify();
     }

@@ -3,6 +3,7 @@
 //! executor.
 
 use std::{
+    collections::BTreeMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -29,6 +30,7 @@ pub struct Library {
     database: Arc<Database>,
     workspace: WorkspaceId,
     workspaces: Vec<Workspace>,
+    workspace_sync_ids: BTreeMap<WorkspaceId, String>,
     place: Place,
     search: String,
     kind: Option<Kind>,
@@ -68,6 +70,7 @@ impl Library {
             database,
             workspace,
             workspaces: Vec::new(),
+            workspace_sync_ids: BTreeMap::new(),
             place: Place::Everything,
             search: String::new(),
             kind: None,
@@ -92,6 +95,11 @@ impl Library {
 
     pub fn workspaces(&self) -> &[Workspace] {
         &self.workspaces
+    }
+
+    /// The id cloud settings use, once this workspace has been linked.
+    pub fn workspace_sync_id(&self, id: WorkspaceId) -> Option<&str> {
+        self.workspace_sync_ids.get(&id).map(String::as_str)
     }
 
     /// The workspace shown. `None` only until the first load finishes.
@@ -275,6 +283,7 @@ impl Library {
     fn apply(&mut self, loaded: Loaded, cx: &mut Context<'_, Library>) {
         let browsers_changed = browser_map(&self.workspaces) != browser_map(&loaded.workspaces);
         self.workspaces = loaded.workspaces;
+        self.workspace_sync_ids = loaded.workspace_sync_ids;
         if browsers_changed {
             cx.emit(BrowsersChanged);
         }
@@ -326,6 +335,7 @@ fn browser_map(workspaces: &[Workspace]) -> Vec<(WorkspaceId, &[String])> {
 
 struct Loaded {
     workspaces: Vec<Workspace>,
+    workspace_sync_ids: BTreeMap<WorkspaceId, String>,
     results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
@@ -348,6 +358,7 @@ fn load(
     };
     Ok(Loaded {
         workspaces: store.workspaces()?,
+        workspace_sync_ids: store.workspace_sync_ids()?,
         results: Arc::new(store.search(query, RESULT_LIMIT)?),
         kind_counts: store.kind_counts(query)?,
         counts: store.counts(workspace)?,

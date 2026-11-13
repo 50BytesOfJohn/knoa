@@ -138,9 +138,12 @@ share. Signed out, the app is Local mode and none of this runs.
   Cloudflare Worker in the private API repository) does it, and this
   Mac hands its queue to the server instead of running it. On the free plan this Mac
   organizes with the user's own key, pushes the results and uploads the thumbnails.
-- **Account page** in Settings: sign in and out, the plan and its usage, and how sync is
-  doing. Signing out keeps the library and its link, so signing in to the same account
-  carries on; signing in to another account asks before merging the library into it.
+- **Account page** in Settings: sign in and out, the plan and its usage, AI access, and
+  how sync is doing. AI access settings are fetched when the page is shown and saved on
+  change, separately from library sync. Pro accounts can set a default and workspace
+  exceptions for connected MCP clients. Signing out keeps the library and its link, so
+  signing in to the same account carries on; signing in to another account asks before
+  merging the library into it.
 
 ## Enrichment
 
