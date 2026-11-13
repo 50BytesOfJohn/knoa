@@ -142,8 +142,11 @@ fn rebased<P: Serialize + DeserializeOwned>(patch: P, pending: &Pending) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use knoa_core::{
-        Enrichment, Kind, NewBookmark, Origin, Place, Query, Status, protocol::bookmark_id,
+        Enrichment, Kind, NewBookmark, Origin, Place, Query, Status,
+        protocol::{PullResponse, bookmark_id},
     };
     use serde_json::Value;
     use serde_json::json;
@@ -151,7 +154,9 @@ mod tests {
     use super::*;
     use crate::{
         NewBookmarks,
-        test_support::{WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, linked, pushed},
+        test_support::{
+            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, link, linked, pushed,
+        },
     };
 
     const URL: &str = "https://a.dev/";
@@ -312,6 +317,67 @@ mod tests {
 
         assert!(only_bookmark(&store).is_none());
         assert_eq!(store.tags(WORKSPACE).unwrap(), []);
+    }
+
+    #[test]
+    fn a_bookmarks_old_children_go_when_its_url_came_back_before_this_pull() {
+        let fixture: Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/tombstone-revive.json"
+        )))
+        .unwrap();
+        let pages: Vec<PullResponse> = fixture["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|step| step.get("pull").is_some())
+            .map(|step| serde_json::from_value(step["expect"].clone()).unwrap())
+            .collect();
+        let [first, rest @ ..] = pages.as_slice() else {
+            panic!("the fixture pulls");
+        };
+        let mut store = Store::open_in_memory().unwrap();
+        link(&mut store, "user-1", &[&first.changes]);
+
+        for page in rest {
+            store.apply_remote(&page.changes, page.cursor).unwrap();
+        }
+
+        let expected: BTreeMap<String, Vec<String>> =
+            serde_json::from_value(fixture["replica"].clone()).unwrap();
+        let held: BTreeMap<String, Vec<String>> = expected
+            .keys()
+            .map(|entity| (entity.clone(), synced_keys(&store, entity)))
+            .collect();
+        assert_eq!(held, expected);
+    }
+
+    /// The protocol keys of the rows this Mac holds for `entity`.
+    fn synced_keys(store: &Store, entity: &str) -> Vec<String> {
+        let query = match entity {
+            "workspace" => "SELECT sync_id FROM workspaces WHERE sync_id IS NOT NULL",
+            "folder" => "SELECT sync_id FROM folders WHERE sync_id IS NOT NULL",
+            "bookmark" => "SELECT sync_id FROM bookmarks WHERE sync_id IS NOT NULL",
+            "bookmark_tag" => {
+                "SELECT b.sync_id || '/' || t.tag FROM bookmarks b
+                 JOIN (SELECT bookmark_id, tag FROM bookmark_tags
+                       UNION ALL SELECT bookmark_id, tag FROM tag_exclusions) t
+                 ON t.bookmark_id = b.id"
+            }
+            "bookmark_folder" => {
+                "SELECT b.sync_id || '/' || f.sync_id FROM bookmarks b
+                 JOIN (SELECT bookmark_id, folder_id FROM bookmark_folders
+                       UNION ALL SELECT bookmark_id, folder_id FROM folder_exclusions) l
+                 ON l.bookmark_id = b.id JOIN folders f ON f.id = l.folder_id"
+            }
+            "bookmark_text" => "SELECT sync_id FROM bookmarks WHERE page_text IS NOT NULL",
+            other => panic!("no entity {other}"),
+        };
+        let mut stmt = store.conn.prepare(query).unwrap();
+        stmt.query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
     }
 
     #[test]

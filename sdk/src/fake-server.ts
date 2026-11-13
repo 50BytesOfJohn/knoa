@@ -203,8 +203,12 @@ export class FakeServer {
 		if (m.actor === "ai" && this.userOwns(m)) return { status: "ignored" };
 		if (m.op === "delete") {
 			const removed = deleteRow(this.tables, m.entity, m.key);
-			// Children go without tombstones of their own: clients cascade.
-			for (const row of removed) this.versions.delete(id(row));
+			for (const row of removed) {
+				if (row.entity === m.entity && row.key === m.key) continue;
+				// As the protocol says: only a bookmark's children get tombstones.
+				if (m.entity === "bookmark") this.bump(row.entity, row.key, true);
+				else this.versions.delete(id(row));
+			}
 			this.bump(m.entity, m.key, true);
 			return { status: "applied" };
 		}
