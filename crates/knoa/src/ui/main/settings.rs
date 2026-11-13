@@ -155,6 +155,9 @@ impl SettingsView {
             self.workspace = None;
             self.show(Page::General, window, cx);
         }
+        if let Some(page) = &self.workspace {
+            page.update(cx, |page, cx| page.refresh(window, cx));
+        }
         cx.notify();
     }
 }

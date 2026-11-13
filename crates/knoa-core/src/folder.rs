@@ -6,6 +6,10 @@ mod icon;
 pub use color::{FolderColor, Hue, Ink};
 pub use icon::FolderIcon;
 
+mod edits;
+
+pub use edits::FolderEdits;
+
 use crate::Origin;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

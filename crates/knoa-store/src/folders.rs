@@ -1,5 +1,7 @@
 //! Folders and folder membership.
 
+mod edits;
+
 use knoa_core::{BookmarkId, Folder, FolderColor, FolderIcon, FolderId, Hue, Ink, WorkspaceId};
 use rusqlite::params;
 
