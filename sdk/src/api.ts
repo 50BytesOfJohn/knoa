@@ -6,6 +6,8 @@ import type {
 	BillingRefreshResponse,
 	BillingUrlResponse,
 	ErrorResponse,
+	McpSettings,
+	McpSettingsResponse,
 	OrganizeRequest,
 	OrganizeResponse,
 	PullResponse,
@@ -71,6 +73,14 @@ export class Api {
 
 	me(): Promise<Account> {
 		return this.call("GET", "/v1/me");
+	}
+
+	mcpSettings(): Promise<McpSettingsResponse> {
+		return this.call("GET", "/v1/mcp/settings");
+	}
+
+	setMcpSettings(body: McpSettings): Promise<McpSettingsResponse> {
+		return this.call("PUT", "/v1/mcp/settings", body);
 	}
 
 	checkout(body: BillingCheckoutRequest): Promise<BillingUrlResponse> {

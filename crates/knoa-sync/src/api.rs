@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use knoa_core::protocol::{
-    Account, ErrorResponse, ImageResponse, MAX_PULL, Mutation, OrganizeRequest, OrganizeResponse,
-    PullResponse, PushRequest, PushResponse,
+    Account, ErrorResponse, ImageResponse, MAX_PULL, McpSettings, McpSettingsResponse, Mutation,
+    OrganizeRequest, OrganizeResponse, PullResponse, PushRequest, PushResponse,
 };
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -29,6 +29,20 @@ impl Api {
     pub async fn me(&self) -> Result<Account> {
         let url = self.url("v1/me")?;
         self.json(|http, token| http.get(url.clone()).bearer_auth(token))
+            .await
+    }
+
+    /// The access granted to AI clients, and the URL used to connect them.
+    pub async fn mcp_settings(&self) -> Result<McpSettingsResponse> {
+        let url = self.url("v1/mcp/settings")?;
+        self.json(|http, token| http.get(url.clone()).bearer_auth(token))
+            .await
+    }
+
+    /// Replaces the default access and all workspace exceptions.
+    pub async fn set_mcp_settings(&self, settings: &McpSettings) -> Result<McpSettingsResponse> {
+        let url = self.url("v1/mcp/settings")?;
+        self.json(|http, token| http.put(url.clone()).bearer_auth(token).json(settings))
             .await
     }
 
@@ -152,3 +166,6 @@ async fn api_error(response: Response) -> Error {
         },
     }
 }
+
+#[cfg(test)]
+mod tests;

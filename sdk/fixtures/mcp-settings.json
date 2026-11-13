@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "default": {
+      "access": "read",
+      "workspaces": {}
+    },
+    "overrides": {
+      "access": "full",
+      "workspaces": {
+        "6f1c2a3e-8b4d-4e5f-9a6b-7c8d9e0f1a2b": "off",
+        "7123a3fe-2ed6-4e92-8a12-7c351480eaaf": "read",
+        "962dbd4c-9f38-4ca8-b367-ccca57f13655": "full"
+      }
+    },
+    "off": {
+      "access": "off",
+      "workspaces": {}
+    }
+  },
+  "url": "https://api.example.test/mcp"
+}

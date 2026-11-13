@@ -5,6 +5,7 @@
 
 mod account;
 pub mod max_chars;
+mod mcp;
 mod rows;
 mod sync;
 
@@ -12,6 +13,7 @@ pub use account::{
     Account, AccountUsage, Billing, BillingStatus, ErrorResponse, ImageResponse, Limits,
     OrganizeRequest, OrganizeResponse, OrganizeScope, Organizer, Plan, ServerMessage,
 };
+pub use mcp::{McpAccess, McpSettings, McpSettingsResponse};
 pub use rows::{
     Bookmark, BookmarkFolder, BookmarkPatch, BookmarkStatus, BookmarkTag, BookmarkText, Folder,
     FolderPatch, ListedTag, Workspace, WorkspacePatch,
