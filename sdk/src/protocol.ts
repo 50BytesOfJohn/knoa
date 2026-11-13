@@ -294,6 +294,34 @@ export const PONG = "pong";
 
 export type Plan = "free" | "pro";
 
+/** What a plan allows. The server enforces these; clients show them. */
+export interface PlanLimits {
+	bookmarks: number;
+	organized_per_month: number;
+	/** Folders-only runs are cheap, but not free: a generous monthly number of them. */
+	folders_only_per_month: number;
+}
+
+export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
+	free: {
+		bookmarks: 10_000,
+		organized_per_month: 0,
+		folders_only_per_month: 0,
+	},
+	pro: {
+		bookmarks: 100_000,
+		organized_per_month: 3_000,
+		folders_only_per_month: 30_000,
+	},
+};
+
+/** A Pro trial organizes enough to show what Pro does, not a free month of it. */
+export const TRIAL_LIMITS: PlanLimits = {
+	...PLAN_LIMITS.pro,
+	organized_per_month: 600,
+	folders_only_per_month: 6_000,
+};
+
 /** `GET /v1/me`. An `account` message on the socket says this changed. */
 export interface Account {
 	user_id: string;
@@ -305,7 +333,7 @@ export interface Account {
 	 * and pushes the result.
 	 */
 	organizer: "cloud" | "device";
-	limits: { bookmarks: number; organized_per_month: number };
+	limits: Pick<PlanLimits, "bookmarks" | "organized_per_month">;
 	usage: { bookmarks: number; organized_this_month: number };
 	billing: Billing;
 }
