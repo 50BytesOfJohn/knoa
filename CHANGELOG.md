@@ -3,6 +3,19 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.2.2](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.2.2) - 2026-11-13
+
+### Changed
+
+- Share tag, link, billing and plan limits through the SDK ([#30](https://github.com/50BytesOfJohn/knoa/pull/30))
+- Keep a stopped sync client stopped ([#31](https://github.com/50BytesOfJohn/knoa/pull/31))
+- Export a full bookmark from one place ([#32](https://github.com/50BytesOfJohn/knoa/pull/32))
+- Keep billing details and fix the allowance notice ([#35](https://github.com/50BytesOfJohn/knoa/pull/35))
+- Save the web replica in order and guard it with a revision ([#36](https://github.com/50BytesOfJohn/knoa/pull/36))
+- Guard thumbnail saves against bookmark replacement ([#33](https://github.com/50BytesOfJohn/knoa/pull/33))
+- Track bookmark delivery before cloud handoff ([#37](https://github.com/50BytesOfJohn/knoa/pull/37))
+- Save editor changes as field-level intent ([#34](https://github.com/50BytesOfJohn/knoa/pull/34))
+- Settle pushed edits in the folder edit test ([#38](https://github.com/50BytesOfJohn/knoa/pull/38))
 ## [0.2.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.2.1) - 2026-11-13
 
 ### Changed
