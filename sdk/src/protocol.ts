@@ -322,6 +322,38 @@ export interface Billing {
 	trial_available: boolean;
 }
 
+// ── Billing ────────────────────────────────────────────────────────────────────────────
+
+export type BillingPeriod = "month" | "annual";
+
+/**
+ * `POST /v1/billing/checkout`: a Polar checkout for Pro, with a trial when
+ * `trial_available`. Answers {@link BillingUrlResponse}, or 409 `already_subscribed`.
+ */
+export interface BillingCheckoutRequest {
+	period: BillingPeriod;
+}
+
+/**
+ * The page to send the user to. `POST /v1/billing/portal` answers it too, with Polar's
+ * customer portal, or 404 `no_subscription` for an account that never had Pro.
+ */
+export interface BillingUrlResponse {
+	url: string;
+}
+
+/** `POST /v1/billing/refresh`: the plan after checking Polar again, say after a checkout. */
+export interface BillingRefreshResponse {
+	plan: Plan;
+}
+
+/** The billing routes' own error codes. Any of them can also answer 502 `unavailable`. */
+export const BILLING_ERROR = {
+	alreadySubscribed: "already_subscribed",
+	noSubscription: "no_subscription",
+	unavailable: "billing_unavailable",
+} as const;
+
 /**
  * `POST /v1/organize`, subscribers only (403 otherwise): run the cloud organizer again.
  * New bookmarks are queued without asking.

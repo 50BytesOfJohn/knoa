@@ -2,6 +2,9 @@
 
 import type {
 	Account,
+	BillingCheckoutRequest,
+	BillingRefreshResponse,
+	BillingUrlResponse,
 	ErrorResponse,
 	OrganizeRequest,
 	OrganizeResponse,
@@ -68,6 +71,18 @@ export class Api {
 
 	me(): Promise<Account> {
 		return this.call("GET", "/v1/me");
+	}
+
+	checkout(body: BillingCheckoutRequest): Promise<BillingUrlResponse> {
+		return this.call("POST", "/v1/billing/checkout", body);
+	}
+
+	portal(): Promise<BillingUrlResponse> {
+		return this.call("POST", "/v1/billing/portal");
+	}
+
+	refreshBilling(): Promise<BillingRefreshResponse> {
+		return this.call("POST", "/v1/billing/refresh");
 	}
 
 	organize(body: OrganizeRequest): Promise<OrganizeResponse> {
