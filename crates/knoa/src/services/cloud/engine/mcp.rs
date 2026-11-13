@@ -7,7 +7,7 @@ use knoa_core::{
 };
 
 use crate::services::{
-    cloud::{Cloud, McpState, Phase, mcp::Change},
+    cloud::{Cloud, McpState, Phase, Wake, mcp::Change},
     network::Network,
 };
 
@@ -30,6 +30,16 @@ impl Cloud {
             && connection.mcp.begin_load()
         {
             self.request_mcp(Request::Load, cx);
+        }
+    }
+
+    pub fn retry_mcp_settings(&mut self, cx: &mut Context<'_, Cloud>) {
+        if self.can_change_mcp()
+            && let Some(change) = self.mcp().and_then(McpState::failed_change)
+        {
+            self.change_mcp(change, cx);
+        } else {
+            self.load_mcp_settings(cx);
         }
     }
 
@@ -94,9 +104,14 @@ impl Cloud {
             }
         });
         connection.mcp_task = Some(cx.spawn(async move |this, cx| {
-            let result = match task.await {
-                Ok(result) => result.map_err(|err| err.to_string()),
-                Err(err) => Err(err.to_string()),
+            let (result, refresh_account) = match task.await {
+                Ok(Err(knoa_sync::Error::Server {
+                    status: 403, code, ..
+                })) if code == "subscription_required" => {
+                    (Err("AI access needs Knoa Pro.".to_owned()), true)
+                }
+                Ok(result) => (result.map_err(|err| err.to_string()), false),
+                Err(err) => (Err(err.to_string()), false),
             };
             let _ = this.update(cx, |this, cx| {
                 if generation.if_current(|| ()).is_none() {
@@ -109,6 +124,9 @@ impl Cloud {
                     connection.mcp.finish(result);
                     connection.mcp_task = None;
                     cx.notify();
+                }
+                if refresh_account {
+                    this.wake(Wake::Account);
                 }
             });
         }));

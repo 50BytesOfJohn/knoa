@@ -85,15 +85,16 @@ impl AccountPage {
                 ));
             }
             if let Some(problem) = state.problem() {
-                rows.push(form::problem_note(
-                    format!("Couldn't update AI access: {problem}"),
-                    theme,
-                ));
+                rows.push(form::problem_note(problem, theme));
                 rows.push(form::row(
-                    "Load AI access again",
+                    if state.save_failed() && pro {
+                        "Save AI access again"
+                    } else {
+                        "Load AI access again"
+                    },
                     None,
                     button("retry-mcp-settings", "Retry", Tone::Soft, cx).on_click(cx.listener(
-                        |this, _, _, cx| this.cloud.update(cx, Cloud::load_mcp_settings),
+                        |this, _, _, cx| this.cloud.update(cx, Cloud::retry_mcp_settings),
                     )),
                     theme,
                 ));

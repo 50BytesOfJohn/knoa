@@ -8,6 +8,7 @@ pub struct McpState {
     settings: Option<McpSettingsResponse>,
     operation: Operation,
     problem: Option<String>,
+    failed_change: Option<Change>,
 }
 
 #[derive(Debug, Default)]
@@ -15,9 +16,13 @@ enum Operation {
     #[default]
     Idle,
     Loading,
-    Saving(McpSettingsResponse),
+    Saving {
+        previous: McpSettingsResponse,
+        change: Change,
+    },
 }
 
+#[derive(Debug, Clone)]
 pub(super) enum Change {
     Default(McpAccess),
     Workspace(String, Option<McpAccess>),
@@ -33,11 +38,19 @@ impl McpState {
     }
 
     pub fn saving(&self) -> bool {
-        matches!(self.operation, Operation::Saving(_))
+        matches!(self.operation, Operation::Saving { .. })
     }
 
     pub fn problem(&self) -> Option<&str> {
         self.problem.as_deref()
+    }
+
+    pub fn save_failed(&self) -> bool {
+        self.failed_change.is_some()
+    }
+
+    pub(super) fn failed_change(&self) -> Option<Change> {
+        self.failed_change.clone()
     }
 
     pub(super) fn begin_load(&mut self) -> bool {
@@ -46,6 +59,7 @@ impl McpState {
         }
         self.operation = Operation::Loading;
         self.problem = None;
+        self.failed_change = None;
         true
     }
 
@@ -55,13 +69,13 @@ impl McpState {
         }
         let previous = self.settings.as_ref()?;
         let mut next = previous.clone();
-        match change {
-            Change::Default(access) => next.access = access,
+        match &change {
+            Change::Default(access) => next.access = *access,
             Change::Workspace(id, Some(access)) => {
-                next.workspaces.insert(id, access);
+                next.workspaces.insert(id.clone(), *access);
             }
             Change::Workspace(id, None) => {
-                next.workspaces.remove(&id);
+                next.workspaces.remove(id);
             }
         }
         if &next == previous {
@@ -71,9 +85,13 @@ impl McpState {
             access: next.access,
             workspaces: next.workspaces.clone(),
         };
-        self.operation = Operation::Saving(previous.clone());
+        self.operation = Operation::Saving {
+            previous: previous.clone(),
+            change,
+        };
         self.settings = Some(next);
         self.problem = None;
+        self.failed_change = None;
         Some(body)
     }
 
@@ -82,10 +100,14 @@ impl McpState {
         match result {
             Ok(settings) => self.settings = Some(settings),
             Err(problem) => {
-                if let Operation::Saving(previous) = operation {
+                let action = if let Operation::Saving { previous, change } = operation {
                     self.settings = Some(previous);
-                }
-                self.problem = Some(problem);
+                    self.failed_change = Some(change);
+                    "save"
+                } else {
+                    "load"
+                };
+                self.problem = Some(format!("Couldn't {action} AI access: {problem}"));
             }
         }
     }
@@ -123,12 +145,31 @@ mod tests {
 
         state.finish(Err("Offline".into()));
         assert_eq!(state.settings(), previous.as_ref());
-        assert_eq!(state.problem(), Some("Offline"));
+        assert_eq!(state.problem(), Some("Couldn't save AI access: Offline"));
+        let retry = state.failed_change().unwrap();
+        assert!(state.begin_save(retry).is_some());
+        assert_eq!(
+            state.settings().unwrap().workspaces["private"],
+            McpAccess::Full
+        );
+        assert_eq!(state.problem(), None);
+        state.finish(Err("Offline".into()));
         assert!(!state.busy());
         assert!(state.begin_save(Change::Default(McpAccess::Off)).is_some());
         assert_eq!(state.problem(), None);
         state.finish(Err("Offline".into()));
         assert_eq!(state.settings(), previous.as_ref());
+    }
+
+    #[test]
+    fn failed_load_reports_loading_and_allows_retry() {
+        let mut state = McpState::default();
+        assert!(state.begin_load());
+        state.finish(Err("Offline".into()));
+        assert_eq!(state.problem(), Some("Couldn't load AI access: Offline"));
+        assert!(state.failed_change().is_none());
+        assert!(state.begin_load());
+        assert_eq!(state.problem(), None);
     }
 
     #[test]
