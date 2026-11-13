@@ -3,6 +3,13 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.2.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.2.1) - 2026-11-13
+
+### Changed
+
+- Retry a 404 on push, add backoff jitter ([#27](https://github.com/50BytesOfJohn/knoa/pull/27))
+- Send parked bookmarks once deletions make room ([#28](https://github.com/50BytesOfJohn/knoa/pull/28))
+- Tombstone a deleted bookmark's tags, links and text ([#29](https://github.com/50BytesOfJohn/knoa/pull/29))
 ## [0.2.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.2.0) - 2026-11-12
 
 ### Added
