@@ -350,6 +350,23 @@ export interface Billing {
 	trial_available: boolean;
 }
 
+// ── MCP ────────────────────────────────────────────────────────────────────────────────
+
+/** What AI clients connected over MCP may do. */
+export type McpAccess = "off" | "read" | "full";
+
+export interface McpSettings {
+	/** Applies to every workspace without an entry in `workspaces`. */
+	access: McpAccess;
+	/** Exceptions by workspace id. A workspace not listed uses `access`. */
+	workspaces: Record<string, McpAccess>;
+}
+
+/** `GET` and `PUT /v1/mcp/settings`. `url` is the address users paste into an AI client. */
+export interface McpSettingsResponse extends McpSettings {
+	url: string;
+}
+
 // ── Billing ────────────────────────────────────────────────────────────────────────────
 
 export type BillingPeriod = "month" | "annual";

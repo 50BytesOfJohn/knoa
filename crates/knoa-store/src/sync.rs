@@ -15,7 +15,12 @@ mod rows;
 mod snapshot;
 mod unsent;
 
-use knoa_core::protocol::{MAX_PUSH, MAX_PUSH_BYTES, Mutation};
+use std::collections::BTreeMap;
+
+use knoa_core::{
+    WorkspaceId,
+    protocol::{MAX_PUSH, MAX_PUSH_BYTES, Mutation},
+};
 use rusqlite::{Connection, OptionalExtension as _};
 
 pub(crate) use apply::apply_held;
@@ -28,6 +33,15 @@ pub use unsent::Settled;
 use crate::{Result, Store};
 
 impl Store {
+    /// Cloud ids for the current workspaces; local-only workspaces have no entry.
+    pub fn workspace_sync_ids(&self) -> Result<BTreeMap<WorkspaceId, String>> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT id, sync_id FROM workspaces WHERE sync_id IS NOT NULL")?;
+        let rows = stmt.query_map([], |row| Ok((WorkspaceId(row.get(0)?), row.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Whether the library is linked to an account.
     pub fn is_linked(&self) -> Result<bool> {
         linked(&self.conn)
@@ -67,4 +81,40 @@ pub(crate) fn linked(conn: &Connection) -> Result<bool> {
             row.get(0)
         })?,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use knoa_core::Ink;
+
+    use super::*;
+    use crate::test_support::{WORKSPACE, WORKSPACE_KEY, linked, pushed};
+
+    #[test]
+    fn workspace_cloud_ids_follow_linking_creation_and_deletion() {
+        let mut store = Store::open_in_memory().unwrap();
+        assert!(store.workspace_sync_ids().unwrap().is_empty());
+        linked(&mut store);
+        assert_eq!(
+            store.workspace_sync_ids().unwrap()[&WORKSPACE],
+            WORKSPACE_KEY
+        );
+
+        let work = store.create_workspace("Work", Ink::Moss).unwrap();
+        let keys = store.workspace_sync_ids().unwrap();
+        let created = pushed(&store)
+            .into_iter()
+            .find(|m| m["data"]["name"] == "Work")
+            .unwrap();
+        assert_eq!(
+            created["key"], keys[&work],
+            "settings must address the same workspace as sync"
+        );
+        assert_ne!(keys[&work], work.0.to_string());
+
+        store.delete_workspace(work).unwrap();
+        assert!(!store.workspace_sync_ids().unwrap().contains_key(&work));
+        store.unlink().unwrap();
+        assert!(store.workspace_sync_ids().unwrap().is_empty());
+    }
 }

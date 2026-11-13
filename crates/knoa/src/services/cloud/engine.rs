@@ -3,6 +3,7 @@
 //! the socket pokes, and every few minutes in case a poke was missed.
 
 mod account;
+mod mcp;
 mod organize;
 mod pull;
 mod push;

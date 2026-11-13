@@ -194,6 +194,8 @@ impl Cloud {
             socket: socket.abort_handle(),
             _tasks: vec![engine, socket_task],
             replacement: None,
+            mcp: super::McpState::default(),
+            mcp_task: None,
         });
         cx.notify();
     }

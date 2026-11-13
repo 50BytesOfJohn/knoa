@@ -9,6 +9,7 @@ mod config;
 mod connection;
 mod engine;
 mod link;
+mod mcp;
 mod replacement;
 mod thumbnails;
 
@@ -21,6 +22,7 @@ use knoa_fetch::Fetcher;
 use knoa_sync::Api;
 
 pub use self::config::CloudConfig;
+pub use self::mcp::McpState;
 use crate::{
     services::{generation::Generation, organizer::Organizer},
     state::{
@@ -87,6 +89,8 @@ pub struct Connection {
     socket: tokio::task::AbortHandle,
     _tasks: Vec<Task<()>>,
     replacement: Option<Task<()>>,
+    mcp: McpState,
+    mcp_task: Option<Task<()>>,
 }
 
 impl Drop for Connection {

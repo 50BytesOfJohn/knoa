@@ -1,6 +1,8 @@
 //! Shared SDK fixtures read into the Rust protocol types and written back unchanged.
 
-use knoa_core::protocol::{Account, OrganizeResponse, PullResponse, PushResponse};
+use knoa_core::protocol::{
+    Account, McpSettings, McpSettingsResponse, OrganizeResponse, PullResponse, PushResponse,
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
@@ -82,4 +84,19 @@ fn cached_accounts_without_billing_keep_their_existing_details() {
 fn round_trip<T: DeserializeOwned + Serialize>(wire: &Value) {
     let parsed: T = serde_json::from_value(wire.clone()).expect("the Rust type reads the answer");
     assert_eq!(&serde_json::to_value(&parsed).expect("it serializes"), wire);
+}
+
+#[test]
+fn mcp_settings_preserve_the_shared_wire_contract() {
+    let fixture: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../sdk/fixtures/mcp-settings.json"
+    )))
+    .unwrap();
+    for settings in fixture["settings"].as_object().unwrap().values() {
+        round_trip::<McpSettings>(settings);
+        let mut response = settings.clone();
+        response["url"] = fixture["url"].clone();
+        round_trip::<McpSettingsResponse>(&response);
+    }
 }
