@@ -1,7 +1,9 @@
-import type { Bookmark, Change } from "../src/protocol";
+import type { Bookmark, Change, PullResponse } from "../src/protocol";
 import { describe, expect, it } from "vitest";
+import revive from "../fixtures/tombstone-revive.json";
 import { addLink, addTag, removeTag } from "../src/mutations";
 import { Replica } from "../src/replica";
+import { MemoryStorage } from "../src/storage";
 import { workspaceChange } from "./fixtures";
 
 const WS = "6f1c2a7e-9a51-4b8e-a3b4-1f9e2d6c8a10";
@@ -78,6 +80,25 @@ describe("Replica", () => {
 		expect(library.workspaces).toHaveLength(1);
 		expect(library.bookmark.size).toBe(0);
 		expect(library.tags.size).toBe(0);
+	});
+
+	it("drops a bookmark's old children when its URL came back before this pull", async () => {
+		const replica = new Replica();
+		const storage = new MemoryStorage();
+		for (const step of revive.steps) {
+			if (!("pull" in step)) continue;
+			const page = step.expect as unknown as PullResponse;
+			replica.applyPull(page.changes, page.cursor);
+			const change = replica.takeChanges();
+			if (change) await storage.save(change);
+		}
+
+		const held: Record<string, string[]> = {};
+		for (const entity of Object.keys(revive.replica)) held[entity] = [];
+		for (const row of (await storage.load())?.rows ?? []) {
+			held[row.entity]?.push(row.key);
+		}
+		expect(held).toEqual(revive.replica);
 	});
 
 	it("keeps pending edits over pulled rows, column by column", () => {

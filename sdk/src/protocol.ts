@@ -198,7 +198,11 @@ export const MAX_TAGS_PER_BOOKMARK = 100;
  *   A `put` on a deleted row brings it back as a new row.
  * - `delete` leaves a tombstone. Deleting a bookmark also deletes its tags, folder links
  *   and text; a folder, its links; a workspace, its folders and bookmarks. Clients do the
- *   same when they pull the tombstone, so the children get no tombstones of their own.
+ *   same when they pull the tombstone. A bookmark's tags, folder links and text get
+ *   tombstones of their own, because its id comes from its URL: adding the URL again
+ *   replaces the bookmark's tombstone, and a client that missed it learns from these
+ *   that the old children are gone. A folder's or workspace's children get none: clients
+ *   never reuse their ids.
  *
  * A user's value beats the AI's: an `ai` mutation never changes or deletes a tag or folder
  * link whose origin is `user` or that is excluded, and never adds a link to a folder that
