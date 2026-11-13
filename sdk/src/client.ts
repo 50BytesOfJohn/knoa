@@ -18,7 +18,7 @@ import { nextBatch } from "./batch";
 import type { Library } from "./library";
 import { type Rejection, Replica } from "./replica";
 import { PokeSocket, type SocketFactory, type SocketLike } from "./socket";
-import type { Storage } from "./storage";
+import { StorageConflictError, type Storage } from "./storage";
 import { StorageWriter } from "./storage-writer";
 
 export type SyncStatus = "loading" | "offline" | "syncing" | "synced" | "error";
@@ -181,7 +181,7 @@ export class SyncClient {
 		const stored = await this.storage.load().catch(() => null);
 		// Stopped while loading: starting the socket or listeners now would outlive the client.
 		if (this.stopped) return;
-		if (stored) this.replica.load(stored);
+		if (stored) this.writer.load(stored);
 		this.update({ ready: stored !== null && stored.cursor > 0 });
 		this.sync();
 		void this.refreshAccount();
@@ -194,7 +194,11 @@ export class SyncClient {
 			this.again = false;
 			this.update({ status: "syncing" });
 			try {
-				const pushedBookmarks = await this.pushThenPull();
+				// Resolve stale storage while local edits are still pending.
+				await this.writer.settled();
+				const pushedBookmarks = await this.pushThenPull().finally(() =>
+					this.writer.settled(),
+				);
 				this.backoff.reset();
 				this.update({
 					status: "synced",
@@ -203,6 +207,18 @@ export class SyncClient {
 				});
 				if (pushedBookmarks) void this.refreshAccount();
 			} catch (error) {
+				if (error instanceof StorageConflictError) {
+					try {
+						// Reload between rounds so no response from the old replica lands afterwards.
+						await this.writer.reload();
+						this.again = true;
+						this.update({});
+						continue;
+					} catch (reloadError) {
+						this.fail(reloadError);
+						return;
+					}
+				}
 				this.fail(error);
 				return;
 			}

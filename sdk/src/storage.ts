@@ -3,6 +3,16 @@
 
 import type { Entity, Key, Mutation, Rows } from "./protocol";
 
+/** Successful saves increment the snapshot's revision by one. */
+export type StorageRevision = number;
+
+export class StorageConflictError extends Error {
+	constructor() {
+		super("The stored replica changed in another client");
+		this.name = "StorageConflictError";
+	}
+}
+
 export interface StoredRow {
 	entity: Entity;
 	key: Key;
@@ -10,6 +20,8 @@ export interface StoredRow {
 }
 
 export interface StoredState {
+	/** Missing in legacy adapters and databases; starts at zero. */
+	revision?: StorageRevision;
 	cursor: number;
 	rows: StoredRow[];
 	/** In the order the mutations were made. */
@@ -22,6 +34,8 @@ export interface StoredState {
  * remove their own mutations instead of overwriting each other's.
  */
 export interface StorageChange {
+	/** Expected revision; omitted only for legacy, unconditional writes. */
+	revision?: StorageRevision;
 	cursor: number;
 	put: StoredRow[];
 	remove: { entity: Entity; key: Key }[];
@@ -33,7 +47,10 @@ export interface StorageChange {
 export interface Storage {
 	/** `null` when nothing was stored yet. */
 	load(): Promise<StoredState | null>;
-	/** Writes are applied in the order they are made. */
+	/**
+	 * Compare `change.revision` with storage, throwing StorageConflictError on mismatch.
+	 * Commit rows, cursor, outbox and the incremented revision in the same transaction.
+	 */
 	save(change: StorageChange): Promise<void>;
 	clear(): Promise<void>;
 }
@@ -48,6 +65,7 @@ export function outboxSequence(): () => number {
 }
 
 export class MemoryStorage implements Storage {
+	private revision: StorageRevision = 0;
 	private cursor: number | null = null;
 	private rows = new Map<string, StoredRow>();
 	private outbox = new Map<string, { seq: number; mutation: Mutation }>();
@@ -58,10 +76,18 @@ export class MemoryStorage implements Storage {
 		const outbox = [...this.outbox.values()]
 			.sort((a, b) => a.seq - b.seq)
 			.map((entry) => entry.mutation);
-		return { cursor: this.cursor, rows: [...this.rows.values()], outbox };
+		return {
+			revision: this.revision,
+			cursor: this.cursor,
+			rows: [...this.rows.values()],
+			outbox,
+		};
 	}
 
 	async save(change: StorageChange): Promise<void> {
+		if (change.revision !== undefined && change.revision !== this.revision) {
+			throw new StorageConflictError();
+		}
 		for (const row of change.put) this.rows.set(rowId(row), row);
 		for (const row of change.remove) this.rows.delete(rowId(row));
 		for (const mutation of change.enqueue) {
@@ -69,9 +95,11 @@ export class MemoryStorage implements Storage {
 		}
 		for (const mid of change.dequeue) this.outbox.delete(mid);
 		this.cursor = change.cursor;
+		this.revision += 1;
 	}
 
 	async clear(): Promise<void> {
+		this.revision = 0;
 		this.cursor = null;
 		this.rows.clear();
 		this.outbox.clear();

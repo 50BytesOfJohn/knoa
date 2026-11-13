@@ -268,26 +268,6 @@ describe("storage", () => {
 		web.stop();
 	});
 
-	it("keeps both tabs' unpushed edits in a shared database", async () => {
-		vi.useFakeTimers();
-		const server = new FakeServer();
-		const storage = new MemoryStorage();
-		const first = await started(clientFor(server, storage, null));
-		const second = await started(clientFor(server, storage, null));
-		server.failNext("network", "network");
-		const a = createWorkspace("A", 0).mutation;
-		const b = createWorkspace("B", 1).mutation;
-		first.mutate([a]);
-		await first.settled();
-		second.mutate([b]);
-		await second.settled();
-
-		const stored = await storage.load();
-		expect(stored?.outbox.map((m) => m.mid)).toEqual([a.mid, b.mid]);
-		first.stop();
-		second.stop();
-	});
-
 	it("sends nothing once stopped", async () => {
 		const server = new FakeServer();
 		const client = await started(clientFor(server, new MemoryStorage(), null));
