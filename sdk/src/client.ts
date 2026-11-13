@@ -19,6 +19,7 @@ import type { Library } from "./library";
 import { type Rejection, Replica } from "./replica";
 import { PokeSocket, type SocketFactory, type SocketLike } from "./socket";
 import type { Storage } from "./storage";
+import { StorageWriter } from "./storage-writer";
 
 export type SyncStatus = "loading" | "offline" | "syncing" | "synced" | "error";
 
@@ -54,6 +55,7 @@ export class SyncClient {
 	readonly api: Api;
 	private readonly replica = new Replica();
 	private readonly storage: Storage;
+	private readonly writer: StorageWriter;
 	private readonly socket: PokeSocket | null;
 	private readonly listeners = new Set<() => void>();
 	private readonly backoff = new Backoff(1_000, 60_000);
@@ -61,7 +63,6 @@ export class SyncClient {
 	private running: Promise<void> | null = null;
 	private again = false;
 	private retry: ReturnType<typeof setTimeout> | null = null;
-	private saving: Promise<void> = Promise.resolve();
 	private unwatch: (() => void) | null = null;
 	private starting: Promise<void> | null = null;
 	/** Terminal: a stopped client never starts again. */
@@ -77,6 +78,7 @@ export class SyncClient {
 		};
 		this.api = new Api(options.apiUrl, getToken, options.fetch);
 		this.storage = options.storage;
+		this.writer = new StorageWriter(this.replica, this.storage);
 		const factory =
 			options.socket === undefined ? browserSocket() : options.socket;
 		this.socket = factory
@@ -310,15 +312,7 @@ export class SyncClient {
 	}
 
 	private persist(): void {
-		const change = this.replica.takeChanges();
-		if (!change) return;
-		this.saving = this.saving
-			.then(() => this.storage.save(change))
-			.catch(() => {
-				// Storage full or blocked: the library still works, and the next save tries
-				// these rows again.
-				this.replica.unsaved(change);
-			});
+		this.writer.save();
 	}
 
 	private update(patch: Partial<SyncSnapshot>): void {
