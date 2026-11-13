@@ -7,7 +7,9 @@
     "./fake-server": "./src/fake-server.ts",
     "./protocol": "./src/protocol.ts",
     "./indexeddb": "./src/indexeddb.ts",
-    "./kinds": "./src/kinds.ts"
+    "./kinds": "./src/kinds.ts",
+    "./tag": "./src/tag.ts",
+    "./link": "./src/link.ts"
   },
   "scripts": {
     "test": "node scripts/check-kinds.mjs && vitest run",

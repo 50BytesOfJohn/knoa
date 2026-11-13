@@ -1,6 +1,8 @@
 // A port of `knoa_core::normalize_tag` (crates/knoa-core/src/tag.rs in the knoa repo). Both
 // cores must spell a tag the same way, or the same tag syncs as two rows.
 
+export { MAX_TAG_CHARS } from "./protocol";
+
 /** Rust's `char::is_whitespace` (Unicode White_Space), which differs from JS `\s`. */
 const SPACE =
 	"\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
@@ -17,6 +19,3 @@ export function normalizeTag(tag: string): string {
 		.join("-")
 		.toLowerCase();
 }
-
-/** Anything longer is a phrase, not a tag. */
-export const MAX_TAG_CHARS = 40;

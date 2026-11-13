@@ -1,19 +1,10 @@
 import { expect, it } from "vitest";
-import { normalizeTag } from "../src/tag";
+import fixture from "../fixtures/tag-keys.json";
+import { addTag } from "../src/mutations";
 
-it("spells tags like knoa_core::normalize_tag", () => {
-	const cases: [string, string][] = [
-		["Film Noir ", "film-noir"],
-		["film-noir", "film-noir"],
-		["Vienna", "vienna"],
-		["#Rust", "rust"],
-		["##two  words", "two-words"],
-		["snake_case_tag", "snake-case-tag"],
-		["  -- dashes--and__underscores  ", "dashes-and-underscores"],
-		["Ünïcode Tag", "ünïcode-tag"],
-		["", ""],
-		["#", ""],
-	];
-	for (const [input, expected] of cases)
-		expect(normalizeTag(input)).toBe(expected);
+// The same cases run against `knoa_core::normalize_tag` (crates/knoa-core/tests/tag_keys.rs),
+// whose spelling is canonical.
+it("keys tags like knoa_core", () => {
+	for (const { input, key } of fixture.cases)
+		expect(addTag(fixture.bookmark, input)?.key ?? null, input).toBe(key);
 });

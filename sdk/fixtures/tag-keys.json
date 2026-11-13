@@ -1,0 +1,19 @@
+{
+	"bookmark": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f",
+	"cases": [
+		{ "input": "Film Noir ", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/film-noir" },
+		{ "input": "film-noir", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/film-noir" },
+		{ "input": "#Rust", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/rust" },
+		{ "input": "##two  words", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/two-words" },
+		{ "input": "snake_case_tag", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/snake-case-tag" },
+		{ "input": "  -- dashes--and__underscores  ", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/dashes-and-underscores" },
+		{ "input": "Ünïcode Tag", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/ünïcode-tag" },
+		{ "input": " No　Break ", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/no-break" },
+		{ "input": "x\u0085y", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/x-y" },
+		{ "input": "﻿Rust", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/﻿rust" },
+		{ "input": "a234567890123456789012345678901234567890", "key": "6f1c1a3e-2b4d-5c8e-9f00-1a2b3c4d5e6f/a234567890123456789012345678901234567890" },
+		{ "input": "a2345678901234567890123456789012345678901", "key": null },
+		{ "input": "", "key": null },
+		{ "input": "#", "key": null }
+	]
+}

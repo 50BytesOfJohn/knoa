@@ -28,7 +28,8 @@ export type BookmarkId = string;
 export type Origin = "ai" | "user";
 
 /** `queued`: waiting for the cloud organizer. Devices keep their own queue states local. */
-export type BookmarkStatus = "new" | "queued" | "organized" | "failed";
+export const BOOKMARK_STATUSES = ["new", "queued", "organized", "failed"] as const;
+export type BookmarkStatus = (typeof BOOKMARK_STATUSES)[number];
 
 export interface ListedTag {
 	tag: string;
