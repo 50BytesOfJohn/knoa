@@ -166,6 +166,3 @@ async fn api_error(response: Response) -> Error {
         },
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -1,8 +1,7 @@
 //! The Account page's AI access URL, default, and workspace exceptions.
 
 use gpui::{
-    ClipboardItem, Context, Div, InteractiveElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, prelude::FluentBuilder as _,
+    ClipboardItem, Context, Div, IntoElement as _, SharedString, StatefulInteractiveElement as _,
 };
 use gpui_component::radio::{Radio, RadioGroup};
 use knoa_core::{
@@ -31,31 +30,22 @@ impl AccountPage {
         let cloud = self.cloud.read(cx);
         let state = cloud.mcp();
         let settings = state.and_then(McpState::settings);
-        let pro = cloud
-            .account()
-            .is_some_and(|account| account.plan == Plan::Pro);
+        let pro = cloud.can_change_mcp();
         let busy = state.is_some_and(McpState::busy);
         let disabled = !pro || busy || settings.is_none();
         let mut rows = vec![form::note(ABOUT, theme.text)];
         if let Some(settings) = settings {
             let url = settings.url.clone();
-            rows.push(form::row(
-                "MCP URL",
-                Some(&settings.url),
+            let copy = if pro {
                 button("copy-mcp-url", "Copy", Tone::Soft, cx)
-                    .when(pro, |button| {
-                        button.on_click(move |_, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(url.clone()));
-                        })
+                    .on_click(move |_, _, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(url.clone()));
                     })
-                    .when(!pro, |button| {
-                        button
-                            .text_color(theme.faint)
-                            .cursor_default()
-                            .hover(|style| style.bg(theme.soft))
-                    }),
-                theme,
-            ));
+                    .into_any_element()
+            } else {
+                gpui::Empty.into_any_element()
+            };
+            rows.push(form::row("MCP URL", Some(&settings.url), copy, theme));
         }
         rows.push(form::stacked(
             "Default access",

@@ -64,11 +64,14 @@ impl Cloud {
         self.change_mcp(Change::Workspace(id, access), cx);
     }
 
-    fn change_mcp(&mut self, change: Change, cx: &mut Context<'_, Cloud>) {
-        if !self
-            .account()
+    /// AI access is a Pro feature; a trial counts as Pro.
+    pub fn can_change_mcp(&self) -> bool {
+        self.account()
             .is_some_and(|account| account.plan == Plan::Pro)
-        {
+    }
+
+    fn change_mcp(&mut self, change: Change, cx: &mut Context<'_, Cloud>) {
+        if !self.can_change_mcp() {
             return;
         }
         if let Phase::SignedIn(connection) = &mut self.phase

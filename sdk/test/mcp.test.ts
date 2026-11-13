@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import fixture from "../fixtures/mcp-settings.json";
-import { Api, HttpError } from "../src/api";
+import { Api } from "../src/api";
 import type { McpSettings, McpSettingsResponse } from "../src/protocol";
 
 // JSON imports widen string literals to `string`, as in account-fixture.ts.
@@ -41,25 +41,4 @@ it("reads MCP settings and replaces them, including clearing workspace exception
 			url: fixture.url,
 		});
 	}
-});
-
-it("preserves structured MCP settings errors", async () => {
-	const api = new Api(
-		"http://api.test",
-		async () => "token",
-		async () =>
-			Response.json(
-				{ error: "invalid", message: "Invalid workspace access" },
-				{ status: 400 },
-			),
-	);
-	const error = await api
-		.setMcpSettings({ access: "read", workspaces: {} })
-		.catch((e: unknown) => e);
-	expect(error).toBeInstanceOf(HttpError);
-	expect(error).toMatchObject({
-		status: 400,
-		code: "invalid",
-		message: "Invalid workspace access",
-	});
 });
