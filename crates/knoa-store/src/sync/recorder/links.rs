@@ -124,7 +124,7 @@ mod tests {
     use super::*;
     use crate::{
         Store,
-        test_support::{import_one, linked, mids, pushed},
+        test_support::{applied, import_one, linked, pushed},
     };
 
     fn organized(tags: &[&str]) -> Enrichment {
@@ -149,7 +149,7 @@ mod tests {
         store
             .finish_organized(id, &organized(&["rust", "web"]), 10)
             .unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
 
         store.queue(id).unwrap();
         store.take_jobs(0, 1).unwrap();
@@ -189,7 +189,7 @@ mod tests {
         linked(&mut store);
         let id = import_one(&mut store);
         store.add_tag(id, "rust", Origin::Ai).unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
 
         store.remove_tag(id, "rust").unwrap();
 

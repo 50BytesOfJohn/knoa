@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::{Map, Value};
 
 use super::{
+    delivery::{self, BlockReason, BookmarkDelivery},
     ids::{self, Table},
     linked, outbox,
     rows::{self, Synced},
@@ -89,13 +90,24 @@ impl<'c> Recorder<'c> {
     }
 
     pub fn bookmark_before(&self, id: i64) -> Result<Before<BookmarkPatch>> {
-        if self.linked && unsent::is_unsent(self.conn, id)? {
-            return Ok(Before(None));
-        }
         self.before(|| rows::bookmark(self.conn, id))
     }
 
     pub fn bookmark_changed(&self, id: i64, before: Before<BookmarkPatch>) -> Result<()> {
+        if self.linked {
+            match delivery::state(self.conn, id)? {
+                Some(BookmarkDelivery::Blocked(BlockReason::Quota)) => return Ok(()),
+                Some(BookmarkDelivery::Blocked(BlockReason::Invalid)) => {
+                    if let (Some(before), Some(after)) = (&before.0, rows::bookmark(self.conn, id)?)
+                        && !changed_columns(&before.row, &after.row)?.is_empty()
+                    {
+                        unsent::retry(self.conn, id)?;
+                    }
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         let after = || rows::bookmark(self.conn, id);
         self.changed(Entity::Bookmark, before, after, || {
             self.created_bookmark(id)
@@ -121,7 +133,7 @@ impl<'c> Recorder<'c> {
 
     pub fn deleting_bookmark(&self, id: i64) -> Result<()> {
         // The server never had it.
-        if self.linked && unsent::is_unsent(self.conn, id)? {
+        if self.linked && delivery::is_blocked(self.conn, id)? {
             return Ok(());
         }
         self.deleting(Entity::Bookmark, Table::Bookmarks, id)
@@ -215,7 +227,7 @@ mod tests {
     use super::*;
     use crate::{
         NewBookmarks, Store,
-        test_support::{WORKSPACE, WORKSPACE_KEY, bookmark, import_one, linked, mids, pushed},
+        test_support::{WORKSPACE, WORKSPACE_KEY, applied, bookmark, import_one, linked, pushed},
     };
 
     #[test]
@@ -253,7 +265,7 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
         let id = import_one(&mut store);
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
 
         store.set_up_next(id, true).unwrap();
         let mut workspace = store.workspace(WORKSPACE).unwrap().unwrap();
@@ -288,7 +300,7 @@ mod tests {
                 NewBookmarks::Organize,
             )
             .unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
 
         store.delete_workspace(work).unwrap();
 

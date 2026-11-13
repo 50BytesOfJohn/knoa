@@ -358,7 +358,7 @@ mod tests {
     use crate::{
         NewBookmarks,
         test_support::{
-            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, import_one, linked, mids,
+            WORKSPACE, WORKSPACE_KEY, applied, bookmark, bookmark_row, change, import_one, linked,
             pushed,
         },
     };
@@ -386,7 +386,7 @@ mod tests {
                 .unwrap(),
             Some(())
         );
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
         let old_key = bookmark_id(WORKSPACE_KEY, &job.bookmark.url).unwrap();
         let url = "https://b.dev/";
         let key = bookmark_id(WORKSPACE_KEY, url).unwrap();

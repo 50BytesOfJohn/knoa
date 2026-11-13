@@ -5,8 +5,8 @@ use rusqlite::OptionalExtension as _;
 
 use super::{
     super::{
+        delivery,
         ids::{self, Table},
-        unsent,
     },
     Recorder,
 };
@@ -47,9 +47,9 @@ impl Recorder<'_> {
         Ok(Some(key))
     }
 
-    /// `None` too while the bookmark waits for room on the account: it goes again whole.
+    /// Blocked bookmarks retain their changes locally until a full snapshot can retry.
     pub(super) fn bookmark_key(&self, id: i64) -> Result<Option<String>> {
-        if !self.linked || unsent::is_unsent(self.conn, id)? {
+        if !self.linked || delivery::is_blocked(self.conn, id)? {
             return Ok(None);
         }
         if let Some(key) = ids::sync_id(self.conn, Table::Bookmarks, id)? {

@@ -36,11 +36,27 @@ pub struct ThumbnailDownload {
     pub image_key: String,
 }
 
-/// Bookmarks the server has: linked, and with no creation still waiting in the outbox.
-const ON_SERVER: &str = "b.sync_id IS NOT NULL
-    AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.entity = 'bookmark' AND o.key = b.sync_id)";
+/// Only evidence from the server permits work that needs the remote row.
+const ON_SERVER: &str = "b.sync_id IS NOT NULL AND b.delivery = 'confirmed'";
 
 impl Store {
+    /// Releases blocked bookmarks from the queue when the cloud organizes this library.
+    pub fn release_blocked_jobs(&mut self) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "UPDATE bookmarks SET status = CASE WHEN organized_at IS NULL THEN 'new' ELSE 'organized' END
+             WHERE status = 'queued' AND delivery IN ('blocked_quota', 'blocked_invalid')",
+            [],
+        )?;
+        tx.execute(
+            "DELETE FROM jobs WHERE bookmark_id IN
+             (SELECT id FROM bookmarks WHERE delivery IN ('blocked_quota', 'blocked_invalid'))",
+            [],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Up to `limit` jobs of this Mac's queue for bookmarks the server already has.
     pub fn cloud_jobs(&self, limit: usize) -> Result<Vec<CloudJob>> {
         let mut stmt = self.conn.prepare(&format!(
@@ -174,13 +190,7 @@ mod tests {
         let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
         assert_eq!(store.cloud_jobs(10).unwrap().len(), 0);
 
-        let mids: Vec<String> = store
-            .next_push()
-            .unwrap()
-            .into_iter()
-            .map(|m| m.mid)
-            .collect();
-        store.acknowledge(&mids).unwrap();
+        store.settle(&applied(&store)).unwrap();
         let jobs = store.cloud_jobs(10).unwrap();
         assert_eq!(jobs.len(), 1);
         assert!(!jobs[0].folders_only);
@@ -199,13 +209,7 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
         let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
-        let mids: Vec<String> = store
-            .next_push()
-            .unwrap()
-            .into_iter()
-            .map(|m| m.mid)
-            .collect();
-        store.acknowledge(&mids).unwrap();
+        store.settle(&applied(&store)).unwrap();
         let image = |path: &str| Image {
             path: path.into(),
             width: 10,
@@ -233,13 +237,7 @@ mod tests {
         linked(&mut store);
         let url = "https://a.dev/";
         let added = store.add_link(WORKSPACE, url, 10).unwrap();
-        let mids: Vec<_> = store
-            .next_push()
-            .unwrap()
-            .into_iter()
-            .map(|m| m.mid)
-            .collect();
-        store.acknowledge(&mids).unwrap();
+        store.settle(&applied(&store)).unwrap();
         let image = Image {
             path: "/cache/new.png".into(),
             width: 10,

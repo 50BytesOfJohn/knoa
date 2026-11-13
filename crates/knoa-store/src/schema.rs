@@ -281,6 +281,18 @@ CREATE TABLE unsent_bookmarks (
     bookmark_id INTEGER PRIMARY KEY REFERENCES bookmarks (id) ON DELETE CASCADE
 );
 ",
+    r"
+ALTER TABLE bookmarks ADD COLUMN delivery TEXT NOT NULL DEFAULT 'pending_create'
+    CHECK (delivery IN ('pending_create', 'blocked_quota', 'blocked_invalid', 'confirmed'));
+UPDATE bookmarks SET delivery = CASE
+    WHEN id IN (SELECT bookmark_id FROM unsent_bookmarks) THEN 'blocked_quota'
+    WHEN EXISTS (SELECT 1 FROM outbox o WHERE o.entity = 'bookmark' AND o.key = bookmarks.sync_id
+        AND o.op = 'put' AND json_type(o.data, '$.url') = 'text'
+        AND json_type(o.data, '$.workspace_id') = 'text') THEN 'pending_create'
+    ELSE 'confirmed' END
+    WHERE sync_id IS NOT NULL;
+DROP TABLE unsent_bookmarks;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -416,8 +428,8 @@ mod tests {
             None
         );
         assert_eq!(
-            count("SELECT count(*) FROM sqlite_master WHERE name = 'unsent_bookmarks'"),
-            1
+            count("SELECT count(*) FROM bookmarks WHERE delivery = 'pending_create'"),
+            2
         );
         assert_eq!(count("SELECT count(*) FROM bookmark_folders"), 1);
         assert_eq!(count("SELECT count(*) FROM bookmark_tags"), 1);
@@ -435,3 +447,6 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod delivery_tests;

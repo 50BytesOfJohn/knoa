@@ -116,7 +116,7 @@ impl Store {
 pub(crate) mod test_support {
     use knoa_core::{
         BookmarkId, NewBookmark, Query, WorkspaceId,
-        protocol::{Change, Mutation},
+        protocol::{Change, Mutation, MutationResult, MutationStatus},
     };
     use serde_json::{Value, json};
 
@@ -185,6 +185,18 @@ pub(crate) mod test_support {
             .unwrap()
             .into_iter()
             .map(|m| m.mid)
+            .collect()
+    }
+
+    /// Applied server answers for everything waiting in the next push.
+    pub fn applied(store: &Store) -> Vec<MutationResult> {
+        mids(store)
+            .into_iter()
+            .map(|mid| MutationResult {
+                mid,
+                status: MutationStatus::Applied,
+                reason: None,
+            })
             .collect()
     }
 
