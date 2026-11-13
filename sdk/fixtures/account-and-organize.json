@@ -1,0 +1,138 @@
+{
+  "accounts": [
+    {
+      "user_id": "user_fixture",
+      "email": "reader@example.test",
+      "plan": "free",
+      "organizer": "device",
+      "limits": {
+        "bookmarks": 1000,
+        "organized_per_month": 0
+      },
+      "usage": {
+        "bookmarks": 12,
+        "organized_this_month": 0
+      },
+      "billing": {
+        "status": "none",
+        "period_end": null,
+        "cancel_at_period_end": false,
+        "trial_available": true
+      }
+    },
+    {
+      "user_id": "user_fixture",
+      "email": "reader@example.test",
+      "plan": "free",
+      "organizer": "device",
+      "limits": {
+        "bookmarks": 1000,
+        "organized_per_month": 0
+      },
+      "usage": {
+        "bookmarks": 12,
+        "organized_this_month": 0
+      },
+      "billing": {
+        "status": "none",
+        "period_end": null,
+        "cancel_at_period_end": false,
+        "trial_available": false
+      }
+    },
+    {
+      "user_id": "user_fixture",
+      "email": "reader@example.test",
+      "plan": "pro",
+      "organizer": "cloud",
+      "limits": {
+        "bookmarks": 10000,
+        "organized_per_month": 100
+      },
+      "usage": {
+        "bookmarks": 12,
+        "organized_this_month": 3
+      },
+      "billing": {
+        "status": "trialing",
+        "period_end": 1797465600,
+        "cancel_at_period_end": false,
+        "trial_available": false
+      }
+    },
+    {
+      "user_id": "user_fixture",
+      "email": "reader@example.test",
+      "plan": "pro",
+      "organizer": "cloud",
+      "limits": {
+        "bookmarks": 10000,
+        "organized_per_month": 100
+      },
+      "usage": {
+        "bookmarks": 12,
+        "organized_this_month": 3
+      },
+      "billing": {
+        "status": "trialing",
+        "period_end": 1797465600,
+        "cancel_at_period_end": true,
+        "trial_available": false
+      }
+    },
+    {
+      "user_id": "user_fixture",
+      "email": "reader@example.test",
+      "plan": "pro",
+      "organizer": "cloud",
+      "limits": {
+        "bookmarks": 10000,
+        "organized_per_month": 1000
+      },
+      "usage": {
+        "bookmarks": 12,
+        "organized_this_month": 3
+      },
+      "billing": {
+        "status": "active",
+        "period_end": 1797465600,
+        "cancel_at_period_end": false,
+        "trial_available": false
+      }
+    },
+    {
+      "user_id": "user_fixture",
+      "email": "reader@example.test",
+      "plan": "pro",
+      "organizer": "cloud",
+      "limits": {
+        "bookmarks": 10000,
+        "organized_per_month": 1000
+      },
+      "usage": {
+        "bookmarks": 12,
+        "organized_this_month": 3
+      },
+      "billing": {
+        "status": "active",
+        "period_end": 1797465600,
+        "cancel_at_period_end": true,
+        "trial_available": false
+      }
+    }
+  ],
+  "organize": [
+    {
+      "queued": 5,
+      "pending": 0
+    },
+    {
+      "queued": 2,
+      "pending": 3
+    },
+    {
+      "queued": 0,
+      "pending": 5
+    }
+  ]
+}

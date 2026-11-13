@@ -5,8 +5,8 @@ use gpui::{
     AnyElement, Context, Div, Entity, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Window, div,
 };
-use jiff::Zoned;
-use knoa_core::protocol::{Account, Plan};
+use jiff::{Timestamp, Zoned, tz::TimeZone};
+use knoa_core::protocol::{Account, BillingStatus, Organizer, Plan};
 
 use super::{form, updates::when};
 use crate::{
@@ -122,21 +122,25 @@ impl AccountPage {
         let config = cloud.config().cloned();
         let plan_row = match (&account, config) {
             (Some(account), Some(config)) => {
-                let (about, label, url) = match account.plan {
+                let about = plan_description(account);
+                let (label, url) = match account.plan {
                     Plan::Free => (
-                        "Free plan. Organizing uses your own AI key, on this Mac.",
-                        "Upgrade",
+                        if account
+                            .billing
+                            .as_ref()
+                            .is_some_and(|billing| billing.trial_available)
+                        {
+                            "Start free trial"
+                        } else {
+                            "Upgrade"
+                        },
                         config.pricing,
                     ),
-                    Plan::Pro => (
-                        "Pro plan. Knoa organizes your bookmarks in the cloud.",
-                        "Manage subscription",
-                        config.billing,
-                    ),
+                    Plan::Pro => ("Manage subscription", config.billing),
                 };
                 form::row(
                     &self.email(cx),
-                    Some(about),
+                    Some(&about),
                     button("plan", label, Tone::Soft, cx)
                         .on_click(move |_, _, cx| cx.open_url(url.as_str())),
                     theme,
@@ -199,13 +203,47 @@ fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
         grouped(usage.bookmarks),
         grouped(limits.bookmarks)
     );
-    let about = match account.plan {
-        Plan::Free => bookmarks,
-        Plan::Pro => format!(
+    let about = match account.organizer {
+        Organizer::Device => bookmarks,
+        Organizer::Cloud => format!(
             "{bookmarks}, {} of {} organized this month",
             grouped(usage.organized_this_month),
             grouped(limits.organized_per_month)
         ),
     };
     form::row("Usage", Some(&about), gpui::Empty, theme)
+}
+
+fn plan_description(account: &Account) -> String {
+    use std::fmt::Write as _;
+
+    let mut about = match (
+        account.plan,
+        account.billing.as_ref().map(|billing| billing.status),
+    ) {
+        (Plan::Free, _) => "Free plan.".to_owned(),
+        (Plan::Pro, Some(BillingStatus::Trialing)) => "Pro trial.".to_owned(),
+        (Plan::Pro, _) => "Pro plan.".to_owned(),
+    };
+    if let Some(billing) = &account.billing
+        && billing.status != BillingStatus::None
+        && let Some(end) = billing
+            .period_end
+            .and_then(|end| Timestamp::from_second(end).ok())
+    {
+        let date = end.to_zoned(TimeZone::system()).strftime("%b %-d, %Y");
+        let action = if billing.cancel_at_period_end {
+            "Ends"
+        } else if billing.status == BillingStatus::Trialing {
+            "Trial ends"
+        } else {
+            "Renews"
+        };
+        let _ = write!(about, " {action} {date}.");
+    }
+    about.push_str(match account.organizer {
+        Organizer::Device => " Organizing uses your own AI key, on this Mac.",
+        Organizer::Cloud => " Knoa organizes your bookmarks in the cloud.",
+    });
+    about
 }
