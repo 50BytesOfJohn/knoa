@@ -204,7 +204,10 @@ impl Engine {
             return Ok(Round::OtherAccount(other));
         }
         // A push that keeps failing mustn't keep this Mac from hearing what changed elsewhere.
-        let pushed = self.push(cx).await;
+        let pushed = self.push_and_recheck(cx).await;
+        if let Ok(Some(other)) = pushed {
+            return Ok(Round::OtherAccount(other));
+        }
         let organizer = self.account.as_ref().map(|a| a.organizer);
         if pushed.is_ok() && organizer == Some(Who::Cloud) {
             self.hand_jobs_to_cloud(cx).await?;
@@ -218,6 +221,20 @@ impl Engine {
             thumbnails.upload(self, cx).await?;
         }
         Ok(Round::Done)
+    }
+
+    /// Pushes, then sends again what [`Engine::recheck_room`] queued, so bookmarks that
+    /// fit now go in this round rather than with the next change here. Returns the
+    /// account when the library is linked to another one.
+    async fn push_and_recheck(&mut self, cx: &mut AsyncApp) -> Result<Option<Account>, Failure> {
+        if !self.push(cx).await? {
+            return Ok(None);
+        }
+        let other = self.recheck_room(cx).await?;
+        if other.is_none() {
+            self.push(cx).await?;
+        }
+        Ok(other)
     }
 
     pub(super) fn status(&self, status: SyncStatus, cx: &mut AsyncApp) -> Result<(), Failure> {

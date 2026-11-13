@@ -9,8 +9,9 @@ use super::{Engine, Failure, net};
 use crate::services::cloud::SyncStatus;
 
 impl Engine {
-    /// Sends the outbox, a batch at a time, until it is empty.
-    pub(super) async fn push(&self, cx: &mut AsyncApp) -> Result<(), Failure> {
+    /// Sends the outbox, a batch at a time, until it is empty. True when the server
+    /// answered any of it.
+    pub(super) async fn push(&self, cx: &mut AsyncApp) -> Result<bool, Failure> {
         let mut at_most = MAX_PUSH;
         let mut refused = Refused::default();
         loop {
@@ -18,11 +19,10 @@ impl Engine {
                 .store(cx, move |store| store.next_push_at_most(at_most))
                 .await?;
             if batch.is_empty() {
-                return if refused.sent {
-                    self.refused(&refused, cx).await
-                } else {
-                    Ok(())
-                };
+                if refused.sent {
+                    self.refused(&refused, cx).await?;
+                }
+                return Ok(refused.sent);
             }
             self.status(SyncStatus::Syncing(batch.len()), cx)?;
             let sent: HashSet<String> = batch.iter().map(|m| m.mid.clone()).collect();
