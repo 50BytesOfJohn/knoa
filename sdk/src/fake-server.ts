@@ -3,6 +3,8 @@
 
 import {
 	type Account,
+	BILLING_ERROR,
+	type BillingCheckoutRequest,
 	type Change,
 	type Entity,
 	type Key,
@@ -13,7 +15,8 @@ import {
 	type PushResponse,
 	type Rows,
 } from "./protocol";
-import type { SocketFactory, SocketLike } from "./socket";
+import { FakeSocket } from "./fake-socket";
+import type { SocketFactory } from "./socket";
 import { deleteRow, emptyTables, putRow, type Tables } from "./tables";
 
 interface Versioned {
@@ -158,8 +161,40 @@ export class FakeServer {
 			}
 			return json({ queued: 0, pending: 0 });
 		}
+		if (method === "POST" && url.pathname.startsWith("/v1/billing/")) {
+			return this.billing(url.pathname.slice("/v1/billing/".length), init);
+		}
 		return json({ error: "not_found", message: url.pathname }, 404);
 	};
+
+	/** Checkout succeeds at once, with no payment page in between. */
+	private billing(route: string, init?: RequestInit): Response {
+		if (route === "refresh") return json({ plan: this.plan });
+		if (route === "portal") {
+			if (this.plan !== "pro") {
+				return json(
+					{ error: BILLING_ERROR.noSubscription, message: "No subscription" },
+					404,
+				);
+			}
+			return json({ url: "/app" });
+		}
+		if (route !== "checkout")
+			return json({ error: "not_found", message: route }, 404);
+		const { period } = JSON.parse(String(init?.body)) as BillingCheckoutRequest;
+		if (period !== "month" && period !== "annual") {
+			return json({ error: "bad_request", message: "Unknown period" }, 400);
+		}
+		if (this.plan === "pro") {
+			return json(
+				{ error: BILLING_ERROR.alreadySubscribed, message: "Already Pro" },
+				409,
+			);
+		}
+		this.plan = "pro";
+		this.accountChanged();
+		return json({ url: "/app?checkout=success" });
+	}
 
 	/** A socket factory that connects to this server, for the client's `socket` option. */
 	socket: SocketFactory = () => {
@@ -270,29 +305,4 @@ function json(body: unknown, status = 200): Response {
 		status,
 		headers: { "Content-Type": "application/json" },
 	});
-}
-
-class FakeSocket implements SocketLike {
-	onopen: (() => void) | null = null;
-	onmessage: ((event: { data: unknown }) => void) | null = null;
-	onclose: ((event: { code?: number }) => void) | null = null;
-	onerror: (() => void) | null = null;
-
-	constructor(private readonly all: Set<FakeSocket>) {
-		all.add(this);
-		queueMicrotask(() => this.onopen?.());
-	}
-
-	send(data: string): void {
-		if (data === "ping") queueMicrotask(() => this.deliver("pong"));
-	}
-
-	close(code = 1000): void {
-		if (!this.all.delete(this)) return;
-		queueMicrotask(() => this.onclose?.({ code }));
-	}
-
-	deliver(data: string): void {
-		queueMicrotask(() => this.onmessage?.({ data }));
-	}
 }
