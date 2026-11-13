@@ -48,7 +48,7 @@ mod tests {
 
     #[test]
     fn folder_edits_preserve_remote_fields_and_can_clear_nullable_values() {
-        use crate::test_support::{WORKSPACE_KEY, change, linked, mids, pushed};
+        use crate::test_support::{WORKSPACE_KEY, applied, change, linked, pushed};
         use serde_json::json;
 
         let mut store = Store::open_in_memory().unwrap();
@@ -71,7 +71,7 @@ mod tests {
         let edits = FolderEdits::between(&baseline, &edited);
         let put = pushed(&store).remove(0);
         let key = put["key"].as_str().unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
         let mut row = put["data"].clone();
         row["id"] = json!(key);
         row["workspace_id"] = json!(WORKSPACE_KEY);
