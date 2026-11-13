@@ -10,6 +10,7 @@ import { clientFor, started } from "./fixtures";
 
 afterEach(() => {
 	vi.useRealTimers();
+	vi.restoreAllMocks();
 });
 
 function links(
@@ -62,6 +63,22 @@ describe("SyncClient", () => {
 		expect(client.getSnapshot().status).toBe("synced");
 		expect(client.getSnapshot().pending).toBe(0);
 		expect(server.pushes.flat().map((m) => m.mid)).toEqual([mutation.mid]);
+		expect(server.tables.workspace.size).toBe(1);
+		client.stop();
+	});
+
+	it("keeps the outbox through a 404 and sends it once the route answers", async () => {
+		vi.useFakeTimers();
+		const server = new FakeServer();
+		const client = await started(clientFor(server));
+		server.failNext(404);
+		client.mutate([createWorkspace("Personal", 0).mutation]);
+		await client.settled();
+		expect(client.getSnapshot().pending).toBe(1);
+
+		await vi.advanceTimersByTimeAsync(1_000);
+		await client.settled();
+		expect(client.getSnapshot().pending).toBe(0);
 		expect(server.tables.workspace.size).toBe(1);
 		client.stop();
 	});
@@ -141,6 +158,8 @@ describe("SyncClient", () => {
 
 	it("backs off longer each time the server displaces its socket", async () => {
 		vi.useFakeTimers();
+		// Jitter off: the waits below are the full 30s and 60s.
+		vi.spyOn(Math, "random").mockReturnValue(0);
 		const server = new FakeServer();
 		let connections = 0;
 		const counting: SocketFactory = (url, protocols) => {
