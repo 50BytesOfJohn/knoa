@@ -1,6 +1,7 @@
 //! Creating and editing a folder: name, what belongs in it, auto-assign, icon and colour.
 
 mod color_picker;
+mod edits;
 mod icon_picker;
 
 use gpui::{
@@ -14,13 +15,13 @@ use gpui_component::{
     switch::Switch,
 };
 use knoa_core::{
-    Folder, FolderColor, FolderIcon, FolderId, Ink,
+    Folder, FolderColor, FolderEdits, FolderIcon, FolderId, Ink,
     protocol::max_chars::{self, fits},
 };
 
 use super::MainView;
 use crate::{
-    state::library::Library,
+    state::library::{Library, LibraryChanged},
     ui::{
         components::{Tone, button, problem, too_long},
         theme::Theme,
@@ -73,6 +74,11 @@ impl FolderEditor {
             // The limits' messages follow the text as it's typed.
             _subscriptions: vec![
                 color_picker::follow_hue(&hue, cx),
+                cx.subscribe_in(
+                    &library,
+                    window,
+                    |this, _, _: &LibraryChanged, window, cx| this.refresh(window, cx),
+                ),
                 cx.observe(&name, |_, _, cx| cx.notify()),
                 cx.observe(&description, |_, _, cx| cx.notify()),
             ],
@@ -98,7 +104,7 @@ impl FolderEditor {
         let (color, icon, auto_assign) = (self.color, self.icon, self.auto_assign);
         match &self.existing {
             Some(folder) => {
-                let folder = Folder {
+                let edited = Folder {
                     name,
                     description,
                     auto_assign,
@@ -106,8 +112,10 @@ impl FolderEditor {
                     icon,
                     ..folder.clone()
                 };
+                let edits = FolderEdits::between(&folder.clone().normalized(), &edited);
+                let id = folder.id;
                 self.library.update(cx, |library, cx| {
-                    library.change(cx, move |store| store.update_folder(&folder));
+                    library.change(cx, move |store| store.edit_folder(id, &edits));
                 });
             }
             None => self.library.update(cx, |library, cx| {

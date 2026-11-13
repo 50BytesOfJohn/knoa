@@ -1,6 +1,10 @@
 //! Workspaces: separate libraries, each fed by its own browser profiles and organized by
 //! its own instructions, folders and tag list.
 
+mod edits;
+
+pub use edits::WorkspaceEdits;
+
 use crate::{Ink, TagList};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

@@ -6,13 +6,14 @@
 //! at once, text when its field loses focus or the page is left.
 
 mod browsers;
+mod edits;
 mod identity;
 mod organizing;
 mod tag_list;
 
 use gpui::{
     AppContext as _, Context, Div, Entity, EventEmitter, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Subscription, TaskExt as _, Window, div,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, TaskExt as _, Window, div,
     prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState, TextareaState};
@@ -34,6 +35,7 @@ use crate::{
         theme::Theme,
     },
 };
+use edits::keep_stored_where_refused;
 use tag_list::{TagListChanged, TagListEditor};
 
 pub enum WorkspacePageEvent {
@@ -46,6 +48,9 @@ impl EventEmitter<WorkspacePageEvent> for WorkspacePage {}
 pub struct WorkspacePage {
     /// `None` while creating a workspace.
     existing: Option<WorkspaceId>,
+    baseline: Workspace,
+    saves: Option<Task<()>>,
+    pending_saves: usize,
     name: Entity<InputState>,
     instructions: Entity<TextareaState>,
     guideline: Entity<TextareaState>,
@@ -112,9 +117,18 @@ impl WorkspacePage {
             // Organizing again is offered only while AI is on.
             cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify()),
         ];
+        cx.on_release(|this: &mut WorkspacePage, _| {
+            if let Some(saves) = this.saves.take() {
+                saves.detach();
+            }
+        })
+        .detach();
         let reorganize = (!is_new).then(|| new_reorganize(workspace.id, &library, cx));
         WorkspacePage {
             existing: (!is_new).then_some(workspace.id),
+            baseline: workspace.clone().normalized(),
+            saves: None,
+            pending_saves: 0,
             name,
             instructions,
             guideline,
@@ -130,23 +144,6 @@ impl WorkspacePage {
             reorganize,
             library,
             _subscriptions: subscriptions,
-        }
-    }
-
-    /// Stores what changed. Does nothing while creating: that waits for the button.
-    pub fn save(&mut self, cx: &mut Context<'_, WorkspacePage>) {
-        let Some(id) = self.existing.filter(|_| !self.deleted) else {
-            return;
-        };
-        let Some(stored) = self.stored(id, cx) else {
-            return;
-        };
-        let mut workspace = self.workspace(id, cx);
-        keep_stored_where_refused(&mut workspace, &stored);
-        if workspace != stored {
-            self.library.update(cx, |library, cx| {
-                library.change(cx, move |store| store.update_workspace(&workspace));
-            });
         }
     }
 
@@ -175,22 +172,6 @@ impl WorkspacePage {
             .cloned()
     }
 
-    fn workspace(&self, id: WorkspaceId, cx: &Context<'_, WorkspacePage>) -> Workspace {
-        Workspace {
-            id,
-            name: self.name.read(cx).value().trim().to_owned(),
-            color: self.color,
-            browsers: self.browsers.clone(),
-            opens_in: self.opens_in.clone(),
-            instructions: self.instructions.read(cx).value().trim().to_owned(),
-            screening: Screening {
-                enabled: self.screening,
-                guideline: self.guideline.read(cx).value().trim().to_owned(),
-            },
-            tag_list: self.tag_list.read(cx).tag_list(cx),
-        }
-    }
-
     /// Creates the workspace, switches to it, and turns this page into its page.
     fn create(&mut self, window: &mut Window, cx: &mut Context<'_, WorkspacePage>) {
         let mut workspace = self.workspace(WorkspaceId(0), cx);
@@ -205,14 +186,16 @@ impl WorkspacePage {
             let mut store = database.write();
             workspace.id = store.create_workspace(&workspace.name, workspace.color)?;
             store.update_workspace(&workspace)?;
-            knoa_store::Result::Ok(workspace.id)
+            knoa_store::Result::Ok(workspace)
         });
         let library = self.library.clone();
         cx.spawn(async move |this, cx| {
-            let id = task.await?;
+            let workspace = task.await?;
+            let id = workspace.id;
             library.update(cx, |library, cx| library.set_workspace(id, cx));
             this.update(cx, |this, cx| {
                 this.existing = Some(id);
+                this.baseline = workspace.normalized();
                 this.reorganize = Some(new_reorganize(id, &this.library, cx));
                 cx.emit(WorkspacePageEvent::Created(id));
                 cx.notify();
@@ -300,24 +283,6 @@ fn new_reorganize(
 ) -> Entity<Reorganize> {
     let library = library.clone();
     cx.new(|_| Reorganize::new(Scope::Workspace(id), library))
-}
-
-/// Puts back the stored value of a text field the server would refuse: an emptied name,
-/// or text past its limit, which would keep the whole change on this Mac only.
-fn keep_stored_where_refused(workspace: &mut Workspace, stored: &Workspace) {
-    use max_chars::workspace::{GUIDELINE, INSTRUCTIONS, NAME};
-    if workspace.name.is_empty() || !fits(&workspace.name, NAME) {
-        workspace.name.clone_from(&stored.name);
-    }
-    if !fits(&workspace.instructions, INSTRUCTIONS) {
-        workspace.instructions.clone_from(&stored.instructions);
-    }
-    if !fits(&workspace.screening.guideline, GUIDELINE) {
-        workspace
-            .screening
-            .guideline
-            .clone_from(&stored.screening.guideline);
-    }
 }
 
 fn blank_workspace(color: Ink) -> Workspace {

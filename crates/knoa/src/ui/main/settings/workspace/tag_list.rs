@@ -69,6 +69,22 @@ impl TagListEditor {
         }
     }
 
+    pub(super) fn refresh(
+        &mut self,
+        list: &TagList,
+        window: &mut Window,
+        cx: &mut Context<'_, Self>,
+    ) {
+        if self.tag_list(cx).tags != list.tags {
+            self.rows.clear();
+            for tag in &list.tags {
+                self.insert_row(tag, window, cx);
+            }
+        }
+        self.only_these = list.only_these;
+        cx.notify();
+    }
+
     fn is_full(&self) -> bool {
         self.rows.len() >= MAX_LISTED_TAGS
     }

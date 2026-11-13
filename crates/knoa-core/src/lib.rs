@@ -19,7 +19,7 @@ pub use bookmark::{
 };
 pub use enrichment::{Enrichment, Page};
 pub use field::{FieldDef, FieldType, Fields, format_duration};
-pub use folder::{Folder, FolderColor, FolderIcon, FolderId, FolderLink, Hue, Ink};
+pub use folder::{Folder, FolderColor, FolderEdits, FolderIcon, FolderId, FolderLink, Hue, Ink};
 pub use kind::{Kind, KindDef};
 pub use query::{Comparison, FieldFilter, Place, Query};
 pub use tag::{
@@ -27,4 +27,4 @@ pub use tag::{
     normalize_tag, tag_fits,
 };
 pub use usage::{ModelUsage, Usage, UsageTotals};
-pub use workspace::{Screening, Workspace, WorkspaceId};
+pub use workspace::{Screening, Workspace, WorkspaceEdits, WorkspaceId};

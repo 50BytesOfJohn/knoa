@@ -1,6 +1,6 @@
 //! Workspaces, the browser profiles each one syncs, and their tag lists.
 
-use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceId};
+use knoa_core::{Ink, Screening, TagList, Workspace, WorkspaceEdits, WorkspaceId};
 use rusqlite::{Connection, Transaction, params};
 
 use crate::{
@@ -98,6 +98,43 @@ impl Store {
         Ok(())
     }
 
+    /// Applies only fields changed by the editor, against the current stored workspace.
+    pub fn edit_workspace(&mut self, id: WorkspaceId, edits: &WorkspaceEdits) -> Result<()> {
+        if edits.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        let recorder = Recorder::user(&tx)?;
+        let before = recorder.workspace_before(id.0)?;
+        tx.execute(
+            "UPDATE workspaces SET name = coalesce(?2, name), color = coalesce(?3, color),
+                instructions = coalesce(?4, instructions), screening = coalesce(?5, screening),
+                guideline = coalesce(?6, guideline),
+                opens_in = CASE WHEN ?7 THEN ?8 ELSE opens_in END,
+                only_listed_tags = coalesce(?9, only_listed_tags) WHERE id = ?1",
+            params![
+                id.0,
+                edits.name,
+                edits.color.map(Ink::index),
+                edits.instructions,
+                edits.screening,
+                edits.guideline,
+                edits.opens_in.is_some(),
+                edits.opens_in.as_ref().and_then(|value| value.as_deref()),
+                edits.only_listed_tags
+            ],
+        )?;
+        if let Some(browsers) = &edits.browsers {
+            set_browsers(&tx, id, browsers)?;
+        }
+        if let Some(tags) = &edits.tags {
+            tag_list::replace(&tx, id, tags)?;
+        }
+        recorder.workspace_changed(id.0, before)?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Deletes a workspace with its bookmarks and folders. The last one can't be deleted.
     pub fn delete_workspace(&mut self, id: WorkspaceId) -> Result<bool> {
         let tx = self.conn.transaction()?;
@@ -135,4 +172,64 @@ fn set_browsers(tx: &Transaction<'_>, id: WorkspaceId, browsers: &[String]) -> R
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use knoa_core::ListedTag;
+    use serde_json::json;
+
+    use super::*;
+    use crate::test_support::{WORKSPACE, WORKSPACE_KEY, change, linked, pushed, workspace_row};
+
+    #[test]
+    fn workspace_edits_preserve_remote_fields_and_untouched_edits_record_nothing() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let baseline = store.workspace(WORKSPACE).unwrap().unwrap();
+        let mut edited = baseline.clone();
+        edited.name = "Local name".into();
+        edited.screening.enabled = true;
+        let edits = WorkspaceEdits::between(&baseline, &edited);
+        let mut remote = workspace_row(WORKSPACE_KEY, "Personal");
+        remote["instructions"] = json!("Remote instructions");
+        remote["guideline"] = json!("Remote guideline");
+        remote["only_listed_tags"] = json!(true);
+        remote["tag_list"] = json!([{ "tag": "remote", "description": "Remote hint" }]);
+        store
+            .apply_remote(
+                &[change(json!({
+                    "entity": "workspace", "key": WORKSPACE_KEY, "version": 2, "deleted": false,
+                    "data": remote,
+                }))],
+                2,
+            )
+            .unwrap();
+
+        let mut rebased = store.workspace(WORKSPACE).unwrap().unwrap();
+        edits.apply_to(&mut rebased);
+        store.edit_workspace(WORKSPACE, &edits).unwrap();
+
+        let saved = store.workspace(WORKSPACE).unwrap().unwrap();
+        assert_eq!(
+            saved, rebased,
+            "refreshing the editor and saving must preserve the same intent"
+        );
+        assert_eq!(saved.name, edited.name);
+        assert!(saved.screening.enabled);
+        assert_eq!(saved.instructions, "Remote instructions");
+        assert_eq!(saved.screening.guideline, "Remote guideline");
+        assert!(saved.tag_list.only_these);
+        assert_eq!(
+            saved.tag_list.tags,
+            [ListedTag {
+                name: "remote".into(),
+                description: "Remote hint".into()
+            }]
+        );
+        assert_eq!(
+            pushed(&store)[0]["data"],
+            json!({"name": "Local name", "screening": true})
+        );
+    }
 }
