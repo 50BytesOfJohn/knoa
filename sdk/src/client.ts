@@ -63,12 +63,18 @@ export class SyncClient {
 	private retry: ReturnType<typeof setTimeout> | null = null;
 	private saving: Promise<void> = Promise.resolve();
 	private unwatch: (() => void) | null = null;
+	private starting: Promise<void> | null = null;
+	/** Terminal: a stopped client never starts again. */
 	private stopped = false;
 
 	constructor(private readonly options: SyncOptions) {
-		// Checked before every request: a stopped client never sends again.
-		const getToken: TokenProvider = async () =>
-			this.stopped ? null : options.getToken();
+		// Checked before every request, and again once the provider answers: a stopped client
+		// never sends again, even with a token it asked for before stopping.
+		const getToken: TokenProvider = async () => {
+			if (this.stopped) return null;
+			const token = await options.getToken();
+			return this.stopped ? null : token;
+		};
 		this.api = new Api(options.apiUrl, getToken, options.fetch);
 		this.storage = options.storage;
 		const factory =
@@ -92,15 +98,10 @@ export class SyncClient {
 		};
 	}
 
-	/** Renders from storage first, then syncs. */
-	async start(): Promise<void> {
-		const stored = await this.storage.load().catch(() => null);
-		if (stored) this.replica.load(stored);
-		this.update({ ready: stored !== null && stored.cursor > 0 });
-		this.sync();
-		void this.refreshAccount();
-		this.socket?.start();
-		if (this.options.watchBrowser !== false) this.unwatch = watchBrowser(this);
+	/** Renders from storage first, then syncs. Calling it again returns the same start. */
+	start(): Promise<void> {
+		this.starting ??= this.begin();
+		return this.starting;
 	}
 
 	/** Stops for good: a round already running ends before its next request. */
@@ -108,6 +109,7 @@ export class SyncClient {
 		this.stopped = true;
 		this.socket?.stop();
 		this.unwatch?.();
+		this.unwatch = null;
 		if (this.retry) clearTimeout(this.retry);
 		this.retry = null;
 	}
@@ -170,6 +172,19 @@ export class SyncClient {
 	cameOnline(): void {
 		this.socket?.reconnectNow();
 		this.sync();
+	}
+
+	private async begin(): Promise<void> {
+		if (this.stopped) return;
+		const stored = await this.storage.load().catch(() => null);
+		// Stopped while loading: starting the socket or listeners now would outlive the client.
+		if (this.stopped) return;
+		if (stored) this.replica.load(stored);
+		this.update({ ready: stored !== null && stored.cursor > 0 });
+		this.sync();
+		void this.refreshAccount();
+		this.socket?.start();
+		if (this.options.watchBrowser !== false) this.unwatch = watchBrowser(this);
 	}
 
 	private async run(): Promise<void> {
