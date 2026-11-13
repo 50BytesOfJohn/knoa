@@ -8,6 +8,7 @@ use super::{Outcome, columns::Columns, rebased, release_orphans};
 use crate::{
     Result, search,
     sync::{
+        delivery::{self, BookmarkDelivery},
         ids::{self, Table},
         outbox, unsent,
     },
@@ -26,6 +27,7 @@ pub(super) fn put(conn: &Connection, key: &str, row: Bookmark) -> Result<Outcome
     if unsent::resume(conn, id)? {
         pending = outbox::pending_for(conn, Entity::Bookmark, key)?;
     }
+    delivery::set(conn, id, BookmarkDelivery::Confirmed)?;
     let patch = rebased(BookmarkPatch::from(row), &pending)?;
     if matches!(patch.deleted_at, Some(Some(_))) {
         leave_queue(conn, id)?;

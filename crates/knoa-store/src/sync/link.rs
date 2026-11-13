@@ -14,6 +14,7 @@ use rusqlite::{Connection, OptionalExtension as _, params};
 
 use super::{
     Recorder,
+    delivery::{self, BookmarkDelivery},
     ids::{self, Table},
     snapshot::{self, Bookmarks},
 };
@@ -101,10 +102,9 @@ impl Store {
             "DELETE FROM sync_state;
              DELETE FROM outbox;
              DELETE FROM sync_inbox;
-             DELETE FROM unsent_bookmarks;
              UPDATE workspaces SET sync_id = NULL;
              UPDATE folders SET sync_id = NULL;
-             UPDATE bookmarks SET sync_id = NULL, image_key = NULL,
+             UPDATE bookmarks SET sync_id = NULL, image_key = NULL, delivery = 'pending_create',
                  pending_image = CASE WHEN image_path IS NOT NULL THEN hex(randomblob(16)) END;
              -- Waiting for the cloud organizer, which no longer runs for this library.
              UPDATE bookmarks SET status = 'new'
@@ -216,9 +216,13 @@ fn assign_bookmarks(conn: &Connection, remote: &RemoteRows) -> Result<Vec<i64>> 
     for (id, workspace, url) in local {
         let key = bookmark_id(&workspace, &url).ok_or(Error::InvalidSyncId(workspace))?;
         ids::set_sync_id(conn, Table::Bookmarks, id, &key)?;
-        if !remote.bookmarks.contains(&key) {
+        let state = if remote.bookmarks.contains(&key) {
+            BookmarkDelivery::Confirmed
+        } else {
             new.push(id);
-        }
+            BookmarkDelivery::PendingCreate
+        };
+        delivery::set(conn, id, state)?;
     }
     Ok(new)
 }

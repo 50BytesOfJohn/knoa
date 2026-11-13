@@ -35,7 +35,7 @@ impl Engine {
                     if answers.is_empty() {
                         return Err(Failure::Unanswered);
                     }
-                    // Every answer is final, whatever it says.
+                    // Rejected creations stay local until their delivery can retry.
                     let settled = self.store(cx, move |store| store.settle(&answers)).await?;
                     refused.quota += settled.parked;
                     refused.invalid |= settled.invalid > 0;
@@ -45,12 +45,18 @@ impl Engine {
                         at_most = smaller;
                         continue;
                     }
-                    // Alone and still too large, the change can never get through.
-                    tracing::warn!(?sent, "dropped a change too large for the server");
+                    // An oversized creation needs a local correction before a full retry.
+                    tracing::warn!(?sent, "rejected a change too large for the server");
                     refused.too_large = true;
-                    let dropped: Vec<String> = sent.into_iter().collect();
-                    self.store(cx, move |store| store.acknowledge(&dropped))
-                        .await?;
+                    let rejected: Vec<_> = sent
+                        .into_iter()
+                        .map(|mid| MutationResult {
+                            mid,
+                            status: MutationStatus::Rejected,
+                            reason: Some(RejectReason::Invalid),
+                        })
+                        .collect();
+                    self.store(cx, move |store| store.settle(&rejected)).await?;
                 }
                 Err(failure) => {
                     // The batches before this one were answered, and what they kept off

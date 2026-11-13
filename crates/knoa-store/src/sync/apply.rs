@@ -155,7 +155,7 @@ mod tests {
     use crate::{
         NewBookmarks,
         test_support::{
-            WORKSPACE, WORKSPACE_KEY, bookmark, bookmark_row, change, link, linked, pushed,
+            WORKSPACE, WORKSPACE_KEY, applied, bookmark, bookmark_row, change, link, linked, pushed,
         },
     };
 
@@ -194,13 +194,7 @@ mod tests {
 
     /// As if the server took everything waiting.
     fn push_all(store: &mut Store) {
-        let mids: Vec<String> = store
-            .next_push()
-            .unwrap()
-            .into_iter()
-            .map(|m| m.mid)
-            .collect();
-        store.acknowledge(&mids).unwrap();
+        store.settle(&applied(store)).unwrap();
     }
 
     fn organized(tags: &[&str]) -> Enrichment {

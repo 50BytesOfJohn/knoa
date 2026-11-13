@@ -2,9 +2,10 @@
 
 use gpui::AsyncApp;
 use knoa_core::protocol::{MAX_PUSH, OrganizeRequest, OrganizeScope};
+use knoa_store::Store;
 
 use super::{Engine, Failure, net};
-use crate::services::cloud::Wake;
+use crate::{services::cloud::Wake, state::library::Library};
 
 impl Engine {
     /// Asks the cloud organizer to take this Mac's queue: new bookmarks, and "Organize
@@ -13,6 +14,8 @@ impl Engine {
         loop {
             let jobs = self.store(cx, |store| store.cloud_jobs(MAX_PUSH)).await?;
             if jobs.is_empty() {
+                self.store(cx, Store::release_blocked_jobs).await?;
+                self.library.update(cx, Library::refresh_soon);
                 return Ok(());
             }
             for folders_only in [false, true] {

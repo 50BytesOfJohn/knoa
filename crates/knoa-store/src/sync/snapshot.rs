@@ -84,7 +84,7 @@ mod tests {
     use super::*;
     use crate::{
         Store,
-        test_support::{WORKSPACE, import_one, linked, mids, pushed},
+        test_support::{WORKSPACE, applied, import_one, linked, pushed},
     };
 
     #[test]
@@ -169,7 +169,7 @@ mod tests {
             }))
             .unwrap()])
             .unwrap();
-        store.acknowledge(&mids(&store)).unwrap();
+        store.settle(&applied(&store)).unwrap();
 
         assert_eq!(store.resend_unsent().unwrap(), 1);
 

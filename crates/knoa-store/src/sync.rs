@@ -5,6 +5,7 @@
 //! change is recorded, so Local mode is the app as it always was.
 
 mod apply;
+mod delivery;
 mod device;
 mod ids;
 mod link;
@@ -57,15 +58,6 @@ impl Store {
     /// [`Store::next_push`], with at most `limit` changes.
     pub fn next_push_at_most(&self, limit: usize) -> Result<Vec<Mutation>> {
         outbox::pending(&self.conn, limit.min(MAX_PUSH), MAX_PUSH_BYTES)
-    }
-
-    /// Drops pushed mutations. The server's answer for each is final, whether it applied,
-    /// ignored or rejected it.
-    pub fn acknowledge(&mut self, mids: &[String]) -> Result<()> {
-        let tx = self.conn.transaction()?;
-        outbox::acknowledge(&tx, mids)?;
-        tx.commit()?;
-        Ok(())
     }
 }
 
