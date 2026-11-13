@@ -39,9 +39,11 @@ One process. The UI thread only renders and handles input:
 | `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
 | `knoa-sync` | Cloud mode's client: Clerk sign-in, the Knoa API and its socket | no |
 
-`sdk/` is the shared `@knoa/sync` TypeScript package for the web app, browser extension,
-phone app and API repository. `sdk/src/protocol.ts` is the wire contract mirrored by
-Rust; `sdk/fixtures/` supplies the shared protocol examples used by the Rust tests.
+`sdk/` is the shared `@knoa/sync` TypeScript package for the web app, browser extension
+and API repository. `sdk/src/protocol.ts` is the wire contract mirrored by Rust;
+`sdk/fixtures/` supplies the shared protocol examples used by the Rust tests. The phone
+apps are native, in their own repositories, with sync clients written against the same
+contract and fixtures ([ADR 0018](adr/0018-native-phone-apps.md)).
 
 ## Data model
 
