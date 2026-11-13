@@ -23,7 +23,10 @@ impl Engine {
         if link::ensure(self, &account, cx).await? == link::Linked::OtherAccount {
             return Ok(Some(account));
         }
-        if has_new_room(self.account.as_ref(), &account) {
+        // Whenever the server's count shows room, not only when it changed: a count
+        // remembered from an earlier ask misses the bookmarks pushed since, so a deletion
+        // could free room without the count ever dropping below it.
+        if account.usage.bookmarks < account.limits.bookmarks {
             let resent = self.store(cx, Store::resend_unsent).await?;
             if resent > 0 {
                 tracing::info!(resent, "sending bookmarks the plan's limit held back");
@@ -31,6 +34,20 @@ impl Engine {
         }
         self.account = Some(account);
         Ok(None)
+    }
+
+    /// Deleting bookmarks here frees room on the account, but only the server's count
+    /// shows it. So while bookmarks wait for room, a push that got through asks for the
+    /// account again, which queues them if they fit now. Returns the account when the
+    /// library is linked to another one.
+    pub(super) async fn recheck_room(
+        &mut self,
+        cx: &mut AsyncApp,
+    ) -> Result<Option<Account>, Failure> {
+        if self.store(cx, |store| store.unsent_bookmarks()).await? == 0 {
+            return Ok(None);
+        }
+        self.refresh_account(cx).await
     }
 
     /// `/v1/me`, with the email from Clerk when the API doesn't know it yet. Asked once
@@ -72,15 +89,4 @@ fn log_account(previous: Option<&Account>, account: &Account) {
         Who::Device => "device",
     };
     tracing::info!(plan, organizer, "cloud account");
-}
-
-/// Whether bookmarks the plan's limit refused may get through now: the account has room
-/// and has just connected, grown its limit or changed plan. Anything narrower would leave
-/// them waiting; anything wider would resend them on every pull while still over.
-fn has_new_room(previous: Option<&Account>, account: &Account) -> bool {
-    let room = account.usage.bookmarks < account.limits.bookmarks;
-    let changed = previous.is_none_or(|previous| {
-        previous.limits.bookmarks < account.limits.bookmarks || previous.plan != account.plan
-    });
-    room && changed
 }
