@@ -115,7 +115,7 @@ pub enum SyncStatus {
     Error(String),
 }
 
-const ALLOWANCE_USED_UP: &str = "This month's organizing allowance is used up, so new bookmarks aren't organized. Once it renews, use Organize again on them.";
+const ALLOWANCE_USED_UP: &str = "This month's organizing allowance is used up. Knoa keeps your organizing requests and resumes them automatically when allowance becomes available.";
 
 struct CloudGlobal(Entity<Cloud>);
 

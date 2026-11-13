@@ -4,6 +4,7 @@ use gpui::AsyncApp;
 use knoa_core::protocol::{MAX_PUSH, OrganizeRequest, OrganizeScope};
 
 use super::{Engine, Failure, net};
+use crate::services::cloud::Wake;
 
 impl Engine {
     /// Asks the cloud organizer to take this Mac's queue: new bookmarks, and "Organize
@@ -43,9 +44,16 @@ impl Engine {
         tracing::info!(
             asked = bookmarks.len(),
             queued = response.queued,
+            pending = response.pending,
             folders_only,
             "organizing in the cloud"
         );
+        if response.pending > 0 {
+            // The response can exhaust allowance before the next account pull shows it.
+            self.this
+                .update(cx, |this, _| this.wake(Wake::Account))
+                .map_err(|_| Failure::Stopped)?;
+        }
         self.store(cx, move |store| store.hand_to_cloud(&bookmarks))
             .await
     }

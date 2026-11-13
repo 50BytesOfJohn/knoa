@@ -57,8 +57,8 @@ impl Store {
     }
 
     /// The cloud organizer took these bookmarks: they leave this Mac's queue. Their status
-    /// goes back to what it was until the server's own `queued` arrives in a pull, so one
-    /// the server didn't take (its monthly allowance ran out) doesn't wait forever.
+    /// goes back to what it was until the server's own `queued` arrives in a pull. The
+    /// server retains deferred requests and queues them as allowance becomes available.
     pub fn hand_to_cloud(&mut self, bookmarks: &[String]) -> Result<()> {
         let tx = self.conn.transaction()?;
         for key in bookmarks {

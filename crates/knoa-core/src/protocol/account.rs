@@ -11,6 +11,9 @@ pub struct Account {
     pub organizer: Organizer,
     pub limits: Limits,
     pub usage: AccountUsage,
+    /// Older cached accounts predate billing details; the API always provides them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing: Option<Billing>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,6 +42,23 @@ pub struct Limits {
 pub struct AccountUsage {
     pub bookmarks: u64,
     pub organized_this_month: u64,
+}
+
+/// Pro subscription details shared with the other clients.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Billing {
+    pub status: BillingStatus,
+    pub period_end: Option<i64>,
+    pub cancel_at_period_end: bool,
+    pub trial_available: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BillingStatus {
+    None,
+    Trialing,
+    Active,
 }
 
 /// Server to client over the socket. `poke`: the library is at `version`, pull if behind.
@@ -70,7 +90,7 @@ pub enum OrganizeScope {
 pub struct OrganizeResponse {
     /// Queued by this call.
     pub queued: u64,
-    /// Still to be queued this month, on the server's own schedule.
+    /// Still to be queued this month, on the server's own schedule; no need to ask again.
     #[serde(default)]
     pub pending: u64,
 }
