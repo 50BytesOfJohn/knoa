@@ -44,8 +44,8 @@ impl MainView {
     }
 
     pub fn refresh_thumbnail(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
-        if let Some(url) = self.url_of(id, cx) {
-            Thumbnails::entity(cx).update(cx, |thumbnails, cx| thumbnails.refresh(id, url, cx));
+        if let Some(bookmark) = self.library.read(cx).bookmark(id).cloned() {
+            Thumbnails::entity(cx).update(cx, |thumbnails, cx| thumbnails.refresh(bookmark, cx));
         }
     }
 }
