@@ -8,7 +8,9 @@ use knoa_core::{
 };
 use rusqlite::{OptionalExtension as _, Row, params_from_iter};
 
-use crate::{Result, Store, search::Filter, search::kind_from_column, sync::Recorder};
+use crate::{
+    BookmarkIdentity, Result, Store, search::Filter, search::kind_from_column, sync::Recorder,
+};
 
 /// Badge numbers for the sidebar's places.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -116,21 +118,20 @@ impl Store {
         )
     }
 
-    /// Points a bookmark at a thumbnail this Mac just fetched. The old file is left to the
-    /// launch sweep, since other bookmarks may share it. The server's image no longer
-    /// matches the cached one, so a linked library uploads the new one.
-    pub fn set_image(&mut self, id: BookmarkId, image: &Image) -> Result<()> {
-        self.conn.execute(
-            "UPDATE bookmarks SET image_path = ?2, image_width = ?3, image_height = ?4,
-                image_key = NULL, pending_image = hex(randomblob(16))
-             WHERE id = ?1",
-            rusqlite::params![
-                id.0,
-                image.path.to_string_lossy(),
-                image.width,
-                image.height
-            ],
-        )?;
+    /// Points a bookmark at a thumbnail this Mac just fetched, but only while the row still
+    /// belongs to its original bookmark. The old file is left to the launch sweep, since
+    /// other bookmarks may share it. The server's image no longer matches the cached one,
+    /// so a linked library uploads the new one.
+    pub fn set_image_if_current(
+        &mut self,
+        identity: &BookmarkIdentity,
+        image: &Image,
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        if identity.is_current(&tx)? {
+            set_image(&tx, identity.id(), image)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -169,6 +170,20 @@ impl Store {
         tx.commit()?;
         Ok(())
     }
+}
+
+fn set_image(conn: &rusqlite::Connection, id: BookmarkId, image: &Image) -> Result<()> {
+    conn.execute(
+        "UPDATE bookmarks SET image_path = ?2, image_width = ?3, image_height = ?4,
+            image_key = NULL, pending_image = hex(randomblob(16)) WHERE id = ?1",
+        rusqlite::params![
+            id.0,
+            image.path.to_string_lossy(),
+            image.width,
+            image.height
+        ],
+    )?;
+    Ok(())
 }
 
 /// A row as stored, before the JSON columns are parsed.

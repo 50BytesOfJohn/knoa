@@ -6,7 +6,7 @@
 use knoa_core::{Bookmark, BookmarkId, Enrichment, FolderId, Page, WorkspaceId};
 use rusqlite::{OptionalExtension as _, params};
 
-use crate::{Result, Store, search, sync::Recorder};
+use crate::{BookmarkIdentity, Result, Store, search, sync::Recorder};
 
 /// A bookmark taken from the queue.
 #[derive(Debug, Clone)]
@@ -15,7 +15,7 @@ pub struct Job {
     pub attempts: u32,
     /// Only file the bookmark into folders again, from what it already has.
     pub folders_only: bool,
-    sync_id: Option<String>,
+    identity: BookmarkIdentity,
 }
 
 impl Store {
@@ -97,15 +97,14 @@ impl Store {
         let mut jobs = Vec::with_capacity(due.len());
         for (id, attempts, folders_only) in due {
             if let Some(bookmark) = self.bookmark(BookmarkId(id))? {
+                let Some(identity) = self.bookmark_identity(&bookmark)? else {
+                    continue;
+                };
                 jobs.push(Job {
                     bookmark,
                     attempts,
                     folders_only,
-                    sync_id: self.conn.query_row(
-                        "SELECT sync_id FROM bookmarks WHERE id = ?1",
-                        [id],
-                        |row| row.get(0),
-                    )?,
+                    identity,
                 });
             }
         }
@@ -119,21 +118,7 @@ impl Store {
         job: &Job,
         save: impl FnOnce(&mut Store) -> Result<T>,
     ) -> Result<Option<T>> {
-        // Sync can delete a row and reuse its integer id while a request is in flight.
-        // Unlinked bookmarks have no sync id, so their workspace and URL identify them.
-        let current: bool = self.conn.query_row(
-            "SELECT EXISTS (SELECT 1 FROM bookmarks
-             WHERE id = ?1 AND workspace_id = ?2 AND url = ?3
-               AND (?4 IS NULL OR sync_id = ?4))",
-            params![
-                job.bookmark.id.0,
-                job.bookmark.workspace.0,
-                job.bookmark.url,
-                job.sync_id,
-            ],
-            |row| row.get(0),
-        )?;
-        if !current {
+        if !job.identity.is_current(&self.conn)? {
             return Ok(None);
         }
         save(self).map(Some)
@@ -379,11 +364,22 @@ mod tests {
     };
 
     #[test]
-    fn stale_job_results_do_not_change_a_pulled_bookmark_reusing_the_rowid() {
+    fn stale_results_do_not_change_a_pulled_bookmark_reusing_the_rowid() {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
         let id = import_one(&mut store);
         let job = store.take_jobs(0, 1).unwrap().remove(0);
+        let identity = store.bookmark_identity(&job.bookmark).unwrap().unwrap();
+        let image = knoa_core::Image {
+            path: "/cache/a.png".into(),
+            width: 100,
+            height: 100,
+        };
+        store.set_image_if_current(&identity, &image).unwrap();
+        assert_eq!(
+            store.bookmark(id).unwrap().unwrap().image,
+            Some(image.clone())
+        );
         assert_eq!(
             store
                 .save_job(&job, |store| store.save_page(id, &Page::default(), 1))
@@ -428,6 +424,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(saved, None);
+        assert_eq!(store.bookmark(id).unwrap().unwrap(), replacement);
+        store.set_image_if_current(&identity, &image).unwrap();
+        assert_eq!(store.thumbnail_uploads(10).unwrap(), []);
         assert_eq!(store.bookmark(id).unwrap().unwrap(), replacement);
         assert_eq!(
             store

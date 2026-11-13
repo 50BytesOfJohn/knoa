@@ -157,9 +157,15 @@ impl Store {
 mod tests {
     use std::path::PathBuf;
 
-    use knoa_core::Image;
+    use knoa_core::{BookmarkId, Image};
 
     use crate::{Store, test_support::*};
+
+    fn set_image(store: &mut Store, id: BookmarkId, image: &Image) {
+        let bookmark = store.bookmark(id).unwrap().unwrap();
+        let identity = store.bookmark_identity(&bookmark).unwrap().unwrap();
+        store.set_image_if_current(&identity, image).unwrap();
+    }
 
     #[test]
     fn queued_bookmarks_go_to_the_cloud_only_once_the_server_has_them() {
@@ -205,10 +211,10 @@ mod tests {
             width: 10,
             height: 10,
         };
-        store.set_image(added.id, &image("/cache/old.png")).unwrap();
+        set_image(&mut store, added.id, &image("/cache/old.png"));
         let uploading = store.thumbnail_uploads(10).unwrap().remove(0);
 
-        store.set_image(added.id, &image("/cache/old.png")).unwrap();
+        set_image(&mut store, added.id, &image("/cache/old.png"));
         store
             .set_image_key(added.id, &uploading.pending_image, "key-of-old")
             .unwrap();
@@ -239,7 +245,7 @@ mod tests {
             width: 10,
             height: 10,
         };
-        store.set_image(added.id, &image).unwrap();
+        set_image(&mut store, added.id, &image);
         let uploading = store.thumbnail_uploads(10).unwrap().remove(0);
         let mut row = bookmark_row(&uploading.bookmark, WORKSPACE_KEY, url, "A");
         for version in 2..=3 {

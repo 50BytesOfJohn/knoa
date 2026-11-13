@@ -4,8 +4,9 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use gpui::{App, AppContext as _, Context, Entity, Global, ImageSource, Task};
-use knoa_core::{BookmarkId, Image};
+use knoa_core::{Bookmark, BookmarkId, Image};
 use knoa_fetch::Fetcher;
+use knoa_store::BookmarkIdentity;
 
 use crate::{services::network::Network, state::library::Library};
 
@@ -53,15 +54,36 @@ impl Thumbnails {
 
     /// Fetches the bookmark's page again and keeps its image if it has one. A page without
     /// one leaves the old thumbnail in place.
-    pub fn refresh(&mut self, id: BookmarkId, url: String, cx: &mut Context<'_, Thumbnails>) {
+    pub fn refresh(&mut self, bookmark: Bookmark, cx: &mut Context<'_, Thumbnails>) {
+        let id = bookmark.id;
         if self.refresh_of(id) == Some(Refresh::Running) {
             return;
         }
         let fetcher = self.fetcher.clone();
-        let fetch = Network::spawn(cx, async move { fetcher.fetch(&url).await });
+        let database = self.library.read(cx).database();
+        let url = bookmark.url.clone();
+        let identity =
+            cx.background_spawn(async move { database.read().bookmark_identity(&bookmark) });
+        let network = Network::handle(cx);
         let task = cx.spawn(async move |this, cx| {
-            let outcome = match fetch.await {
-                Ok(Ok(page)) => page.image.ok_or(Refresh::NoImage),
+            let identity = match identity.await {
+                Ok(Some(identity)) => identity,
+                result => {
+                    if let Err(err) = result {
+                        tracing::error!(?id, "can't read thumbnail identity: {err}");
+                    }
+                    let _ = this.update(cx, |this, cx| this.finish(id, Err(Refresh::Failed), cx));
+                    return;
+                }
+            };
+            let outcome = match network
+                .spawn(async move { fetcher.fetch(&url).await })
+                .await
+            {
+                Ok(Ok(page)) => page
+                    .image
+                    .map(|image| (identity, image))
+                    .ok_or(Refresh::NoImage),
                 Ok(Err(err)) => {
                     tracing::info!(?id, "can't refresh the thumbnail: {err}");
                     Err(Refresh::Failed)
@@ -80,17 +102,19 @@ impl Thumbnails {
     fn finish(
         &mut self,
         id: BookmarkId,
-        outcome: Result<Image, Refresh>,
+        outcome: Result<(BookmarkIdentity, Image), Refresh>,
         cx: &mut Context<'_, Thumbnails>,
     ) {
         match outcome {
-            Ok(image) => {
+            Ok((identity, image)) => {
                 self.refreshes.remove(&id);
                 // The cache is keyed by image URL, so a new picture can land in the same
                 // file; GPUI would keep drawing the one it decoded before.
                 ImageSource::from(image.path.clone()).remove_asset(cx);
                 self.library.update(cx, |library, cx| {
-                    library.change(cx, move |store| store.set_image(id, &image));
+                    library.change(cx, move |store| {
+                        store.set_image_if_current(&identity, &image)
+                    });
                 });
             }
             Err(refresh) => {
