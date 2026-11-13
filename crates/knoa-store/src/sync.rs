@@ -11,6 +11,7 @@ mod link;
 mod outbox;
 mod recorder;
 mod rows;
+mod snapshot;
 mod unsent;
 
 use knoa_core::protocol::{MAX_PUSH, MAX_PUSH_BYTES, Mutation};

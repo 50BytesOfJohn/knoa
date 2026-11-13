@@ -9,15 +9,13 @@
 
 use std::collections::{HashMap, HashSet};
 
-use knoa_core::{
-    Origin,
-    protocol::{Change, Changed, RowState, bookmark_id, new_id},
-};
+use knoa_core::protocol::{Change, Changed, RowState, bookmark_id, new_id};
 use rusqlite::{Connection, OptionalExtension as _, params};
 
 use super::{
     Recorder,
     ids::{self, Table},
+    snapshot::{self, Bookmarks},
 };
 use crate::{Error, Result, Store};
 
@@ -229,7 +227,6 @@ fn assign_bookmarks(conn: &Connection, remote: &RemoteRows) -> Result<Vec<i64>> 
 /// merges with its own: an AI link never replaces a user's.
 fn enqueue(conn: &Connection, new: &New) -> Result<()> {
     let user = Recorder::user(conn)?;
-    let ai = Recorder::ai(conn)?;
     for id in &new.workspaces {
         user.put_whole_workspace(*id)?;
     }
@@ -237,33 +234,9 @@ fn enqueue(conn: &Connection, new: &New) -> Result<()> {
         user.put_whole_folder(*id)?;
     }
     for id in &new.bookmarks {
-        user.put_whole_bookmark(*id)?;
-        ai.text(*id)?;
+        snapshot::record_bookmark_content(conn, *id)?;
     }
-    let by = |origin: &str| {
-        if origin == Origin::Ai.slug() {
-            &ai
-        } else {
-            &user
-        }
-    };
-    let tags = rows::<(i64, String, String)>(
-        conn,
-        "SELECT bookmark_id, tag, origin FROM bookmark_tags
-         UNION ALL SELECT bookmark_id, tag, 'user' FROM tag_exclusions",
-    )?;
-    for (bookmark, tag, origin) in tags {
-        by(&origin).tag(bookmark, &tag)?;
-    }
-    let links = rows::<(i64, i64, String)>(
-        conn,
-        "SELECT bookmark_id, folder_id, origin FROM bookmark_folders
-         UNION ALL SELECT bookmark_id, folder_id, 'user' FROM folder_exclusions",
-    )?;
-    for (bookmark, folder, origin) in links {
-        by(&origin).folder_link(bookmark, folder)?;
-    }
-    Ok(())
+    snapshot::record_bookmark_links(conn, Bookmarks::All)
 }
 
 fn rows<T>(conn: &Connection, sql: &str) -> Result<Vec<T>>
@@ -277,7 +250,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{FolderColor, Ink, Query};
+    use knoa_core::{FolderColor, Ink, Origin, Query};
     use serde_json::{Value, json};
 
     use super::*;
