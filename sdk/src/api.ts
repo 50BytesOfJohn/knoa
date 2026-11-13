@@ -35,7 +35,9 @@ export class SignedOutError extends Error {
 
 /**
  * Worth trying again later: the network, the server having a bad moment, an expired token
- * or a rate limit. Anything else the server said is its final answer.
+ * or a rate limit. A 404 counts too: a wrong API URL or a routing hiccup says nothing about
+ * the changes, and dropping them would lose the user's edits. Anything else the server said
+ * is its final answer.
  */
 export function isRetryable(error: unknown): boolean {
 	if (error instanceof SignedOutError) return true;
@@ -43,6 +45,7 @@ export function isRetryable(error: unknown): boolean {
 	return (
 		error.status >= 500 ||
 		error.status === 401 ||
+		error.status === 404 ||
 		error.status === 408 ||
 		error.status === 429
 	);
