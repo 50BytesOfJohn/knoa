@@ -2,16 +2,12 @@
 //! while they wait, and once the account has room they are sent again whole, with their
 //! text, tags and folder links.
 
-use knoa_core::{
-    Origin,
-    protocol::{Entity, MutationResult, MutationStatus, RejectReason},
-};
+use knoa_core::protocol::{Entity, MutationResult, MutationStatus, RejectReason};
 use rusqlite::{Connection, OptionalExtension as _, params};
 
 use super::{
-    Recorder,
     ids::{self, Table},
-    outbox,
+    outbox, snapshot,
 };
 use crate::{Result, Store};
 
@@ -74,7 +70,7 @@ impl Store {
         };
         tx.execute("DELETE FROM unsent_bookmarks", [])?;
         for id in &ids {
-            resend(&tx, *id)?;
+            snapshot::record_bookmark_snapshot(&tx, *id)?;
         }
         tx.commit()?;
         Ok(ids.len())
@@ -102,7 +98,7 @@ pub(super) fn resume(conn: &Connection, bookmark: i64) -> Result<bool> {
     if removed == 0 {
         return Ok(false);
     }
-    resend(conn, bookmark)?;
+    snapshot::record_bookmark_snapshot(conn, bookmark)?;
     Ok(true)
 }
 
@@ -147,53 +143,9 @@ fn about_parked(conn: &Connection, row: Option<&(Entity, String)>) -> Result<boo
     }
 }
 
-/// Queues the bookmark as linking does a new one: whole, then its text, tags and folder
-/// links, each by whoever made it.
-fn resend(conn: &Connection, bookmark: i64) -> Result<()> {
-    let user = Recorder::user(conn)?;
-    let ai = Recorder::ai(conn)?;
-    let by = |origin: &str| {
-        if origin == Origin::Ai.slug() {
-            &ai
-        } else {
-            &user
-        }
-    };
-    user.put_whole_bookmark(bookmark)?;
-    ai.text(bookmark)?;
-    let tags: Vec<(String, String)> = rows(
-        conn,
-        "SELECT tag, origin FROM bookmark_tags WHERE bookmark_id = ?1
-         UNION ALL SELECT tag, 'user' FROM tag_exclusions WHERE bookmark_id = ?1",
-        bookmark,
-    )?;
-    for (tag, origin) in tags {
-        by(&origin).tag(bookmark, &tag)?;
-    }
-    let links: Vec<(i64, String)> = rows(
-        conn,
-        "SELECT folder_id, origin FROM bookmark_folders WHERE bookmark_id = ?1
-         UNION ALL SELECT folder_id, 'user' FROM folder_exclusions WHERE bookmark_id = ?1",
-        bookmark,
-    )?;
-    for (folder, origin) in links {
-        by(&origin).folder_link(bookmark, folder)?;
-    }
-    Ok(())
-}
-
-fn rows<T>(conn: &Connection, sql: &str, bookmark: i64) -> Result<Vec<T>>
-where
-    T: for<'r> TryFrom<&'r rusqlite::Row<'r>, Error = rusqlite::Error>,
-{
-    let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map([bookmark], |row| T::try_from(row))?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
-}
-
 #[cfg(test)]
 mod tests {
-    use knoa_core::{Page, Place, Query, protocol::bookmark_id};
+    use knoa_core::{Origin, Page, Place, Query, protocol::bookmark_id};
     use serde_json::{Value, json};
 
     use super::*;
