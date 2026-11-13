@@ -4,8 +4,10 @@ import type { Mutation } from "./protocol";
 import {
 	outboxSequence,
 	rowId,
+	StorageConflictError,
 	type Storage,
 	type StorageChange,
+	type StorageRevision,
 	type StoredRow,
 	type StoredState,
 } from "./storage";
@@ -17,6 +19,7 @@ const STORES = [ROWS, META, OUTBOX];
 
 interface Meta {
 	cursor: number;
+	revision?: StorageRevision;
 	/** Version 1 kept the whole outbox here; version 2 moves it to `outbox`. */
 	outbox?: Mutation[];
 }
@@ -49,29 +52,43 @@ export class IndexedDbStorage implements Storage {
 			request<StoredRow[]>(tx.objectStore(ROWS).getAll()),
 			request<Meta | undefined>(tx.objectStore(META).get("state")),
 			request<OutboxEntry[]>(tx.objectStore(OUTBOX).getAll()),
+			done(tx),
 		]);
 		if (!meta) return null;
 		const ordered = outbox
 			.sort((a, b) => a.seq - b.seq)
 			.map((entry) => entry.mutation);
-		return { cursor: meta.cursor, outbox: ordered, rows };
+		return {
+			revision: meta.revision ?? 0,
+			cursor: meta.cursor,
+			outbox: ordered,
+			rows,
+		};
 	}
 
 	async save(change: StorageChange): Promise<void> {
 		const db = await this.open();
 		const tx = db.transaction(STORES, "readwrite");
-		const rows = tx.objectStore(ROWS);
-		for (const row of change.put) rows.put(row, rowId(row));
-		for (const row of change.remove) rows.delete(rowId(row));
-		const outbox = tx.objectStore(OUTBOX);
-		for (const mutation of change.enqueue) {
-			const entry: OutboxEntry = { seq: this.next(), mutation };
-			outbox.put(entry, mutation.mid);
-		}
-		for (const mid of change.dequeue) outbox.delete(mid);
-		const meta: Meta = { cursor: change.cursor };
-		tx.objectStore(META).put(meta, "state");
-		await done(tx);
+		const completed = done(tx);
+		let failure: unknown;
+		const read = tx.objectStore(META).get("state");
+		// The comparison and every write share a transaction, including across connections.
+		read.onsuccess = () => {
+			try {
+				const meta = read.result as Meta | undefined;
+				const revision = meta?.revision ?? 0;
+				if (change.revision !== undefined && change.revision !== revision) {
+					throw new StorageConflictError();
+				}
+				writeChange(tx, change, revision + 1, this.next);
+			} catch (error) {
+				failure = error;
+				tx.abort();
+			}
+		};
+		await completed.catch((error: unknown) => {
+			throw failure ?? error;
+		});
 	}
 
 	async clear(): Promise<void> {
@@ -83,15 +100,15 @@ export class IndexedDbStorage implements Storage {
 
 	private open(): Promise<IDBDatabase> {
 		this.db ??= new Promise((resolve, reject) => {
-			const open = indexedDB.open(this.name, 2);
+			const open = indexedDB.open(this.name, 3);
 			open.onupgradeneeded = (event) => {
 				const db = open.result;
 				if (event.oldVersion < 1) {
 					db.createObjectStore(ROWS);
 					db.createObjectStore(META);
 				}
-				db.createObjectStore(OUTBOX);
-				if (event.oldVersion === 1) moveOutbox(open.transaction);
+				if (event.oldVersion < 2) db.createObjectStore(OUTBOX);
+				upgradeMeta(open.transaction, event.oldVersion);
 			};
 			open.onsuccess = () => {
 				// Another tab deleting the replica on sign-out waits for this to let go.
@@ -104,19 +121,40 @@ export class IndexedDbStorage implements Storage {
 	}
 }
 
-/** Version 1's outbox array becomes one entry per mutation, in the same order. */
-function moveOutbox(tx: IDBTransaction | null): void {
+function writeChange(
+	tx: IDBTransaction,
+	change: StorageChange,
+	revision: StorageRevision,
+	next: () => number,
+): void {
+	const rows = tx.objectStore(ROWS);
+	for (const row of change.put) rows.put(row, rowId(row));
+	for (const row of change.remove) rows.delete(rowId(row));
+	const outbox = tx.objectStore(OUTBOX);
+	for (const mutation of change.enqueue) {
+		outbox.put({ seq: next(), mutation } satisfies OutboxEntry, mutation.mid);
+	}
+	for (const mid of change.dequeue) outbox.delete(mid);
+	tx.objectStore(META).put(
+		{ cursor: change.cursor, revision } satisfies Meta,
+		"state",
+	);
+}
+
+function upgradeMeta(tx: IDBTransaction | null, oldVersion: number): void {
 	if (!tx) return;
 	const metas = tx.objectStore(META);
 	const read = metas.get("state");
 	read.onsuccess = () => {
 		const meta = read.result as Meta | undefined;
-		if (!meta?.outbox) return;
-		const outbox = tx.objectStore(OUTBOX);
-		meta.outbox.forEach((mutation, seq) => {
-			outbox.put({ seq, mutation } satisfies OutboxEntry, mutation.mid);
-		});
-		metas.put({ cursor: meta.cursor } satisfies Meta, "state");
+		if (!meta) return;
+		if (oldVersion === 1) {
+			const outbox = tx.objectStore(OUTBOX);
+			meta.outbox?.forEach((mutation, seq) => {
+				outbox.put({ seq, mutation } satisfies OutboxEntry, mutation.mid);
+			});
+		}
+		metas.put({ cursor: meta.cursor, revision: 0 } satisfies Meta, "state");
 	};
 }
 
@@ -130,7 +168,6 @@ function request<T>(req: IDBRequest): Promise<T> {
 function done(tx: IDBTransaction): Promise<void> {
 	return new Promise((resolve, reject) => {
 		tx.oncomplete = () => resolve();
-		tx.onerror = () => reject(tx.error);
 		tx.onabort = () => reject(tx.error);
 	});
 }

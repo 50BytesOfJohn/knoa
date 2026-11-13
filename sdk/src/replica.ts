@@ -56,7 +56,23 @@ export class Replica {
 		}
 		this.outbox = [...state.outbox];
 		this.cursorValue = state.cursor;
+		this.dirtyRows.clear();
+		this.dirtyMeta = false;
+		this.enqueued = [];
+		this.dequeued.clear();
 		this.cached = null;
+	}
+
+	/** Replaces stale confirmed rows while retaining edits this client has yet to save. */
+	rebase(state: StoredState): void {
+		const pending = new Set(this.outbox.map((mutation) => mutation.mid));
+		const enqueued = this.enqueued.filter((mutation) => pending.has(mutation.mid));
+		const dequeued = new Set(this.dequeued);
+		this.load(state);
+		if (dequeued.size > 0) this.discard(dequeued);
+		const stored = new Set(this.outbox.map((mutation) => mutation.mid));
+		// A saved entry missing from the new snapshot was answered by another tab.
+		this.enqueue(enqueued.filter((mutation) => !stored.has(mutation.mid)));
 	}
 
 	/** The library as the user sees it: confirmed rows with pending edits applied. */
