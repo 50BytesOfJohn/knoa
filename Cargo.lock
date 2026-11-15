@@ -3456,7 +3456,6 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
- "percent-encoding",
  "reqwest",
  "serde",
  "serde_json",
@@ -3500,6 +3499,7 @@ dependencies = [
 name = "knoa-core"
 version = "0.2.2"
 dependencies = [
+ "percent-encoding",
  "serde",
  "serde_json",
  "url",

@@ -15,7 +15,8 @@ mod usage;
 mod workspace;
 
 pub use bookmark::{
-    Bookmark, BookmarkId, Image, NewBookmark, Origin, Status, TRASH_SECONDS, parse_link, site_of,
+    Bookmark, BookmarkId, Image, NewBookmark, Origin, Status, TRASH_SECONDS, link_file_name,
+    parse_link, site_of,
 };
 pub use enrichment::{AnalysisImage, Enrichment, Page};
 pub use field::{FieldDef, FieldType, Fields, format_duration};

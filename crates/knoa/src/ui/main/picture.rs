@@ -5,8 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use gpui::{AppContext as _, ClipboardItem, Context, Image, ImageFormat};
-use knoa_core::{Bookmark, BookmarkId, Kind};
-use percent_encoding::percent_decode_str;
+use knoa_core::{Bookmark, BookmarkId, Kind, link_file_name};
 
 use super::MainView;
 
@@ -113,13 +112,6 @@ pub(super) fn name_of(bookmark: &Bookmark) -> String {
         return bookmark.title.clone();
     }
     link_file_name(&bookmark.url).unwrap_or_else(|| bookmark.title.clone())
-}
-
-fn link_file_name(link: &str) -> Option<String> {
-    let url = url::Url::parse(link).ok()?;
-    let segment = url.path_segments()?.next_back()?;
-    let name = percent_decode_str(segment).decode_utf8_lossy();
-    (!name.trim().is_empty()).then(|| name.into_owned())
 }
 
 /// The title as a file name, with the stored copy's extension. A title that is itself a
