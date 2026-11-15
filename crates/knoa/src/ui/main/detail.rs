@@ -183,6 +183,8 @@ impl MainView {
             .cursor_pointer()
             .child(icon("x", px(15.), fg))
             .on_click(cx.listener(|this, _, _, cx| {
+                // It sits on a picture's cover, which would open the viewer too.
+                cx.stop_propagation();
                 this.detail_open = false;
                 cx.notify();
             }))
