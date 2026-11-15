@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::Value;
 use url::Url;
 
-use crate::html;
+use crate::{html, image};
 
 /// How much the fetch could read. Decided here, not by the model: models claim "good"
 /// for pages they couldn't read.
@@ -39,6 +39,9 @@ pub struct Evidence<'a> {
     pub structured_data: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub media: Option<&'a html::Media>,
+    /// For a link straight to an image file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<&'a image::Facts>,
     #[serde(skip_serializing_if = "Fields::is_empty")]
     pub known_fields: &'a Fields,
     #[serde(skip_serializing_if = "str::is_empty")]
@@ -58,6 +61,7 @@ pub fn bare<'a>(url: &'a Url, quality: Quality, fields: &'a Fields) -> Evidence<
         language: None,
         structured_data: Vec::new(),
         media: None,
+        image: None,
         known_fields: fields,
         text: "",
     }

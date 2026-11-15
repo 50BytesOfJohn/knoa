@@ -19,7 +19,9 @@ impl Fetcher {
 
     /// [`Fetcher::fetch_with_preview`], with the preview stored in the thumbnail cache.
     pub async fn fetch(&self, url: &str) -> Result<Page, Error> {
-        let Fetched { mut page, preview } = self.fetch_with_preview(url).await?;
+        let Fetched {
+            mut page, preview, ..
+        } = self.fetch_with_preview(url).await?;
         if let Some(preview) = preview {
             page.image = store(&preview, &self.image_cache).await;
         }

@@ -21,6 +21,17 @@ pub struct Page {
     pub evidence: String,
 }
 
+/// A small copy of a bookmarked image for the AI to look at. Made fresh for each request,
+/// never stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnalysisImage {
+    /// Its MIME type, like `image/jpeg`.
+    pub media_type: &'static str,
+    pub bytes: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
 /// The AI's answer for one bookmark, already validated against the kind's fields.
 #[derive(Debug, Clone)]
 pub struct Enrichment {

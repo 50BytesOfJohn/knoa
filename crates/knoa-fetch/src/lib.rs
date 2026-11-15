@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 use evidence::{Evidence, Quality, bare, evidence_json};
 pub use image::Preview;
-use knoa_core::{Fields, Kind, Page};
+use knoa_core::{AnalysisImage, Fields, Kind, Page};
 use serde_json::Value;
 use url::Url;
 
@@ -54,7 +54,11 @@ pub struct Fetcher {
 pub struct Fetched {
     /// Its `image` is unset: that is where the stored preview goes.
     pub page: Page,
+    /// The bookmark's image. For a link straight to an image file it is a display copy,
+    /// at most 1600 pixels on its longest side, not the original.
     pub preview: Option<Preview>,
+    /// For a link straight to an image file: a smaller copy for the AI to look at.
+    pub analysis: Option<AnalysisImage>,
 }
 
 impl From<Page> for Fetched {
@@ -62,6 +66,7 @@ impl From<Page> for Fetched {
         Fetched {
             page,
             preview: None,
+            analysis: None,
         }
     }
 }
@@ -97,18 +102,21 @@ impl Fetcher {
             return Ok(fetched);
         }
         if response.content_type.starts_with("image/") {
-            let preview = image::download(&self.http, &url).await;
-            let fields = Fields::new();
-            let evidence = evidence_json(&Evidence {
-                note: Some("the link is an image file"),
-                ..bare(&url, Quality::Partial, &fields)
+            let image_url = url.clone();
+            let image = off_thread(move || {
+                let http::Response {
+                    body,
+                    content_type,
+                    truncated,
+                    ..
+                } = response;
+                image::read_raw(&image_url, body, &content_type, truncated)
+            })
+            .await;
+            return Ok(match image {
+                Some(image) => image_page(&url, image),
+                None => title_only(&url, "the image file couldn't be read").into(),
             });
-            let page = Page {
-                kind: Some(Kind::Image),
-                evidence,
-                ..Page::default()
-            };
-            return Ok(Fetched { page, preview });
         }
         if !response.content_type.contains("html") {
             let note = format!("a {} file, no text extracted", response.content_type);
@@ -124,7 +132,9 @@ impl Fetcher {
         }
 
         let body = String::from_utf8_lossy(&response.body).into_owned();
-        let meta = parse_html(body).await;
+        let meta = off_thread(move || html::parse(&body))
+            .await
+            .unwrap_or_default();
         Ok(self.page_from_html(&url, &response.url, meta, site).await)
     }
 
@@ -202,7 +212,11 @@ impl Fetcher {
             fields,
             evidence,
         };
-        Fetched { page, preview }
+        Fetched {
+            page,
+            preview,
+            analysis: None,
+        }
     }
 
     /// The page itself was refused, but a site API may still know the bookmark.
@@ -218,23 +232,65 @@ impl Fetcher {
             fields: site.fields,
             ..Page::default()
         };
-        Fetched { page, preview }
+        Fetched {
+            page,
+            preview,
+            analysis: None,
+        }
     }
 }
 
-/// Parsing a big page takes a while, so the desktop keeps it off the network threads.
+/// Parsing a big page or decoding an image takes a while, so the desktop keeps it off the
+/// network threads. `None` when the work panicked.
 #[cfg(not(target_arch = "wasm32"))]
-async fn parse_html(body: String) -> html::HtmlMeta {
-    tokio::task::spawn_blocking(move || html::parse(&body))
-        .await
-        .unwrap_or_default()
+async fn off_thread<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    tokio::task::spawn_blocking(work).await.ok()
 }
 
 /// A Worker has only the one thread.
 #[cfg(target_arch = "wasm32")]
 #[expect(clippy::unused_async, reason = "awaited like the desktop's version")]
-async fn parse_html(body: String) -> html::HtmlMeta {
-    html::parse(&body)
+async fn off_thread<T>(work: impl FnOnce() -> T) -> Option<T> {
+    Some(work())
+}
+
+/// The bookmark is the image: its pixels go to the AI, its details to the evidence and the
+/// image kind's fields.
+fn image_page(url: &Url, image: image::RawImage) -> Fetched {
+    let mut fields = Fields::new();
+    if let Some(resolution) = image.facts.resolution() {
+        fields.insert("resolution".into(), resolution.into());
+    }
+    if !image.facts.format.is_empty() {
+        fields.insert("format".into(), image.facts.format.clone().into());
+    }
+    let note = match &image.problem {
+        None => "the link is an image file".to_owned(),
+        Some(problem) => {
+            format!("the link is an image file, but {problem}: only its details are known")
+        }
+    };
+    let quality = if image.analysis.is_some() {
+        Quality::Good
+    } else {
+        Quality::Partial
+    };
+    let evidence = evidence_json(&Evidence {
+        note: Some(&note),
+        image: Some(&image.facts),
+        ..bare(url, quality, &fields)
+    });
+    let page = Page {
+        kind: Some(Kind::Image),
+        fields,
+        evidence,
+        ..Page::default()
+    };
+    Fetched {
+        page,
+        preview: image.preview,
+        analysis: image.analysis,
+    }
 }
 
 fn title_only(url: &Url, note: &str) -> Page {

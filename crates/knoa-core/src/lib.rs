@@ -17,7 +17,7 @@ mod workspace;
 pub use bookmark::{
     Bookmark, BookmarkId, Image, NewBookmark, Origin, Status, TRASH_SECONDS, parse_link, site_of,
 };
-pub use enrichment::{Enrichment, Page};
+pub use enrichment::{AnalysisImage, Enrichment, Page};
 pub use field::{FieldDef, FieldType, Fields, format_duration};
 pub use folder::{Folder, FolderColor, FolderEdits, FolderIcon, FolderId, FolderLink, Hue, Ink};
 pub use kind::{Kind, KindDef};

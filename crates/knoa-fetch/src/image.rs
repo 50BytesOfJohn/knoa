@@ -1,5 +1,14 @@
-//! Downloading preview images and checking they are shaped like previews.
+//! Images: downloading a page's preview image, and reading a link straight to an image
+//! file into a display copy and a copy for the AI.
 
+mod decode;
+mod encode;
+mod facts;
+mod raw;
+mod scale;
+
+pub use facts::Facts;
+pub use raw::{RawImage, read as read_raw};
 use url::Url;
 
 use crate::http::Http;
@@ -14,9 +23,10 @@ const MIN_HEIGHT: usize = 90;
 /// preview. Cards crop to about 16:9, so these would be unrecognizable slivers anyway.
 const MAX_ASPECT: usize = 4;
 
-/// A downloaded preview image, not yet stored.
+/// An image for the bookmark's card and detail, not yet stored.
+#[derive(Debug, Clone)]
 pub struct Preview {
-    /// Where it was downloaded from.
+    /// Where it was downloaded from. Copies of the same image share it.
     pub url: Url,
     pub width: u32,
     pub height: u32,
