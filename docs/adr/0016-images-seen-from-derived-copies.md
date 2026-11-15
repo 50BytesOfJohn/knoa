@@ -16,11 +16,11 @@ page with the default models; the original URL cost up to ten times the prompt t
 
 ## Decision
 
-- `knoa-fetch` downloads a linked image once and decodes it once, within a pixel budget
-  checked from the header first, with JPEGs scaled down in the DCT. From that decode come
-  a display copy (at most 1600 pixels) and an AI copy (1024 pixel JPEG). The display copy
-  is what is cached, shown and uploaded. Files that can't be decoded are described from
-  their header only.
+- `knoa-fetch` downloads a linked image once and decodes it once, within a pixel and
+  memory budget checked from its headers first, with JPEGs scaled down in the DCT. From
+  that decode come a display copy (at most 1600 pixels, always a still) and an AI copy
+  (1024 pixel JPEG). The display copy is what is cached, shown and uploaded. Files that
+  can't be decoded are described from their header only.
 - `knoa-ai` messages hold text or parts (text and images), in a form no provider owns.
   OpenRouter gets images inline as data URLs at "high" detail. The classifier stays text
   only; the summary and tags are enough for folders.

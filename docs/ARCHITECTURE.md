@@ -164,13 +164,18 @@ resumes on its own once that one gets through, or when the user sets a new key.
    - LLM extraction from the page text when the above is not enough.
 
    A link straight to an image file is the bookmark itself. It is downloaded once and
-   decoded within a pixel budget checked from its header: 100 MP in every format on the
-   Mac, and in the cloud organizer's 128 MB Worker 64 MP for baseline JPEGs (scaled down
-   while decoding) and 16 MP for the rest. Larger files are refused. One decode gives the
-   display copy (JPEG, or PNG while it has transparency; a small file is kept as it is)
-   and a 1024 pixel JPEG for the AI. Its format, resolution, size and animation go into
-   the evidence, and resolution and format into the image kind's fields. An image that
-   can't be decoded (AVIF, HEIC, SVG, over budget) keeps those details and a note why.
+   decoded within a budget checked from its headers before any pixels are allocated: a
+   pixel count (100 MP on the Mac, 64 MP in the cloud organizer's 128 MB Worker) and the
+   decoder's estimated peak memory for that format, sampling and bit depth (1 GiB on the
+   Mac, 64 MiB in the Worker, which keeps the whole pipeline under about 100 MB next to a
+   24 MiB body; the arithmetic is in `knoa-fetch`'s `decode/budget.rs`). JPEGs are scaled
+   down while decoding, large images are box-reduced before the final filter, and an
+   animation decodes to its first frame. Larger files are refused. One decode gives the
+   display copy (JPEG, or PNG while it has transparency; a small, still, upright file
+   within the display size is kept as it is) and a 1024 pixel JPEG for the AI. Its
+   format, resolution, size and animation go into the evidence, and resolution and format
+   into the image kind's fields. An image that can't be decoded (AVIF, HEIC, SVG, lossless
+   JPEG, over budget) keeps those details and a note why.
 3. **Kind**: the page's own kind when it declared one, else one choice question to the
    classifier (OpenRouter Decisions), else a small chat call
    ([ADR 0013](adr/0013-kind-before-fields.md)).
@@ -184,8 +189,10 @@ resumes on its own once that one gets through, or when the user sets a new key.
    still its URL also gets a short title, which replaces the URL under the same rule as
    the page's own title. For a linked image the model sees the AI copy, inline at high
    detail in the bookmark's message, after a short system message on describing images;
-   when none of the configured models takes images, the bookmark is organized again from
-   the image's details alone.
+   when every configured model refuses the request with the image (unbilled), the
+   bookmark is organized again from the image's details alone. Image bookmarks organized
+   before the AI saw pixels are queued once more by a migration, as a backfill each Mac
+   drops for a bookmark whose answer from another Mac has arrived.
 5. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
    bookmark's workspace
    (OpenRouter Decisions, with a sentinel question). A provider without a classifier
@@ -238,14 +245,18 @@ Keychain in release-channel builds and in a plain file in dev builds
   one. It is a device-side `Place`, not part of the sync protocol. Its results are laid
   out as pictures only: each tile at the stored image's shape, cropped to a range, in one
   continuous grid with the title and site over the picture on hover or selection.
-- Image viewer: a full-window overlay with its own key context, opened with Space on a
-  picture, a double-click on a Gallery tile or the detail panel's cover. It shows the
+- Image viewer: a full-window overlay with its own key context that occludes the screen
+  beneath, opened with Space on a picture, a double-click on a Gallery tile or the detail
+  panel's cover. In the Gallery a click only selects; Show details (Cmd-I), in the
+  bookmark menu and the viewer's bar, opens the detail panel. App-wide shortcuts close the
+  viewer before they act. It shows the
   stored display copy no larger than its own size and moves through the pictures among
   the current results. It can copy the picture to the clipboard as an image and save it
   through the save panel.
 - GPUI keeps every image it decodes, in memory and in the GPU atlas, until told to drop
   it. The card grid records the pictures it built and releases those more than a screen
-  beyond the viewport, except the selected bookmark's.
+  beyond the viewport, except the selected bookmark's. A picture whose cached file a fetch
+  wrote again is released too, the selected one included, so it is decoded anew.
 - Settings: a sheet over the main screen with its own sidebar of app pages (General,
   Appearance, AI) and one page per workspace.
 - Masonry, glass panels over a wallpaper and the date rail are Knoa's own elements
