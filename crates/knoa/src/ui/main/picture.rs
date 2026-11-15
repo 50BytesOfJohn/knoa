@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use gpui::{AppContext as _, ClipboardItem, Context, Image, ImageFormat};
 use knoa_core::{Bookmark, BookmarkId, Kind};
+use percent_encoding::percent_decode_str;
 
 use super::MainView;
 
@@ -105,16 +106,20 @@ fn format_of(extension: &str) -> Option<ImageFormat> {
     }
 }
 
-/// The title, or while the title is still the link, the link's file name.
-fn name_of(bookmark: &Bookmark) -> String {
+/// The title, or while the title is still the link, the link's file name, decoded:
+/// `Rotating_earth_(large).gif` rather than `Rotating_earth_%28large%29.gif`.
+pub(super) fn name_of(bookmark: &Bookmark) -> String {
     if bookmark.title != bookmark.url {
         return bookmark.title.clone();
     }
-    url::Url::parse(&bookmark.url)
-        .ok()
-        .and_then(|url| Some(url.path_segments()?.next_back()?.to_owned()))
-        .filter(|segment| !segment.is_empty())
-        .unwrap_or_default()
+    link_file_name(&bookmark.url).unwrap_or_else(|| bookmark.title.clone())
+}
+
+fn link_file_name(link: &str) -> Option<String> {
+    let url = url::Url::parse(link).ok()?;
+    let segment = url.path_segments()?.next_back()?;
+    let name = percent_decode_str(segment).decode_utf8_lossy();
+    (!name.trim().is_empty()).then(|| name.into_owned())
 }
 
 /// The title as a file name, with the stored copy's extension. A title that is itself a
@@ -125,12 +130,38 @@ fn file_name(title: &str, stored: &Path) -> String {
         Some((stem, own)) if format_of(own).is_some() => stem,
         _ => title,
     };
+    // Slashes and colons can't be in a macOS file name; control characters shouldn't.
     let stem: String = stem
         .chars()
-        .map(|c| if matches!(c, '/' | ':') { '-' } else { c })
+        .filter(|c| !c.is_control())
+        .map(|c| {
+            if matches!(c, '/' | ':' | '\\') {
+                '-'
+            } else {
+                c
+            }
+        })
         .take(NAME_CHARS)
         .collect();
-    let stem = stem.trim();
+    // A leading dot would hide the file.
+    let stem = stem.trim().trim_start_matches('.').trim_start();
     let stem = if stem.is_empty() { "Image" } else { stem };
     format!("{stem}.{extension}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_saves_under_its_decoded_file_name_with_unsafe_characters_replaced() {
+        let link = "https://upload.wikimedia.org/a/Rotating_earth_%28large%29.gif";
+        let name = link_file_name(link).expect("a file name");
+
+        assert_eq!(
+            file_name(&name, Path::new("cache/1a2b.png")),
+            "Rotating_earth_(large).png"
+        );
+        assert_eq!(file_name("..a/b:c\u{7}", Path::new("x.jpg")), "a-b-c.jpg");
+    }
 }

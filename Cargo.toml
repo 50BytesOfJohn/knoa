@@ -67,6 +67,8 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSView",
 ] }
 objc2-foundation = "0.3"
+# Already in the tree through `url`; decodes a link's file name for saving.
+percent-encoding = "2"
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "json",

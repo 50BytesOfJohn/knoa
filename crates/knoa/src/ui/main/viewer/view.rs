@@ -10,7 +10,7 @@ use knoa_core::{Bookmark, BookmarkId, Image};
 
 use crate::ui::{
     components::{icon, tip_in},
-    main::{CloseViewer, CopyImage, MainView, OpenSelected, SaveImage, ShowDetails},
+    main::{CloseViewer, CopyImage, MainView, OpenSelected, SaveImage, ShowDetails, picture},
     theme::Theme,
 };
 
@@ -224,7 +224,7 @@ fn caption(bookmark: &Bookmark, notice: Option<&'static str>) -> Div {
                 .truncate()
                 .text_base()
                 .font_weight(FontWeight::MEDIUM)
-                .child(bookmark.title.clone()),
+                .child(picture::name_of(bookmark)),
         )
         .child(
             div()

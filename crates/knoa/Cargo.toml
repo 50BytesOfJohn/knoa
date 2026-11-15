@@ -21,6 +21,7 @@ lyon_tessellation.workspace = true
 objc2.workspace = true
 objc2-app-kit.workspace = true
 objc2-foundation.workspace = true
+percent-encoding.workspace = true
 reqwest.workspace = true
 knoa-ai.workspace = true
 knoa-browser.workspace = true
