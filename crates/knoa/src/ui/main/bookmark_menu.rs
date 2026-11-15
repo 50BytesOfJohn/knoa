@@ -18,7 +18,7 @@ use knoa_core::{Bookmark, BookmarkId, Folder, FolderId, Place};
 
 use super::{
     CopyLink, DeleteSelected, MainView, OpenSelected, OpenSelectedInBackground, QuickLook,
-    ToggleUpNext, picture::has_picture,
+    ShowDetails, ToggleUpNext, picture::has_picture,
 };
 use crate::{
     services::thumbnails::{Refresh, Thumbnails},
@@ -143,10 +143,12 @@ fn opening_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) 
         },
     );
     let copy = item(view, "Copy link", "link", id, MainView::copy_link_of);
+    let details = item(view, "Show details", "info", id, MainView::select);
     let menu = menu
         .item(target.shortcut(open, OpenSelected))
         .item(target.shortcut(open_behind, OpenSelectedInBackground))
-        .item(target.shortcut(copy, CopyLink));
+        .item(target.shortcut(copy, CopyLink))
+        .item(target.shortcut(details, ShowDetails));
     if has_picture(&target.bookmark) {
         picture_items(menu, view, target)
     } else {

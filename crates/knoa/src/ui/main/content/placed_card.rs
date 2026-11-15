@@ -78,6 +78,11 @@ impl MainView {
             } else {
                 self.open_bookmark(id, Activation::Foreground, cx);
             }
+        } else if event.standard_click() && self.layout.arrangement == Arrangement::Pictures {
+            // Opening the panel would reflow the grid under a double-click's second click.
+            // An open panel follows the selection; Cmd-I or the menu opens it.
+            self.set_selected(Some(id), cx);
+            cx.notify();
         } else if event.standard_click() {
             self.select(id, cx);
         }

@@ -46,7 +46,7 @@ use detail::TagEdits;
 use keys::{
     CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
     MoveRight, MoveUp, NewLink, NextImage, OpenSelected, OpenSelectedInBackground, PreviousImage,
-    QuickLook, SaveImage, ToggleUpNext,
+    QuickLook, SaveImage, ShowDetails, ToggleUpNext,
 };
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
@@ -201,6 +201,14 @@ impl MainView {
         self.search.update(cx, |input, cx| input.focus(window, cx));
     }
 
+    /// Cmd-I: the detail panel for the selection, from the grid or the viewer.
+    fn show_details(&mut self, _: &ShowDetails, window: &mut Window, cx: &mut Context<'_, Self>) {
+        self.close_viewer_first(window, cx);
+        if let Some(id) = self.selected {
+            self.select(id, cx);
+        }
+    }
+
     /// Typing anywhere searches: a printable key sends focus to the search field.
     fn type_to_search(
         &mut self,
@@ -281,6 +289,7 @@ impl Render for MainView {
             .on_action(cx.listener(Self::open_settings))
             .on_action(cx.listener(Self::focus_search))
             .on_action(cx.listener(Self::new_link))
+            .on_action(cx.listener(Self::show_details))
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
             .child(self.render_sidebar(window, cx))

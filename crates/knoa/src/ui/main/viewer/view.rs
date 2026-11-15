@@ -10,7 +10,7 @@ use knoa_core::{Bookmark, BookmarkId, Image};
 
 use crate::ui::{
     components::{icon, tip_in},
-    main::{CloseViewer, CopyImage, MainView, OpenSelected, SaveImage},
+    main::{CloseViewer, CopyImage, MainView, OpenSelected, SaveImage, ShowDetails},
     theme::Theme,
 };
 
@@ -77,18 +77,32 @@ impl MainView {
         let theme = Theme::get(cx).clone();
         div()
             .flex_none()
+            .relative()
             .h(px(BAR_HEIGHT))
             .pl(px(TRAFFIC_LIGHTS))
             .pr_4()
             .flex()
             .items_center()
+            .justify_end()
             .gap_1()
+            // Centered on the window, well clear of the traffic lights.
             .child(
                 div()
-                    .flex_1()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
                     .text_sm()
                     .text_color(gpui::white().opacity(0.6))
                     .children(position),
+            )
+            .child(
+                bar_button("viewer-info", "info")
+                    .tooltip(tip_in("Show details", Some(&ShowDetails), "Viewer", &theme))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.show_details(&ShowDetails, window, cx);
+                    })),
             )
             .child(
                 bar_button("viewer-open", "external-link")
