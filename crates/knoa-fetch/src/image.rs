@@ -35,7 +35,15 @@ pub struct Preview {
     pub bytes: Vec<u8>,
 }
 
-/// Downloads `url` and reads its size. `None` when it isn't a usable preview image.
+/// Downloads a page's preview image. `None` when it isn't shaped like a preview.
+pub async fn download_preview(http: &Http, url: &Url) -> Option<Preview> {
+    download(http, url)
+        .await
+        .filter(|p| is_preview_shaped(p.width as usize, p.height as usize))
+}
+
+/// Downloads `url` and reads its size, whatever its shape: an image already chosen as a
+/// bookmark's, like a panorama linked straight to. `None` when it isn't a usable image.
 pub async fn download(http: &Http, url: &Url) -> Option<Preview> {
     let response = http
         .image(url)
@@ -47,9 +55,6 @@ pub async fn download(http: &Http, url: &Url) -> Option<Preview> {
         return None;
     }
     let size = imagesize::blob_size(&response.body).ok()?;
-    if !is_preview_shaped(size.width, size.height) {
-        return None;
-    }
     let extension = match imagesize::image_type(&response.body).ok()? {
         imagesize::ImageType::Png => "png",
         imagesize::ImageType::Jpeg => "jpg",

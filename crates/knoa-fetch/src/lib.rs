@@ -181,7 +181,7 @@ impl Fetcher {
             .filter(|_| readable)
             .and_then(|src| landed.join(&src).ok());
         let preview = match image_url {
-            Some(src) => image::download(&self.http, &src).await,
+            Some(src) => image::download_preview(&self.http, &src).await,
             None => None,
         };
         let prompt_text: String = if readable {
@@ -225,7 +225,7 @@ impl Fetcher {
     /// The page itself was refused, but a site API may still know the bookmark.
     async fn page_from_site(&self, url: &Url, site: sites::SiteFacts) -> Fetched {
         let preview = match site.image.and_then(|src| url.join(&src).ok()) {
-            Some(src) => image::download(&self.http, &src).await,
+            Some(src) => image::download_preview(&self.http, &src).await,
             None => None,
         };
         let page = Page {
