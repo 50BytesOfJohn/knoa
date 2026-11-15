@@ -3,6 +3,12 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.3.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.3.0) - 2026-11-15
+
+### Added
+
+- Add AI access settings for the cloud MCP server
+- Add image bookmarks with a Gallery and a viewer ([#40](https://github.com/50BytesOfJohn/knoa/pull/40))
 ## [0.2.2](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.2.2) - 2026-11-13
 
 ### Changed
