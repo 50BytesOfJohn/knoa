@@ -30,6 +30,11 @@ impl MainView {
                 "All caught up",
                 "Every bookmark here has been organized.".to_owned(),
             )
+        } else if library.place() == Place::Gallery {
+            (
+                "No pictures here",
+                "Links straight to an image file show up here.".to_owned(),
+            )
         } else if library.place() == Place::Everything {
             let synced = library.workspace().is_some_and(|w| !w.browsers.is_empty());
             if synced {

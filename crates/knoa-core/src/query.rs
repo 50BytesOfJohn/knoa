@@ -9,6 +9,9 @@ use crate::{FieldType, FolderId, Kind, WorkspaceId, field::parse_minutes};
 pub enum Place {
     #[default]
     Everything,
+    /// Bookmarks of a media kind, shown as pictures. Only on this Mac: it isn't part of
+    /// the sync protocol.
+    Gallery,
     UpNext,
     /// Bookmarks in no folder.
     Unsorted,

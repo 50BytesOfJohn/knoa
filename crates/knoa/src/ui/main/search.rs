@@ -32,6 +32,7 @@ impl MainView {
         let total = library.results().len();
         let scope = match library.place() {
             Place::Everything => None,
+            Place::Gallery => Some("Gallery".to_owned()),
             Place::UpNext => Some("Up next".to_owned()),
             Place::Unsorted => Some("Unsorted".to_owned()),
             Place::NotOrganized => Some("Not organized".to_owned()),
@@ -148,7 +149,9 @@ impl MainView {
                 .child(label)
         };
         let mut row = div().flex().flex_wrap().justify_center().gap_1p5();
-        if counts.len() > 1 || current.is_some() {
+        // The Gallery holds media kinds only, so choosing among them says little.
+        let in_gallery = library.place() == Place::Gallery;
+        if !in_gallery && (counts.len() > 1 || current.is_some()) {
             row = row.child(chip("kind-all", "All".into(), current.is_none()).on_click(
                 cx.listener(|this, _, _, cx| {
                     this.library
