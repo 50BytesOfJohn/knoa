@@ -10,7 +10,8 @@ fn delivery_upgrade_preserves_confirmed_pending_and_parked_bookmarks() {
     let path = dir.path().join("previous.db");
     {
         let conn = Connection::open(&path).unwrap();
-        let previous = MIGRATIONS.len() - 1;
+        // The schema just before delivery states, the tenth migration.
+        let previous = 9;
         for sql in &MIGRATIONS[..previous] {
             conn.execute_batch(sql).unwrap();
         }

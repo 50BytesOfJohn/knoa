@@ -293,6 +293,15 @@ UPDATE bookmarks SET delivery = CASE
     WHERE sync_id IS NOT NULL;
 DROP TABLE unsent_bookmarks;
 ",
+    // Images linked straight to were organized from their URL alone. The AI sees them now,
+    // so they are organized once more; user tags, folders and exclusions still win.
+    r"
+INSERT INTO jobs (bookmark_id)
+    SELECT id FROM bookmarks WHERE kind = 'image' AND status = 'organized' AND deleted_at IS NULL
+    ON CONFLICT DO UPDATE SET run_after = 0, folders_only = 0;
+UPDATE bookmarks SET status = 'queued'
+    WHERE kind = 'image' AND status = 'organized' AND deleted_at IS NULL;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -450,3 +459,5 @@ mod tests {
 
 #[cfg(test)]
 mod delivery_tests;
+#[cfg(test)]
+mod image_tests;

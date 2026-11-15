@@ -271,11 +271,16 @@ impl Store {
     }
 
     /// Takes the bookmark off the queue without AI results: no AI is set up, so the page's
-    /// own metadata is all it gets. It stays "not organized".
+    /// own metadata is all it gets. It stays "not organized", or organized when the AI
+    /// organized it before.
     pub fn finish_page_only(&mut self, id: BookmarkId) -> Result<()> {
         let tx = self.conn.transaction()?;
         Recorder::ai(&tx)?.on_bookmark(id.0, || {
-            tx.execute("UPDATE bookmarks SET status = 'new' WHERE id = ?1", [id.0])?;
+            tx.execute(
+                "UPDATE bookmarks SET status = CASE WHEN model IS NULL THEN 'new' ELSE 'organized' END
+                 WHERE id = ?1",
+                [id.0],
+            )?;
             Ok(())
         })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
