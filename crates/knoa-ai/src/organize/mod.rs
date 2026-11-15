@@ -10,7 +10,7 @@ mod prompt;
 mod schema;
 
 pub use folders::{FilingInput, file_into_folders};
-use knoa_core::{Enrichment, Fields, FolderId, Kind, TagList};
+use knoa_core::{AnalysisImage, Enrichment, Fields, FolderId, Kind, TagList};
 
 use crate::{Classifier, Error, LanguageModel, StructuredRequest};
 
@@ -26,6 +26,8 @@ pub struct BookmarkInput<'a> {
     /// Kind and fields read from the page itself. They win over the models'.
     pub page_kind: Option<Kind>,
     pub page_fields: &'a Fields,
+    /// For a link straight to an image file: a small copy for the model to look at.
+    pub image: Option<&'a AnalysisImage>,
 }
 
 pub struct FolderInput {
@@ -54,8 +56,8 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
 ) -> Result<Enrichment, Error> {
     let kind = kind::pick(model, classifier, input).await?;
     let folders_in_answer = classifier.is_none();
-    let request = StructuredRequest {
-        messages: prompt::messages(input, kind, folders_in_answer),
+    let request = |image| StructuredRequest {
+        messages: prompt::messages(input, kind, folders_in_answer, image),
         schema_name: "bookmark",
         schema: schema::answer_schema(
             kind,
@@ -64,7 +66,14 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         ),
         max_tokens: MAX_TOKENS,
     };
-    let reply = model.generate(&request).await?;
+    let reply = match model.generate(&request(input.bookmark.image)).await {
+        // A user's own models may not take images; the details still say a lot.
+        Err(err) if err.try_other_model() && input.bookmark.image.is_some() => {
+            tracing::debug!("no model took the image, organizing without it: {err}");
+            model.generate(&request(None)).await?
+        }
+        reply => reply?,
+    };
     let folder_ids: Vec<FolderId> = input.folders.iter().map(|f| f.id).collect();
     let mut answer = answer::parse(reply.json, kind, &folder_ids, input.tag_list)?;
     for (name, value) in input.bookmark.page_fields {

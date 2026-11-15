@@ -161,6 +161,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
                     evidence: Some(&page.evidence),
                     page_kind: page.kind,
                     page_fields: &page.fields,
+                    image: None,
                 },
                 instructions: &context.instructions,
                 guideline: context.guideline.as_deref(),
