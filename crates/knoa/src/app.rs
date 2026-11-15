@@ -17,6 +17,7 @@ use crate::{
     state::{
         database::Database,
         library::Library,
+        rewritten_images::RewrittenImages,
         settings::{self, SettingsFile},
     },
     ui::{RootView, theme::Theme},
@@ -43,6 +44,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     housekeeping::run(&library, paths.thumbnails(), cx);
     sync::init(&library, cx);
     let fetcher = Arc::new(knoa_fetch::Fetcher::new(paths.thumbnails())?);
+    RewrittenImages::init(cx);
     Organizer::init(library.clone(), fetcher.clone(), cx);
     // Before the organizer's first round, so it knows whether the cloud has the queue.
     Cloud::init(library.clone(), fetcher.clone(), cx);

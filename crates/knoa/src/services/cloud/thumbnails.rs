@@ -10,7 +10,7 @@ use gpui::AsyncApp;
 use knoa_core::BookmarkId;
 
 use super::engine::{Engine, Failure, net};
-use crate::state::library::Library;
+use crate::state::{library::Library, rewritten_images::RewrittenImages};
 
 const BATCH: usize = 24;
 const AT_ONCE: usize = 4;
@@ -41,10 +41,12 @@ impl Thumbnails {
                 .buffer_unordered(AT_ONCE)
                 .collect()
                 .await;
+            let rewritten = cx.update(|cx| RewrittenImages::handle(cx));
             for (download, image) in fetched {
                 let id = download.id;
                 match image {
                     Ok(Some(image)) => {
+                        rewritten.add(image.path.clone());
                         engine
                             .store(cx, move |store| {
                                 store.set_server_image(id, &download.image_key, &image)

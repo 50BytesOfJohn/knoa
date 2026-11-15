@@ -100,6 +100,9 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         Ok(fetched) => fetched,
         Err(outcome) => return outcome,
     };
+    if let Some(image) = &page.image {
+        work.rewritten_images.add(image.path.clone());
+    }
     let (id, saved_page) = (bookmark.id, page.clone());
     match work
         .save(job, move |store| store.save_page(id, &saved_page, now()))
