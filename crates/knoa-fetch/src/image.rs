@@ -7,6 +7,8 @@ mod facts;
 mod raw;
 mod scale;
 
+use std::fmt;
+
 pub use facts::Facts;
 pub use raw::{RawImage, read as read_raw};
 use url::Url;
@@ -24,7 +26,7 @@ const MIN_HEIGHT: usize = 90;
 const MAX_ASPECT: usize = 4;
 
 /// An image for the bookmark's card and detail, not yet stored.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Preview {
     /// Where it was downloaded from. Copies of the same image share it.
     pub url: Url,
@@ -33,6 +35,19 @@ pub struct Preview {
     /// `png`, `jpg`, `gif` or `webp`.
     pub extension: &'static str,
     pub bytes: Vec<u8>,
+}
+
+/// Without the bytes, which would bury a log line.
+impl fmt::Debug for Preview {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Preview")
+            .field("url", &self.url.as_str())
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("extension", &self.extension)
+            .field("bytes", &self.bytes.len())
+            .finish()
+    }
 }
 
 /// Downloads a page's preview image. `None` when it isn't shaped like a preview.

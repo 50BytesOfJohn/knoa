@@ -78,14 +78,15 @@ fn copies(
     facts: &Facts,
     decoded: Decoded,
 ) -> (Option<Preview>, Option<AnalysisImage>) {
-    let keep_as_is = !decoded.reoriented
-        && body.len() <= KEEP_AS_IS_BYTES
-        && facts.width.max(facts.height) <= Some(DISPLAY_SIDE);
+    // Within the display size a JPEG decodes unscaled, so the decode's size is the file's.
+    let (width, height) = (decoded.image.width(), decoded.image.height());
+    let keep_as_is =
+        !decoded.reoriented && body.len() <= KEEP_AS_IS_BYTES && width.max(height) <= DISPLAY_SIDE;
     let (preview, display) = if keep_as_is {
         let preview = facts.codec.map(|codec| Preview {
             url: url.clone(),
-            width: decoded.image.width(),
-            height: decoded.image.height(),
+            width,
+            height,
             extension: codec.extension(),
             bytes: body,
         });
