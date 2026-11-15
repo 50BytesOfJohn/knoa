@@ -17,7 +17,8 @@ mod usage;
 
 pub use error::Error;
 pub use model::{
-    Choice, Classifier, LanguageModel, Message, Question, StructuredReply, StructuredRequest,
+    Choice, Classifier, Content, LanguageModel, Message, Part, Question, StructuredReply,
+    StructuredRequest,
 };
 pub use organize::{
     BookmarkInput, FilingInput, FolderInput, OrganizeInput, file_into_folders, organize,

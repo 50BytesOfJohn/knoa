@@ -3470,6 +3470,7 @@ dependencies = [
 name = "knoa-ai"
 version = "0.2.2"
 dependencies = [
+ "base64 0.23.1",
  "knoa-core",
  "reqwest",
  "serde",
