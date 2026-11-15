@@ -6,19 +6,22 @@
 
 use std::io::Cursor;
 
-use image::{DynamicImage, ImageDecoder as _, codecs::webp::WebPDecoder};
+use image::{DynamicImage, codecs::webp::WebPDecoder};
 
-use super::{Decoded, Problem, limits, still};
+use super::{Decoded, Problem, budget::Allowance, still};
 
-pub fn decode(bytes: &[u8], canvas: (u32, u32), too_large: Problem) -> Result<Decoded, Problem> {
+pub fn decode(bytes: &[u8], canvas: (u32, u32), allowance: &Allowance) -> Result<Decoded, Problem> {
     let layout = Layout::read(bytes).ok_or(Problem::Damaged)?;
     if layout.canvas != canvas {
         return Err(Problem::Damaged);
     }
-    let mut decoder = WebPDecoder::new(Cursor::new(bytes)).map_err(|_| Problem::Damaged)?;
-    let animated = Some(decoder.has_animation());
-    decoder.set_limits(limits()).map_err(|_| Problem::Damaged)?;
-    still(DynamicImage::from_decoder(decoder), animated, too_large)
+    allowance.check(layout.peak_bytes())?;
+    let decoder = WebPDecoder::new(Cursor::new(bytes)).map_err(|_| Problem::Damaged)?;
+    still(
+        DynamicImage::from_decoder(decoder),
+        Some(layout.animated),
+        allowance,
+    )
 }
 
 /// What a WebP file holds, read from its chunk headers. Only a file whose every frame fits
@@ -28,6 +31,9 @@ struct Layout {
     canvas: (u32, u32),
     /// Every frame: the one picture of a still, each frame of an animation.
     frames: Vec<Frame>,
+    /// From the extended header, or a lossless bitstream's own flag.
+    alpha: bool,
+    animated: bool,
 }
 
 /// One bitstream as its own header sizes it.
@@ -35,6 +41,7 @@ struct Layout {
 struct Frame {
     width: u32,
     height: u32,
+    lossless: bool,
 }
 
 impl Layout {
@@ -50,9 +57,12 @@ impl Layout {
         let (first, payload) = chunks.peek().copied()?;
         if first != *b"VP8X" {
             let frame = bitstream(first, payload)?;
+            let alpha = frame.lossless && payload.get(4)? & 0x10 != 0;
             return Some(Layout {
                 canvas: (frame.width, frame.height),
                 frames: vec![frame],
+                alpha,
+                animated: false,
             });
         }
         let flags = *payload.first()?;
@@ -70,8 +80,51 @@ impl Layout {
         {
             return None;
         }
-        Some(Layout { canvas, frames })
+        Some(Layout {
+            canvas,
+            frames,
+            alpha: flags & 0x10 != 0,
+            animated,
+        })
     }
+}
+
+impl Layout {
+    /// What decoding the first frame holds at its peak: the output, and the frame's own
+    /// buffers. An animation's first frame is also decoded on its own and laid on an RGBA
+    /// canvas.
+    fn peak_bytes(&self) -> u64 {
+        let canvas = pixels(self.canvas.0, self.canvas.1);
+        let output = canvas * if self.alpha || self.animated { 4 } else { 3 };
+        let frame = self.frames.first().map_or(0, |f| f.peak_bytes(self.alpha));
+        if self.animated {
+            let first = self.frames.first().map_or(0, |f| pixels(f.width, f.height));
+            output + canvas * 4 + first * 4 + frame
+        } else {
+            output + frame
+        }
+    }
+}
+
+impl Frame {
+    /// A lossless frame decodes through an RGBA buffer of its size. A lossy one decodes
+    /// into planes of whole 16 pixel macroblocks, 1.5 bytes a pixel; its alpha plane goes
+    /// through an RGBA pass of its own.
+    fn peak_bytes(self, alpha: bool) -> u64 {
+        let size = pixels(self.width, self.height);
+        if self.lossless {
+            return size * 4;
+        }
+        let macroblocks = pixels(
+            self.width.next_multiple_of(16),
+            self.height.next_multiple_of(16),
+        );
+        macroblocks * 3 / 2 + if alpha { size * 5 } else { 0 }
+    }
+}
+
+fn pixels(width: u32, height: u32) -> u64 {
+    u64::from(width) * u64::from(height)
 }
 
 /// An animation frame: placed on the canvas, and holding a bitstream of its own size.
@@ -97,6 +150,7 @@ fn bitstream(id: [u8; 4], payload: &[u8]) -> Option<Frame> {
             Some(Frame {
                 width: le(payload.get(6..8)?) & 0x3fff,
                 height: le(payload.get(8..10)?) & 0x3fff,
+                lossless: false,
             })
         }
         b"VP8L" => {
@@ -107,6 +161,7 @@ fn bitstream(id: [u8; 4], payload: &[u8]) -> Option<Frame> {
             Some(Frame {
                 width: (bits & 0x3fff) + 1,
                 height: ((bits >> 14) & 0x3fff) + 1,
+                lossless: true,
             })
         }
         _ => None,
@@ -144,6 +199,13 @@ mod tests {
 
     use super::*;
 
+    fn unlimited() -> Allowance {
+        Allowance {
+            bytes: u64::MAX,
+            too_large: Problem::Unsupported,
+        }
+    }
+
     fn chunk(id: [u8; 4], payload: &[u8]) -> Vec<u8> {
         let mut chunk = id.to_vec();
         chunk.extend((payload.len() as u32).to_le_bytes());
@@ -176,7 +238,7 @@ mod tests {
 
         assert_eq!(Layout::read(&file), None);
         assert!(matches!(
-            decode(&file, (1, 1), Problem::Unsupported),
+            decode(&file, (1, 1), &unlimited()),
             Err(Problem::Damaged)
         ));
     }
@@ -192,7 +254,8 @@ mod tests {
         let layout = Layout::read(&file).expect("a valid layout");
 
         assert_eq!(layout.canvas, (40, 30));
-        let decoded = decode(&file, (40, 30), Problem::Unsupported).expect("decodable");
+        assert!(layout.alpha && layout.frames[0].lossless && !layout.animated);
+        let decoded = decode(&file, (40, 30), &unlimited()).expect("decodable");
         assert_eq!((decoded.image.width(), decoded.image.height()), (40, 30));
     }
 }

@@ -1,5 +1,6 @@
-//! Decoding within a memory budget, bounded before it starts. The cloud organizer runs this
-//! in a 128 MB Worker next to a body of up to 24 MiB; the Mac allows much larger images.
+//! Decoding within a memory budget, checked against the file's headers before any pixels
+//! are allocated. The cloud organizer runs this in a 128 MB Worker next to a body of up to
+//! 24 MiB; the Mac allows much larger images.
 
 mod budget;
 mod gif;
@@ -12,7 +13,7 @@ use std::fmt;
 use image::{DynamicImage, metadata::Orientation};
 
 use super::facts::Codec;
-use budget::{JPEG_PIXELS, MAX_ALLOC, OTHER_PIXELS};
+use budget::{Allowance, BUDGET, Budget};
 
 /// Why an image file has no pixels to show.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,22 +48,35 @@ pub struct Decoded {
 }
 
 /// Decodes `bytes`, `width`×`height` by its header, no larger than needed for
-/// `target_side` where the format allows.
+/// `target_side` where the format allows. An animation decodes to its first frame.
 pub fn decode(
+    bytes: &[u8],
+    codec: Codec,
+    size: (u32, u32),
+    target_side: u32,
+) -> Result<Decoded, Problem> {
+    decode_within(bytes, codec, size, target_side, BUDGET)
+}
+
+fn decode_within(
     bytes: &[u8],
     codec: Codec,
     (width, height): (u32, u32),
     target_side: u32,
+    budget: Budget,
 ) -> Result<Decoded, Problem> {
-    let pixels = u64::from(width) * u64::from(height);
-    let too_large = Problem::TooManyPixels { width, height };
+    let allowance = Allowance {
+        bytes: budget.bytes,
+        too_large: Problem::TooManyPixels { width, height },
+    };
+    if u64::from(width) * u64::from(height) > budget.pixels {
+        return Err(allowance.too_large);
+    }
     match codec {
-        Codec::Jpeg if pixels > JPEG_PIXELS => Err(too_large),
-        Codec::Jpeg => jpeg::decode(bytes, target_side, too_large),
-        _ if pixels > OTHER_PIXELS => Err(too_large),
-        Codec::Png => png::decode(bytes, too_large),
-        Codec::Webp => webp::decode(bytes, (width, height), too_large),
-        Codec::Gif => gif::decode(bytes, too_large),
+        Codec::Jpeg => jpeg::decode(bytes, target_side, &allowance),
+        Codec::Png => png::decode(bytes, &allowance),
+        Codec::Webp => webp::decode(bytes, (width, height), &allowance),
+        Codec::Gif => gif::decode(bytes, (width, height), &allowance),
     }
 }
 
@@ -82,25 +96,24 @@ fn upright(mut image: DynamicImage, orientation: Orientation) -> Decoded {
     }
 }
 
+/// A decoder that ran into a limit was refused for size; any other failure is damage.
+fn refusal(err: &image::ImageError, allowance: &Allowance) -> Problem {
+    match err {
+        image::ImageError::Limits(_) => allowance.too_large.clone(),
+        _ => Problem::Damaged,
+    }
+}
+
 fn still(
     image: image::ImageResult<DynamicImage>,
     animated: Option<bool>,
-    too_large: Problem,
+    allowance: &Allowance,
 ) -> Result<Decoded, Problem> {
-    let image = image.map_err(|err| match err {
-        image::ImageError::Limits(_) => too_large,
-        _ => Problem::Damaged,
-    })?;
+    let image = image.map_err(|err| refusal(&err, allowance))?;
     Ok(Decoded {
         image,
         animated,
         turned: false,
         reoriented: false,
     })
-}
-
-fn limits() -> image::Limits {
-    let mut limits = image::Limits::default();
-    limits.max_alloc = Some(MAX_ALLOC);
-    limits
 }
