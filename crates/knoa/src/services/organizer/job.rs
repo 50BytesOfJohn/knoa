@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use knoa_ai::{BookmarkInput, FilingInput, OrganizeInput};
 use knoa_core::{BookmarkId, Enrichment, FolderId, Page};
+use knoa_fetch::CachedPage;
 use knoa_store::{Job, Store};
 
 use super::{context::WorkspaceContext, now, work::Work};
@@ -95,22 +96,9 @@ fn record(store: &mut Store, id: BookmarkId, next: NextStep) -> knoa_store::Resu
 
 async fn organize_one(job: &Job, work: &Work) -> Outcome {
     let bookmark = &job.bookmark;
-    let fetcher = work.fetcher.clone();
-    let url = bookmark.url.clone();
-    let page = match work
-        .network
-        .spawn(async move { fetcher.fetch(&url).await })
-        .await
-    {
-        Ok(Ok(page)) => page,
-        Ok(Err(err)) if err.is_transient() => return retry(err.to_string(), job.attempts),
-        // A page that can't be fetched still has a URL and title worth organizing.
-        Ok(Err(err)) => Page {
-            evidence: serde_json::json!({ "quality": "title_only", "note": err.to_string() })
-                .to_string(),
-            ..Page::default()
-        },
-        Err(err) => return Outcome::Failed(format!("fetch task failed: {err}")),
+    let CachedPage { page, analysis } = match fetch(job, work).await {
+        Ok(fetched) => fetched,
+        Err(outcome) => return outcome,
     };
     let (id, saved_page) = (bookmark.id, page.clone());
     match work
@@ -161,7 +149,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
                     evidence: Some(&page.evidence),
                     page_kind: page.kind,
                     page_fields: &page.fields,
-                    image: None,
+                    image: analysis.as_ref(),
                 },
                 instructions: &context.instructions,
                 guideline: context.guideline.as_deref(),
@@ -175,6 +163,33 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         Ok(Ok(enrichment)) => save_enrichment(work, job, enrichment).await,
         Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
+    }
+}
+
+/// Fetches the bookmark's page. `Err` is how the job ends when it can't go on.
+async fn fetch(job: &Job, work: &Work) -> Result<CachedPage, Outcome> {
+    let fetcher = work.fetcher.clone();
+    let url = job.bookmark.url.clone();
+    match work
+        .network
+        .spawn(async move { fetcher.fetch(&url).await })
+        .await
+    {
+        Ok(Ok(fetched)) => Ok(fetched),
+        Ok(Err(err)) if err.is_transient() => Err(retry(err.to_string(), job.attempts)),
+        // A page that can't be fetched still has a URL and title worth organizing.
+        Ok(Err(err)) => {
+            let evidence = serde_json::json!({ "quality": "title_only", "note": err.to_string() });
+            let page = Page {
+                evidence: evidence.to_string(),
+                ..Page::default()
+            };
+            Ok(CachedPage {
+                page,
+                analysis: None,
+            })
+        }
+        Err(err) => Err(Outcome::Failed(format!("fetch task failed: {err}"))),
     }
 }
 

@@ -17,6 +17,9 @@ mod sites;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub use cache::CachedPage;
+
 use evidence::{Evidence, Quality, bare, evidence_json};
 pub use image::Preview;
 use knoa_core::{AnalysisImage, Fields, Kind, Page};

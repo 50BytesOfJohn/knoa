@@ -80,7 +80,8 @@ impl Thumbnails {
                 .spawn(async move { fetcher.fetch(&url).await })
                 .await
             {
-                Ok(Ok(page)) => page
+                Ok(Ok(fetched)) => fetched
+                    .page
                     .image
                     .map(|image| (identity, image))
                     .ok_or(Refresh::NoImage),
