@@ -92,11 +92,12 @@ fn copies(
         });
         (preview, decoded.image)
     } else {
+        // The body is no longer needed, and the shrinking is the pipeline's peak.
         drop(body);
-        let display = scale::shrunk(&decoded.image, DISPLAY_SIDE).unwrap_or(decoded.image);
+        let display = scale::shrink(decoded.image, DISPLAY_SIDE);
         (display_copy(url, &display), display)
     };
-    (preview, analysis_copy(&display))
+    (preview, analysis_copy(display))
 }
 
 /// Re-encoded: a PNG while it has see-through parts, which only a PNG keeps right on both
@@ -116,12 +117,11 @@ fn display_copy(url: &Url, image: &DynamicImage) -> Option<Preview> {
     })
 }
 
-fn analysis_copy(display: &DynamicImage) -> Option<AnalysisImage> {
-    let small = scale::shrunk(display, ANALYSIS_SIDE);
-    let image = small.as_ref().unwrap_or(display);
+fn analysis_copy(display: DynamicImage) -> Option<AnalysisImage> {
+    let image = scale::shrink(display, ANALYSIS_SIDE);
     Some(AnalysisImage {
         media_type: "image/jpeg",
-        bytes: encode::jpeg(image, ANALYSIS_QUALITY)?,
+        bytes: encode::jpeg(&image, ANALYSIS_QUALITY)?,
         width: image.width(),
         height: image.height(),
     })

@@ -119,6 +119,14 @@ impl Http {
     }
 }
 
+/// The buffer a body starts with: its announced length, up to the limit. A body that
+/// grows by doubling can sit in nearly twice its size while it is decoded.
+fn capacity(announced: Option<u64>, limit: usize) -> usize {
+    announced.map_or(0, |length| {
+        usize::try_from(length).unwrap_or(limit).min(limit)
+    })
+}
+
 async fn get(client: &Client, url: &Url, limit: Limit) -> Result<Response, Error> {
     let response = client.get(url.clone()).timeout(TIMEOUT).send().await?;
     let content_type = response

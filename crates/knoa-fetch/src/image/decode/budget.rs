@@ -1,8 +1,15 @@
 //! How much memory one decode may take, checked against the file's headers before any
 //! pixels are allocated.
 //!
-//! In the cloud organizer's 128 MB Worker, decoding holds the body (up to 24 MiB, read
-//! straight from it) and the decoder's peak (at most `bytes`, 64 MiB): 92 MB.
+//! In the cloud organizer's 128 MB Worker the pipeline's peak has three stages, each under
+//! about 100 MB:
+//!
+//! - decoding: the body (up to 24 MiB, read straight from it) and the decoder's peak (at
+//!   most `bytes`, 64 MiB): 92 MB;
+//! - shrinking, with the body dropped: the decoded pixels (within `bytes`) and their box
+//!   reduction to at most 2000 pixels, 16 MB in RGBA: 83 MB;
+//! - the final filter, with the decoded pixels dropped: the 16 MB reduction, `image`'s
+//!   float pass of 2000×1600 at 16 bytes a pixel (51 MB) and the 10 MB result: 77 MB.
 //!
 //! Each format estimates its decoder's peak from its own headers:
 //!

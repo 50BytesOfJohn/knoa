@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use reqwest::{Client, redirect};
 
+use super::capacity;
 use crate::access;
 
 pub fn client(user_agent: &str) -> reqwest::Result<Client> {
@@ -24,7 +25,7 @@ pub async fn read_body(
     mut response: reqwest::Response,
     limit: usize,
 ) -> reqwest::Result<(Vec<u8>, bool)> {
-    let mut body = Vec::new();
+    let mut body = Vec::with_capacity(capacity(response.content_length(), limit));
     while let Some(chunk) = response.chunk().await? {
         body.extend_from_slice(&chunk);
         if body.len() > limit {
@@ -32,6 +33,7 @@ pub async fn read_body(
             return Ok((body, true));
         }
     }
+    body.shrink_to_fit();
     Ok((body, false))
 }
 
