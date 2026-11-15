@@ -11,7 +11,7 @@ use tokio::runtime::Handle;
 use super::job::Outcome;
 use crate::{
     services::{generation::Ticket, network::Network},
-    state::database::Database,
+    state::{database::Database, rewritten_images::RewrittenImages},
 };
 
 /// Everything one job needs, owned so it can move to other threads.
@@ -21,6 +21,7 @@ pub(super) struct Work {
     pub(super) provider: Option<Arc<Provider>>,
     pub(super) background: BackgroundExecutor,
     pub(super) network: Handle,
+    pub(super) rewritten_images: RewrittenImages,
     ticket: Ticket,
 }
 
@@ -38,6 +39,7 @@ impl Work {
             provider,
             background: cx.background_executor().clone(),
             network: Network::handle(cx),
+            rewritten_images: RewrittenImages::handle(cx),
             ticket,
         }
     }

@@ -14,10 +14,13 @@ mod masonry;
 mod navigation;
 mod opening;
 mod overlay;
+mod picture;
 mod search;
 mod settings;
 mod sidebar;
+mod tiles;
 mod trash;
+mod viewer;
 mod workspaces;
 
 use std::time::Instant;
@@ -38,11 +41,12 @@ use crate::{
     },
     ui::theme::Theme,
 };
-use content::LayoutCache;
+use content::{DecodedImages, LayoutCache};
 use detail::TagEdits;
 use keys::{
-    CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft, MoveRight, MoveUp, NewLink,
-    OpenSelected, OpenSelectedInBackground, ToggleDetail, ToggleUpNext,
+    CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
+    MoveRight, MoveUp, NewLink, NextImage, OpenSelected, OpenSelectedInBackground, PreviousImage,
+    QuickLook, SaveImage, ShowDetails, ToggleUpNext,
 };
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
@@ -53,6 +57,8 @@ pub struct MainView {
     organizer: Entity<Organizer>,
     search: Entity<InputState>,
     cards_focus: FocusHandle,
+    /// Held by the image viewer while it is open, so its keys replace the grid's.
+    viewer_focus: FocusHandle,
     scroll: ScrollHandle,
     selected: Option<BookmarkId>,
     detail_open: bool,
@@ -65,6 +71,7 @@ pub struct MainView {
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
     layout: LayoutCache,
+    decoded: DecodedImages,
     /// Until when Knoa takes focus back from a browser it opened a link in behind itself.
     keep_focus_until: Option<Instant>,
     _subscriptions: Vec<Subscription>,
@@ -104,6 +111,7 @@ impl MainView {
             organizer,
             search,
             cards_focus,
+            viewer_focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
             selected: None,
             detail_open: false,
@@ -113,6 +121,7 @@ impl MainView {
             overlay: None,
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
+            decoded: DecodedImages::default(),
             keep_focus_until: None,
             _subscriptions: subscriptions,
         }
@@ -188,7 +197,16 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        self.close_viewer_first(window, cx);
         self.search.update(cx, |input, cx| input.focus(window, cx));
+    }
+
+    /// Cmd-I: the detail panel for the selection, from the grid or the viewer.
+    fn show_details(&mut self, _: &ShowDetails, window: &mut Window, cx: &mut Context<'_, Self>) {
+        self.close_viewer_first(window, cx);
+        if let Some(id) = self.selected {
+            self.select(id, cx);
+        }
     }
 
     /// Typing anywhere searches: a printable key sends focus to the search field.
@@ -238,7 +256,7 @@ impl MainView {
         }
     }
 
-    fn toggle_detail(&mut self, _: &ToggleDetail, _: &mut Window, cx: &mut Context<'_, MainView>) {
+    fn toggle_detail(&mut self, cx: &mut Context<'_, MainView>) {
         self.detail_open = !self.detail_open && self.selected.is_some();
         cx.notify();
     }
@@ -271,6 +289,7 @@ impl Render for MainView {
             .on_action(cx.listener(Self::open_settings))
             .on_action(cx.listener(Self::focus_search))
             .on_action(cx.listener(Self::new_link))
+            .on_action(cx.listener(Self::show_details))
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
             .child(self.render_sidebar(window, cx))

@@ -64,6 +64,7 @@ fn releasing_blocked_cloud_jobs_restores_status_and_preserves_pending_jobs() {
             quota,
             &Enrichment {
                 kind: Kind::Article,
+                title: None,
                 summary: None,
                 fields: Fields::new(),
                 extras: Vec::new(),

@@ -1,8 +1,19 @@
-//! Downloading preview images and checking they are shaped like previews.
+//! Images: downloading a page's preview image, and reading a link straight to an image
+//! file into a display copy and a copy for the AI.
 
+mod decode;
+mod encode;
+mod facts;
+mod raw;
+mod scale;
+
+use std::fmt;
+
+pub use facts::Facts;
+pub use raw::{RawImage, read as read_raw};
 use url::Url;
 
-use crate::http::{Http, IMAGE_LIMIT};
+use crate::http::Http;
 
 /// Smaller images are icons or tracking pixels, not previews.
 const MIN_WIDTH: usize = 120;
@@ -14,9 +25,10 @@ const MIN_HEIGHT: usize = 90;
 /// preview. Cards crop to about 16:9, so these would be unrecognizable slivers anyway.
 const MAX_ASPECT: usize = 4;
 
-/// A downloaded preview image, not yet stored.
+/// An image for the bookmark's card and detail, not yet stored.
+#[derive(Clone)]
 pub struct Preview {
-    /// Where it was downloaded from.
+    /// Where it was downloaded from. Copies of the same image share it.
     pub url: Url,
     pub width: u32,
     pub height: u32,
@@ -25,20 +37,39 @@ pub struct Preview {
     pub bytes: Vec<u8>,
 }
 
-/// Downloads `url` and reads its size. `None` when it isn't a usable preview image.
+/// Without the bytes, which would bury a log line.
+impl fmt::Debug for Preview {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Preview")
+            .field("url", &self.url.as_str())
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("extension", &self.extension)
+            .field("bytes", &self.bytes.len())
+            .finish()
+    }
+}
+
+/// Downloads a page's preview image. `None` when it isn't shaped like a preview.
+pub async fn download_preview(http: &Http, url: &Url) -> Option<Preview> {
+    download(http, url)
+        .await
+        .filter(|p| is_preview_shaped(p.width as usize, p.height as usize))
+}
+
+/// Downloads `url` and reads its size, whatever its shape: an image already chosen as a
+/// bookmark's, like a panorama linked straight to. `None` when it isn't a usable image.
 pub async fn download(http: &Http, url: &Url) -> Option<Preview> {
     let response = http
-        .bytes(url, IMAGE_LIMIT)
+        .image(url)
         .await
         .inspect_err(|err| tracing::debug!(%url, "image fetch failed: {err}"))
         .ok()?;
-    if !response.status.is_success() {
+    // A cut-off file still has a valid header, and would be stored and shown broken.
+    if !response.status.is_success() || response.truncated {
         return None;
     }
     let size = imagesize::blob_size(&response.body).ok()?;
-    if !is_preview_shaped(size.width, size.height) {
-        return None;
-    }
     let extension = match imagesize::image_type(&response.body).ok()? {
         imagesize::ImageType::Png => "png",
         imagesize::ImageType::Jpeg => "jpg",

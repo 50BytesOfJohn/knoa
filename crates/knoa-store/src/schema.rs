@@ -293,6 +293,19 @@ UPDATE bookmarks SET delivery = CASE
     WHERE sync_id IS NOT NULL;
 DROP TABLE unsent_bookmarks;
 ",
+    // Images linked straight to were organized from their URL alone. The AI sees them now,
+    // so they are organized once more; user tags, folders and exclusions still win. Every
+    // Mac of an account runs this, so the jobs are marked: one whose bookmark already has
+    // what only the AI's look gives (`medium`), from another Mac, is dropped.
+    r"
+ALTER TABLE jobs ADD COLUMN vision_backfill INTEGER NOT NULL DEFAULT 0;
+INSERT INTO jobs (bookmark_id, vision_backfill)
+    SELECT id, 1 FROM bookmarks WHERE kind = 'image' AND status = 'organized'
+        AND deleted_at IS NULL AND json_extract(fields, '$.medium') IS NULL
+    ON CONFLICT DO UPDATE SET run_after = 0, folders_only = 0, vision_backfill = 1;
+UPDATE bookmarks SET status = 'queued'
+    WHERE id IN (SELECT bookmark_id FROM jobs WHERE vision_backfill = 1);
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -450,3 +463,5 @@ mod tests {
 
 #[cfg(test)]
 mod delivery_tests;
+#[cfg(test)]
+mod image_tests;

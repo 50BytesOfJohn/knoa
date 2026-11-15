@@ -1,5 +1,7 @@
 //! What organizing a bookmark produced: the page's evidence and the AI's answer.
 
+use std::fmt;
+
 use crate::{Fields, FolderId, Image, Kind};
 
 /// What a page fetch found, before the AI looks at it.
@@ -21,10 +23,35 @@ pub struct Page {
     pub evidence: String,
 }
 
+/// A small copy of a bookmarked image for the AI to look at. Made fresh for each request,
+/// never stored.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AnalysisImage {
+    /// Its MIME type, like `image/jpeg`.
+    pub media_type: &'static str,
+    pub bytes: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Without the bytes, which would bury a log line.
+impl fmt::Debug for AnalysisImage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AnalysisImage")
+            .field("media_type", &self.media_type)
+            .field("bytes", &self.bytes.len())
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish()
+    }
+}
+
 /// The AI's answer for one bookmark, already validated against the kind's fields.
 #[derive(Debug, Clone)]
 pub struct Enrichment {
     pub kind: Kind,
+    /// A title, written only for a bookmark whose title is still its URL.
+    pub title: Option<String>,
     pub summary: Option<String>,
     pub fields: Fields,
     pub extras: Vec<(String, String)>,

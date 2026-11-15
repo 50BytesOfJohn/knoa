@@ -5,9 +5,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use knoa_core::{Image, Page};
+use knoa_core::{AnalysisImage, Image, Page};
 
 use crate::{Error, Fetched, Fetcher, Preview, http};
+
+/// A fetched page whose preview is in the thumbnail cache, as `page.image`.
+pub struct CachedPage {
+    pub page: Page,
+    /// For a link straight to an image file: a smaller copy for the AI to look at.
+    pub analysis: Option<AnalysisImage>,
+}
 
 impl Fetcher {
     pub fn new(image_cache: PathBuf) -> Result<Fetcher, Error> {
@@ -18,16 +25,20 @@ impl Fetcher {
     }
 
     /// [`Fetcher::fetch_with_preview`], with the preview stored in the thumbnail cache.
-    pub async fn fetch(&self, url: &str) -> Result<Page, Error> {
-        let Fetched { mut page, preview } = self.fetch_with_preview(url).await?;
+    pub async fn fetch(&self, url: &str) -> Result<CachedPage, Error> {
+        let Fetched {
+            mut page,
+            preview,
+            analysis,
+        } = self.fetch_with_preview(url).await?;
         if let Some(preview) = preview {
             page.image = store(&preview, &self.image_cache).await;
         }
-        Ok(page)
+        Ok(CachedPage { page, analysis })
     }
 
-    /// Downloads a preview image on its own, like a thumbnail another device stored on the
-    /// server, into the thumbnail cache. `None` when it isn't a usable preview.
+    /// Downloads a bookmark's image on its own, like a thumbnail another device stored on
+    /// the server, into the thumbnail cache. `None` when it isn't a usable image.
     pub async fn download_image(&self, url: &url::Url) -> Option<Image> {
         let preview = crate::image::download(&self.http, url).await?;
         store(&preview, &self.image_cache).await

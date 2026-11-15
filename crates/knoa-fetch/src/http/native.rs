@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use reqwest::{Client, redirect};
 
+use super::capacity;
 use crate::access;
 
 pub fn client(user_agent: &str) -> reqwest::Result<Client> {
@@ -18,18 +19,22 @@ pub fn is_connect(err: &reqwest::Error) -> bool {
     err.is_connect()
 }
 
-/// Reads at most `limit` bytes: a huge page's start holds its metadata, and the rest
-/// isn't worth the memory.
-pub async fn read_body(mut response: reqwest::Response, limit: usize) -> reqwest::Result<Vec<u8>> {
-    let mut body = Vec::new();
+/// Reads at most `limit` bytes, and says whether the body went on: a huge page's start
+/// holds its metadata, and the rest isn't worth the memory.
+pub async fn read_body(
+    mut response: reqwest::Response,
+    limit: usize,
+) -> reqwest::Result<(Vec<u8>, bool)> {
+    let mut body = Vec::with_capacity(capacity(response.content_length(), limit));
     while let Some(chunk) = response.chunk().await? {
         body.extend_from_slice(&chunk);
         if body.len() > limit {
             body.truncate(limit);
-            break;
+            return Ok((body, true));
         }
     }
-    Ok(body)
+    body.shrink_to_fit();
+    Ok((body, false))
 }
 
 /// Only the bookmarked URL is checked before fetching, so a public page could otherwise

@@ -67,6 +67,7 @@ Builds the approved [main screen design](design/main-screen.md).
 - [x] Extractors for popular sites (YouTube, Vimeo, IMDb, GitHub, ...)
 - [x] Thumbnail download and disk cache
 - [ ] Cards for each kind
+- [x] Gallery place for image bookmarks, with a full-window image viewer
 
 ## M5: AI organizing
 

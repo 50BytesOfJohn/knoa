@@ -8,7 +8,10 @@ use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId};
 
 use crate::ui::{
-    main::{MainView, bookmark_menu::with_bookmark_menu, cards, masonry::Placed},
+    main::{
+        MainView, bookmark_menu::with_bookmark_menu, cards, content::Arrangement, masonry::Placed,
+        tiles,
+    },
     theme::Theme,
 };
 
@@ -22,7 +25,13 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let id = bookmark.id;
-        let card = cards::render(bookmark, placed.width, show_summaries, cx);
+        let card = match self.layout.arrangement {
+            Arrangement::Cards => cards::render(bookmark, placed.width, show_summaries, cx),
+            Arrangement::Pictures => {
+                let selected = self.selected == Some(id);
+                tiles::render(bookmark, placed.width, selected, cx)
+            }
+        };
         let on_click = move |this: &mut MainView,
                              event: &ClickEvent,
                              window: &mut Window,
@@ -62,7 +71,18 @@ impl MainView {
         if let Some(activation) = new_tab_activation(event) {
             self.open_bookmark(id, activation, cx);
         } else if event.standard_click() && event.click_count() >= 2 {
-            self.open_bookmark(id, Activation::Foreground, cx);
+            // In the Gallery the picture is the bookmark, so it opens in the viewer.
+            if self.layout.arrangement == Arrangement::Pictures && self.picture_of(id, cx).is_some()
+            {
+                self.open_viewer(id, window, cx);
+            } else {
+                self.open_bookmark(id, Activation::Foreground, cx);
+            }
+        } else if event.standard_click() && self.layout.arrangement == Arrangement::Pictures {
+            // Opening the panel would reflow the grid under a double-click's second click.
+            // An open panel follows the selection; Cmd-I or the menu opens it.
+            self.set_selected(Some(id), cx);
+            cx.notify();
         } else if event.standard_click() {
             self.select(id, cx);
         }

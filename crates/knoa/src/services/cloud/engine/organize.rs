@@ -51,12 +51,17 @@ impl Engine {
             folders_only,
             "organizing in the cloud"
         );
-        if response.pending > 0 {
-            // The response can exhaust allowance before the next account pull shows it.
-            self.this
-                .update(cx, |this, _| this.wake(Wake::Account))
-                .map_err(|_| Failure::Stopped)?;
-        }
+        // The response can exhaust allowance before the next account pull shows it.
+        // Either way the next round pulls the server's `queued`, since this round's pull
+        // came before the handover.
+        let wake = if response.pending > 0 {
+            Wake::Account
+        } else {
+            Wake::Pull
+        };
+        self.this
+            .update(cx, |this, _| this.wake(wake))
+            .map_err(|_| Failure::Stopped)?;
         self.store(cx, move |store| store.hand_to_cloud(&bookmarks))
             .await
     }

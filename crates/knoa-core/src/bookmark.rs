@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -169,6 +170,15 @@ pub fn site_of(url: &str) -> String {
                 .map(|h| h.trim_start_matches("www.").to_owned())
         })
         .unwrap_or_default()
+}
+
+/// The last segment of the link's path, decoded: `Rotating_earth_(large).gif` rather than
+/// `Rotating_earth_%28large%29.gif`. `None` when the path ends in a slash.
+pub fn link_file_name(url: &str) -> Option<String> {
+    let url = Url::parse(url).ok()?;
+    let segment = url.path_segments()?.next_back()?;
+    let name = percent_decode_str(segment).decode_utf8_lossy();
+    (!name.trim().is_empty()).then(|| name.into_owned())
 }
 
 /// Turns what the user typed or pasted into a web URL, adding `https://` when the scheme

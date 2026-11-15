@@ -8,10 +8,14 @@ use serde_json::{Map, Value};
 use crate::Error;
 
 const MAX_SUMMARY_CHARS: usize = 400;
+const MAX_TITLE_CHARS: usize = 90;
 const MAX_EXTRAS: usize = 12;
 
 #[derive(Deserialize)]
 struct Raw {
+    /// Only when the schema asked for one.
+    #[serde(default)]
+    title: Option<String>,
     summary: String,
     /// The kind's fields by name, null when unknown.
     fields: Map<String, Value>,
@@ -34,6 +38,7 @@ struct Pair {
 
 pub struct Answer {
     pub kind: Kind,
+    pub title: Option<String>,
     pub summary: Option<String>,
     pub fields: Fields,
     pub extras: Vec<(String, String)>,
@@ -100,6 +105,7 @@ pub fn parse(
 
     Ok(Answer {
         kind,
+        title: raw.title.as_deref().and_then(clean_title),
         summary,
         fields,
         extras,
@@ -107,6 +113,17 @@ pub fn parse(
         folders,
         set_aside,
     })
+}
+
+/// Trimmed and cut at a word to fit, or `None` when nothing is left.
+fn clean_title(title: &str) -> Option<String> {
+    let title = title.trim();
+    if title.chars().count() <= MAX_TITLE_CHARS {
+        return (!title.is_empty()).then(|| title.to_owned());
+    }
+    let cut: String = title.chars().take(MAX_TITLE_CHARS).collect();
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
+    Some(cut.trim_end_matches([',', ';', ':', '-', ' ']).to_owned())
 }
 
 /// Normalized, deduplicated and capped, keeping only the tags `keeps` allows.

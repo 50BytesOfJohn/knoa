@@ -195,6 +195,12 @@ impl MainView {
                 counts.everything,
             ),
             (
+                Place::Gallery,
+                "Gallery",
+                PlaceMark::Icon("images"),
+                counts.gallery,
+            ),
+            (
                 Place::UpNext,
                 "Up next",
                 PlaceMark::Icon("bookmark"),
@@ -227,8 +233,8 @@ impl MainView {
         ];
         let mut list = div().flex().flex_col().gap_0p5().px(ROW_INSET);
         for (place, label, mark, count) in places {
-            // Set aside and Trash only show while they hold something.
-            let hideable = matches!(place, Place::SetAside | Place::Trash);
+            // The Gallery, Set aside and Trash only show while they hold something.
+            let hideable = matches!(place, Place::Gallery | Place::SetAside | Place::Trash);
             if hideable && count == 0 && current != place {
                 continue;
             }

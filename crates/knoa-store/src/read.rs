@@ -16,6 +16,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
     pub everything: usize,
+    pub gallery: usize,
     pub up_next: usize,
     pub unsorted: usize,
     pub not_organized: usize,
@@ -100,6 +101,7 @@ impl Store {
         )?;
         Ok(Counts {
             everything: place(Place::Everything)?,
+            gallery: place(Place::Gallery)?,
             up_next: place(Place::UpNext)?,
             unsorted: place(Place::Unsorted)?,
             not_organized: place(Place::NotOrganized)?,
@@ -308,6 +310,7 @@ mod tests {
             fields.insert("runtime".into(), json!(runtime));
             let enrichment = Enrichment {
                 kind: Kind::Movie,
+                title: None,
                 summary: Some("A film noir".into()),
                 fields,
                 extras: Vec::new(),
@@ -337,5 +340,50 @@ mod tests {
                 .unwrap(),
             [(Kind::Movie, 2)]
         );
+    }
+
+    #[test]
+    fn gallery_holds_media_and_finds_them_by_what_they_show() {
+        let mut store = Store::open_in_memory().unwrap();
+        let links = [
+            bookmark("https://example.com/harbor.png", "harbor.png", 1),
+            bookmark("https://example.com/teal-guide", "Painting in teal", 2),
+        ];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        for job in store.take_jobs(0, 2).unwrap() {
+            let (kind, fields) = if job.bookmark.title == "harbor.png" {
+                let shown = json!({"medium": "illustration", "colors": ["teal", "black"],
+                    "visible_text": "Neon Harbor"});
+                (Kind::Image, shown)
+            } else {
+                (Kind::Article, json!({}))
+            };
+            let enrichment = Enrichment {
+                kind,
+                title: None,
+                summary: None,
+                fields: serde_json::from_value(fields).unwrap(),
+                extras: Vec::new(),
+                tags: Vec::new(),
+                folders: Vec::new(),
+                set_aside: None,
+                model: "test".into(),
+            };
+            store
+                .finish_organized(job.bookmark.id, &enrichment, 3)
+                .unwrap();
+        }
+
+        let gallery = |input: &str| -> Vec<String> {
+            let query = Query::parse(input, Some(WORKSPACE), Place::Gallery);
+            let found = store.search(&query, 10).unwrap();
+            found.into_iter().map(|b| b.title).collect()
+        };
+        assert_eq!(gallery(""), ["harbor.png"]);
+        assert_eq!(gallery("teal"), ["harbor.png"]);
+        assert_eq!(gallery("illustration neon"), ["harbor.png"]);
+        assert_eq!(store.counts(WORKSPACE).unwrap().gallery, 1);
     }
 }

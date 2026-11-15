@@ -325,7 +325,8 @@ fn cover(
     cover.into_any_element()
 }
 
-const GROUP: &str = "card";
+/// The hover group of a card and its parts.
+pub const GROUP: &str = "card";
 
 /// Wraps a card so it can be clicked, with the 2 px hover lift.
 /// The card fills its layout slot, so a text-height estimate that's a little off shows as

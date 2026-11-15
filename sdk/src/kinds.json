@@ -90,8 +90,15 @@
     "label": "Image",
     "plural": "Images",
     "description": "A picture, illustration, photo or design shot, saved for how it looks.",
-    "key_facts": ["author"],
-    "fields": [{ "name": "author", "type": "text", "description": "Artist or photographer" }]
+    "key_facts": ["medium", "resolution"],
+    "fields": [
+      { "name": "author", "type": "text", "description": "Artist or photographer" },
+      { "name": "medium", "type": "text", "description": "photo, illustration, painting, screenshot, diagram, 3D render, pixel art, ..." },
+      { "name": "colors", "type": "list", "description": "Dominant colors, at most 4 plain names like teal, orange, black" },
+      { "name": "visible_text", "type": "text", "description": "The few most telling words written in the image, at most 100 characters; not a transcription" },
+      { "name": "resolution", "type": "text", "description": "Width×height in pixels" },
+      { "name": "format", "type": "text", "description": "File format: JPEG, PNG, WebP, GIF, ..." }
+    ]
   },
   "app": {
     "label": "App",

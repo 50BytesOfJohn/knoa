@@ -3,12 +3,15 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use gpui::{App, AppContext as _, Context, Entity, Global, ImageSource, Task};
+use gpui::{App, AppContext as _, Context, Entity, Global, Task};
 use knoa_core::{Bookmark, BookmarkId, Image};
 use knoa_fetch::Fetcher;
 use knoa_store::BookmarkIdentity;
 
-use crate::{services::network::Network, state::library::Library};
+use crate::{
+    services::network::Network,
+    state::{library::Library, rewritten_images::RewrittenImages},
+};
 
 /// How long a refresh that found nothing says so.
 const SHOW_OUTCOME_FOR: Duration = Duration::from_secs(4);
@@ -80,7 +83,8 @@ impl Thumbnails {
                 .spawn(async move { fetcher.fetch(&url).await })
                 .await
             {
-                Ok(Ok(page)) => page
+                Ok(Ok(fetched)) => fetched
+                    .page
                     .image
                     .map(|image| (identity, image))
                     .ok_or(Refresh::NoImage),
@@ -108,9 +112,7 @@ impl Thumbnails {
         match outcome {
             Ok((identity, image)) => {
                 self.refreshes.remove(&id);
-                // The cache is keyed by image URL, so a new picture can land in the same
-                // file; GPUI would keep drawing the one it decoded before.
-                ImageSource::from(image.path.clone()).remove_asset(cx);
+                RewrittenImages::handle(cx).add(image.path.clone());
                 self.library.update(cx, |library, cx| {
                     library.change(cx, move |store| {
                         store.set_image_if_current(&identity, &image)

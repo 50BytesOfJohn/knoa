@@ -1,5 +1,6 @@
 //! The capabilities Knoa needs from an AI provider.
 
+use knoa_core::AnalysisImage;
 use serde_json::Value;
 
 use crate::Error;
@@ -28,21 +29,42 @@ impl<T: ?Sized> MaybeSync for T {}
 #[derive(Debug, Clone)]
 pub struct Message {
     pub role: &'static str,
-    pub content: String,
+    pub content: Content,
+}
+
+/// What a message says: text, or text and images for a model that can see.
+#[derive(Debug, Clone)]
+pub enum Content {
+    Text(String),
+    Parts(Vec<Part>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Part {
+    Text(String),
+    Image(AnalysisImage),
 }
 
 impl Message {
     pub fn system(content: impl Into<String>) -> Message {
         Message {
             role: "system",
-            content: content.into(),
+            content: Content::Text(content.into()),
         }
     }
 
     pub fn user(content: impl Into<String>) -> Message {
         Message {
             role: "user",
-            content: content.into(),
+            content: Content::Text(content.into()),
+        }
+    }
+
+    /// A user message showing `image` after `text`.
+    pub fn user_with_image(text: impl Into<String>, image: AnalysisImage) -> Message {
+        Message {
+            role: "user",
+            content: Content::Parts(vec![Part::Text(text.into()), Part::Image(image)]),
         }
     }
 }

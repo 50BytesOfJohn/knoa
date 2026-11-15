@@ -76,6 +76,7 @@ impl Store {
     /// Takes up to `limit` due jobs and marks their bookmarks as organizing.
     pub fn take_jobs(&mut self, now: i64, limit: usize) -> Result<Vec<Job>> {
         let tx = self.conn.transaction()?;
+        drop_settled_backfills(&tx)?;
         let due: Vec<(i64, u32, bool)> = {
             let mut stmt = tx.prepare(
                 "SELECT j.bookmark_id, j.attempts, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
@@ -212,6 +213,7 @@ impl Store {
 
     /// Stores the AI's answer and takes the bookmark off the queue. A bookmark the user kept
     /// is never set aside. A bookmark deleted for good while it was organized is skipped.
+    /// The AI's title replaces only the URL standing in for one, as the page's does.
     pub fn finish_organized(
         &mut self,
         id: BookmarkId,
@@ -224,7 +226,9 @@ impl Store {
             Ok(tx.execute(
             "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
                 status = 'organized', organized_at = ?7, error = NULL,
-                set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END WHERE id = ?1",
+                set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END,
+                title = CASE WHEN source IS NULL AND title = url THEN coalesce(?9, title) ELSE title END
+             WHERE id = ?1",
             params![
                 id.0,
                 enrichment.kind.slug(),
@@ -234,6 +238,7 @@ impl Store {
                 enrichment.model,
                 now,
                 enrichment.set_aside,
+                enrichment.title,
             ],
             )?)
         })?;
@@ -267,11 +272,16 @@ impl Store {
     }
 
     /// Takes the bookmark off the queue without AI results: no AI is set up, so the page's
-    /// own metadata is all it gets. It stays "not organized".
+    /// own metadata is all it gets. It stays "not organized", or organized when the AI
+    /// organized it before.
     pub fn finish_page_only(&mut self, id: BookmarkId) -> Result<()> {
         let tx = self.conn.transaction()?;
         Recorder::ai(&tx)?.on_bookmark(id.0, || {
-            tx.execute("UPDATE bookmarks SET status = 'new' WHERE id = ?1", [id.0])?;
+            tx.execute(
+                "UPDATE bookmarks SET status = CASE WHEN model IS NULL THEN 'new' ELSE 'organized' END
+                 WHERE id = ?1",
+                [id.0],
+            )?;
             Ok(())
         })?;
         tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id.0])?;
@@ -336,6 +346,7 @@ fn requeue(tx: &rusqlite::Transaction<'_>, id: BookmarkId, error: &str) -> Resul
     })
 }
 
+/// A request from the user replaces a waiting backfill, so it is never dropped.
 fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {
     tx.execute(
         "UPDATE bookmarks SET status = 'queued' WHERE id = ?1 AND status != 'organizing'",
@@ -343,9 +354,31 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Resul
     )?;
     tx.execute(
         "INSERT INTO jobs (bookmark_id, folders_only) VALUES (?1, ?2) ON CONFLICT DO UPDATE
-         SET run_after = 0, folders_only = excluded.folders_only",
+         SET run_after = 0, folders_only = excluded.folders_only, vision_backfill = 0",
         params![id, folders_only],
     )?;
+    Ok(())
+}
+
+/// Drops the image backfill's waiting jobs whose bookmark another Mac organized from its
+/// picture since, as a pull shows: running them again would only pay for the same answer.
+pub(crate) fn drop_settled_backfills(tx: &rusqlite::Transaction<'_>) -> Result<()> {
+    const SETTLED: &str =
+        "SELECT j.bookmark_id FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+        WHERE j.vision_backfill = 1 AND b.status = 'queued'
+          AND json_extract(b.fields, '$.medium') IS NOT NULL";
+    let settled: Vec<i64> = tx
+        .prepare(SETTLED)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in settled {
+        tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id])?;
+        tx.execute(
+            "UPDATE bookmarks SET status = CASE WHEN organized_at IS NULL THEN 'new' ELSE 'organized' END
+             WHERE id = ?1",
+            [id],
+        )?;
+    }
     Ok(())
 }
 
@@ -521,9 +554,42 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_ais_title_replaces_only_a_url_standing_in_for_one() {
+        let mut store = Store::open_in_memory().unwrap();
+        let added = store
+            .add_link(WORKSPACE, "https://w.example/full/a.jpg", 1)
+            .unwrap();
+        let links = [bookmark("https://b.dev/", "https://b.dev/", 2)];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let answer = Enrichment {
+            title: Some("Neon workshop with a robot arm".into()),
+            ..enrichment()
+        };
+
+        let jobs = store.take_jobs(0, 2).unwrap();
+        for job in &jobs {
+            store
+                .finish_organized(job.bookmark.id, &answer, 10)
+                .unwrap();
+        }
+
+        for job in jobs {
+            let title = store.bookmark(job.bookmark.id).unwrap().unwrap().title;
+            if job.bookmark.id == added.id {
+                assert_eq!(title, "Neon workshop with a robot arm");
+            } else {
+                assert_eq!(title, "https://b.dev/", "a browser's own title stays");
+            }
+        }
+    }
+
     fn enrichment() -> Enrichment {
         Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: None,
             fields: Fields::new(),
             extras: Vec::new(),

@@ -268,11 +268,21 @@ pub fn tip(
     action: Option<&'static dyn gpui::Action>,
     theme: &Theme,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    tip_in(text, action, "Cards", theme)
+}
+
+/// A [`tip`] showing the key bound to `action` in key context `context`.
+pub fn tip_in(
+    text: &'static str,
+    action: Option<&'static dyn gpui::Action>,
+    context: &'static str,
+    theme: &Theme,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
     move |window, cx| {
         let tooltip = Tooltip::new(text);
         let tooltip = match action {
-            Some(action) => tooltip.action(action, Some("Cards")),
+            Some(action) => tooltip.action(action, Some(context)),
             None => tooltip,
         };
         tooltip

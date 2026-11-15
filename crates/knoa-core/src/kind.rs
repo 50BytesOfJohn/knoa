@@ -55,6 +55,9 @@ impl Kind {
         Kind::Other,
     ];
 
+    /// Kinds whose bookmark is the picture itself, which the Gallery shows.
+    pub const MEDIA: [Kind; 1] = [Kind::Image];
+
     /// The stable identifier used in the database, prompts and `kind:` filters.
     pub fn slug(self) -> &'static str {
         match self {

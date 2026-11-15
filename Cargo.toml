@@ -40,7 +40,18 @@ base64 = "0.23"
 dirs = "6"
 futures = "0.3"
 getrandom = "0.4"
+# Decoding, resizing and encoding linked images, also in the cloud organizer's Worker:
+# only the codecs Knoa reads, and no rayon, since a Worker has one thread. `jpeg` is
+# for its encoder; JPEGs are decoded by jpeg-decoder.
+image = { version = "0.25", default-features = false, features = [
+  "gif",
+  "jpeg",
+  "png",
+  "webp",
+] }
 imagesize = "0.15"
+# Decodes a JPEG scaled down in the DCT, so a huge photo never exists at full size.
+jpeg-decoder = { version = "0.3", default-features = false }
 jiff = "0.2"
 notify = "8"
 # Objective-C messaging for the AppKit and Sparkle calls GPUI doesn't wrap. Same majors
@@ -56,6 +67,8 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSView",
 ] }
 objc2-foundation = "0.3"
+# Already in the tree through `url`; decodes a link's file name for saving.
+percent-encoding = "2"
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "json",

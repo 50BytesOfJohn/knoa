@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use knoa_core::{BookmarkId, Image};
 use rusqlite::params;
 
-use crate::{Result, Store};
+use crate::{Result, Store, jobs::drop_settled_backfills};
 
 /// A queued bookmark the cloud organizer should take over.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,18 +58,24 @@ impl Store {
     }
 
     /// Up to `limit` jobs of this Mac's queue for bookmarks the server already has.
-    pub fn cloud_jobs(&self, limit: usize) -> Result<Vec<CloudJob>> {
-        let mut stmt = self.conn.prepare(&format!(
-            "SELECT b.sync_id, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
-             WHERE b.status = 'queued' AND {ON_SERVER} LIMIT ?1"
-        ))?;
-        let jobs = stmt.query_map([limit], |row| {
-            Ok(CloudJob {
-                bookmark: row.get(0)?,
-                folders_only: row.get(1)?,
-            })
-        })?;
-        Ok(jobs.collect::<rusqlite::Result<_>>()?)
+    pub fn cloud_jobs(&mut self, limit: usize) -> Result<Vec<CloudJob>> {
+        let tx = self.conn.transaction()?;
+        drop_settled_backfills(&tx)?;
+        let jobs = {
+            let mut stmt = tx.prepare(&format!(
+                "SELECT b.sync_id, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+                 WHERE b.status = 'queued' AND {ON_SERVER} LIMIT ?1"
+            ))?;
+            stmt.query_map([limit], |row| {
+                Ok(CloudJob {
+                    bookmark: row.get(0)?,
+                    folders_only: row.get(1)?,
+                })
+            })?
+            .collect::<rusqlite::Result<_>>()?
+        };
+        tx.commit()?;
+        Ok(jobs)
     }
 
     /// The cloud organizer took these bookmarks: they leave this Mac's queue. Their status

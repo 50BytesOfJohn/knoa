@@ -2,6 +2,7 @@
 //! Only cards that intersect the viewport are built each frame.
 
 mod date_rail;
+mod decoded;
 mod empty_state;
 mod layout;
 mod placed_card;
@@ -15,7 +16,8 @@ use knoa_core::Place;
 
 use super::{MainView, search::SEARCH_AREA_HEIGHT, trash::TRASH_BAR_HEIGHT};
 use crate::ui::theme::{DETAIL_WIDTH, GUTTER, MARGIN, SIDEBAR_WIDTH, Theme};
-pub(super) use layout::LayoutCache;
+pub(super) use decoded::DecodedImages;
+pub(super) use layout::{Arrangement, LayoutCache};
 use up_next::UP_NEXT_HEIGHT;
 
 const GAP: f32 = 16.;
@@ -68,6 +70,7 @@ impl MainView {
 
         let viewport_height = f32::from(window.viewport_size().height);
         let scroll_top = -f32::from(self.scroll.offset().y);
+        self.release_far_images(scroll_top, scroll_top + viewport_height, window, cx);
         let results = self.layout.results.clone();
         let show_summaries = Self::show_summaries(cx);
 
@@ -80,7 +83,8 @@ impl MainView {
         } else if trash_bar {
             canvas = canvas.child(self.trash_bar(width, cx));
         }
-        for (group, y) in self.layout.groups.iter().zip(&self.layout.layout.headers) {
+        let headers = self.layout.groups.iter().zip(&self.layout.layout.headers);
+        for (group, y) in headers.filter(|(group, _)| !group.label.is_empty()) {
             canvas = canvas.child(
                 div()
                     .absolute()
@@ -133,7 +137,7 @@ impl MainView {
                     .on_action(cx.listener(Self::move_down))
                     .on_action(cx.listener(Self::open_selected))
                     .on_action(cx.listener(Self::open_selected_in_background))
-                    .on_action(cx.listener(Self::toggle_detail))
+                    .on_action(cx.listener(Self::quick_look))
                     .on_action(cx.listener(Self::toggle_up_next))
                     .on_action(cx.listener(Self::copy_link))
                     .on_action(cx.listener(Self::delete_selected))

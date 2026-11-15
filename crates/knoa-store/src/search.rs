@@ -49,6 +49,15 @@ impl Filter {
                 "NOT EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id)".into(),
             ),
             Place::NotOrganized => conditions.push("b.status != 'organized'".into()),
+            Place::Gallery => {
+                let slots = vec!["?"; Kind::MEDIA.len()].join(", ");
+                conditions.push(format!("b.kind IN ({slots})"));
+                filter.params.extend(
+                    Kind::MEDIA
+                        .iter()
+                        .map(|kind| Value::Text(kind.slug().into())),
+                );
+            }
             Place::Folder(folder) => {
                 conditions.push("EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id AND bf.folder_id = ?)".into());
                 filter.params.push(Value::Integer(folder.0));

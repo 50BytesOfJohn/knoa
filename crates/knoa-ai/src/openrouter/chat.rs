@@ -1,10 +1,13 @@
 //! Chat Completions with strict structured output.
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{OpenRouter, ReportedUsage};
-use crate::{Error, LanguageModel, StructuredReply, StructuredRequest};
+use crate::{
+    Content, Error, LanguageModel, Part, StructuredReply, StructuredRequest, error::Failures,
+};
 
 #[derive(Deserialize)]
 struct Completion {
@@ -26,18 +29,18 @@ struct ChoiceMessage {
 
 impl LanguageModel for OpenRouter {
     async fn generate(&self, request: &StructuredRequest) -> Result<StructuredReply, Error> {
-        let mut last_error = Error::BadAnswer("no chat model configured".into());
+        let mut failures = Failures::default();
         for model in &self.chat_models {
             match self.complete(model, request).await {
                 Ok(reply) => return Ok(reply),
                 Err(err) if err.try_other_model() => {
                     tracing::debug!(model, "trying the next model: {err}");
-                    last_error = err;
+                    failures.add(err);
                 }
                 Err(err) => return Err(err),
             }
         }
-        Err(last_error)
+        Err(failures.into_error())
     }
 }
 
@@ -50,7 +53,7 @@ impl OpenRouter {
         let messages: Vec<_> = request
             .messages
             .iter()
-            .map(|m| json!({ "role": m.role, "content": m.content }))
+            .map(|m| json!({ "role": m.role, "content": content_json(&m.content) }))
             .collect();
         let body = json!({
             "model": model,
@@ -82,5 +85,60 @@ impl OpenRouter {
             json,
             model: completion.model,
         })
+    }
+}
+
+/// OpenRouter's content parts. Images go inline as data URLs, already downscaled, at
+/// "high" detail: left to the model, one priced Knoa's 1024 pixel copy as a thumbnail and
+/// another an original as ten times the tokens.
+fn content_json(content: &Content) -> Value {
+    let parts = match content {
+        Content::Text(text) => return Value::from(text.as_str()),
+        Content::Parts(parts) => parts,
+    };
+    let parts: Vec<Value> = parts
+        .iter()
+        .map(|part| match part {
+            Part::Text(text) => json!({ "type": "text", "text": text }),
+            Part::Image(image) => {
+                let url = format!(
+                    "data:{};base64,{}",
+                    image.media_type,
+                    STANDARD.encode(&image.bytes)
+                );
+                json!({ "type": "image_url", "image_url": { "url": url, "detail": "high" } })
+            }
+        })
+        .collect();
+    Value::from(parts)
+}
+
+#[cfg(test)]
+mod tests {
+    use knoa_core::AnalysisImage;
+
+    use super::*;
+
+    #[test]
+    fn images_are_sent_as_inline_parts_after_the_text() {
+        let image = AnalysisImage {
+            media_type: "image/jpeg",
+            bytes: b"jpeg".to_vec(),
+            width: 1,
+            height: 1,
+        };
+        let content = Content::Parts(vec![Part::Text("Look".into()), Part::Image(image)]);
+
+        assert_eq!(
+            content_json(&content),
+            json!([
+                { "type": "text", "text": "Look" },
+                {
+                    "type": "image_url",
+                    "image_url": { "url": "data:image/jpeg;base64,anBlZw==", "detail": "high" },
+                },
+            ])
+        );
+        assert_eq!(content_json(&Content::Text("Hi".into())), json!("Hi"));
     }
 }

@@ -17,7 +17,8 @@ use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId, Folder, FolderId, Place};
 
 use super::{
-    CopyLink, DeleteSelected, MainView, OpenSelected, OpenSelectedInBackground, ToggleUpNext,
+    CopyLink, DeleteSelected, MainView, OpenSelected, OpenSelectedInBackground, QuickLook,
+    ShowDetails, ToggleUpNext, picture::has_picture,
 };
 use crate::{
     services::thumbnails::{Refresh, Thumbnails},
@@ -142,9 +143,46 @@ fn opening_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) 
         },
     );
     let copy = item(view, "Copy link", "link", id, MainView::copy_link_of);
-    menu.item(target.shortcut(open, OpenSelected))
+    let details = item(view, "Show details", "info", id, MainView::select);
+    let menu = menu
+        .item(target.shortcut(open, OpenSelected))
         .item(target.shortcut(open_behind, OpenSelectedInBackground))
         .item(target.shortcut(copy, CopyLink))
+        .item(target.shortcut(details, ShowDetails));
+    if has_picture(&target.bookmark) {
+        picture_items(menu, view, target)
+    } else {
+        menu
+    }
+}
+
+/// Copy and save show no keys: theirs belong to the viewer, where ⌘C copies the picture.
+fn picture_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) -> PopupMenu {
+    let id = target.bookmark.id;
+    let view_picture = {
+        let view = view.clone();
+        PopupMenuItem::new("View picture")
+            .icon(icon_asset("maximize-2"))
+            .on_click(move |_, window, cx| {
+                let _ = view.update(cx, |this, cx| this.open_viewer(id, window, cx));
+            })
+    };
+    menu.separator()
+        .item(target.shortcut(view_picture, QuickLook))
+        .item(item(
+            view,
+            "Copy image",
+            "copy",
+            id,
+            MainView::copy_image_of,
+        ))
+        .item(item(
+            view,
+            "Save image…",
+            "download",
+            id,
+            MainView::save_image_of,
+        ))
 }
 
 fn filing_items(

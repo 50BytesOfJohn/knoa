@@ -7,6 +7,8 @@
 use futures::StreamExt as _;
 use reqwest::Client;
 
+use super::capacity;
+
 pub fn client(user_agent: &str) -> reqwest::Result<Client> {
     Client::builder().user_agent(user_agent).build()
 }
@@ -16,17 +18,21 @@ pub fn is_connect(_err: &reqwest::Error) -> bool {
     false
 }
 
-/// Reads at most `limit` bytes: a huge page's start holds its metadata, and a Worker has
-/// little memory to spare.
-pub async fn read_body(response: reqwest::Response, limit: usize) -> reqwest::Result<Vec<u8>> {
-    let mut body = Vec::new();
+/// Reads at most `limit` bytes, and says whether the body went on: a huge page's start
+/// holds its metadata, and a Worker has little memory to spare.
+pub async fn read_body(
+    response: reqwest::Response,
+    limit: usize,
+) -> reqwest::Result<(Vec<u8>, bool)> {
+    let mut body = Vec::with_capacity(capacity(response.content_length(), limit));
     let mut chunks = response.bytes_stream();
     while let Some(chunk) = chunks.next().await {
         body.extend_from_slice(&chunk?);
         if body.len() > limit {
             body.truncate(limit);
-            break;
+            return Ok((body, true));
         }
     }
-    Ok(body)
+    body.shrink_to_fit();
+    Ok((body, false))
 }

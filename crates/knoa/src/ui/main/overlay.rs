@@ -17,6 +17,7 @@ use super::{
     folder_editor::FolderEditor,
     settings::{Page, SettingsView},
     sidebar::{TITLEBAR_HEIGHT, workspace_menu_left},
+    viewer::Viewer,
 };
 use crate::{
     state::settings::SettingsFile,
@@ -31,6 +32,8 @@ pub enum Overlay {
     /// The workspace switcher.
     Workspaces,
     AddLink(Entity<AddLink>),
+    /// The full-window image viewer.
+    Viewer(Viewer),
 }
 
 impl MainView {
@@ -103,6 +106,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        self.close_viewer_first(window, cx);
         let library = self.library.clone();
         let this = cx.entity().downgrade();
         let panel = cx.new(|cx| AddLink::new(library, this, window, cx));
@@ -115,6 +119,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        self.close_viewer_first(window, cx);
         self.show_settings(Page::General, window, cx);
     }
 }
@@ -153,6 +158,11 @@ impl MainView {
             Overlay::AddLink(panel) => panel.clone().into_any_element(),
             Overlay::ViewOptions => self.view_options(cx).into_any_element(),
             Overlay::Workspaces => self.workspace_switcher(cx).into_any_element(),
+            // Not a panel: the viewer fills the window with its own backdrop.
+            Overlay::Viewer(viewer) => {
+                let viewer = self.render_viewer(viewer.bookmark, viewer.notice(), window, cx);
+                return Some(deferred(viewer).with_priority(1).into_any_element());
+            }
         };
         let panel = div()
             .id("overlay-panel")
