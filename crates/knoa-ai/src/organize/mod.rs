@@ -68,8 +68,10 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         max_tokens: MAX_TOKENS,
     };
     let reply = match model.generate(&request(input.bookmark.image)).await {
-        // A user's own models may not take images; the details still say a lot.
-        Err(err) if err.try_other_model() && input.bookmark.image.is_some() => {
+        // A user's own models may not take images; the details still say a lot. Only when
+        // every model refused it unbilled: an unusable answer was paid for, and fails as
+        // any other for the job's own retries.
+        Err(err) if err.is_refusal() && input.bookmark.image.is_some() => {
             tracing::debug!("no model took the image, organizing without it: {err}");
             model.generate(&request(None)).await?
         }
@@ -118,5 +120,134 @@ fn filing_input<'a>(input: &'a OrganizeInput<'_>, answer: &'a answer::Answer) ->
         tags: &answer.tags,
         instructions: input.instructions,
         folders: input.folders,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use serde_json::json;
+
+    use super::*;
+    use crate::{Content, Part, Provider, StructuredReply, error::Failures};
+
+    /// How a fake chat model treats a request.
+    #[derive(Clone, Copy)]
+    enum Model {
+        /// Refuses images, unbilled, and answers text.
+        Blind,
+        /// Takes the image and answers with something unusable, which was billed.
+        Garbled,
+    }
+
+    /// Chat models in fallback order, recording whether each request carried the image.
+    struct Models {
+        models: Vec<Model>,
+        requests: Mutex<Vec<bool>>,
+    }
+
+    impl Models {
+        fn new(models: &[Model]) -> Models {
+            Models {
+                models: models.to_vec(),
+                requests: Mutex::default(),
+            }
+        }
+
+        fn requests(&self) -> Vec<bool> {
+            self.requests.lock().expect("lock poisoned").clone()
+        }
+    }
+
+    impl LanguageModel for Models {
+        #[expect(
+            clippy::unused_async_trait_impl,
+            reason = "a real provider awaits its requests"
+        )]
+        async fn generate(&self, request: &StructuredRequest) -> Result<StructuredReply, Error> {
+            let with_image = request.messages.iter().any(|message| {
+                matches!(&message.content, Content::Parts(parts)
+                    if parts.iter().any(|part| matches!(part, Part::Image(_))))
+            });
+            let mut failures = Failures::default();
+            for model in &self.models {
+                self.requests
+                    .lock()
+                    .expect("lock poisoned")
+                    .push(with_image);
+                let reply = match (model, with_image) {
+                    (Model::Blind, true) => Err(Error::Provider {
+                        status: 404,
+                        message: "no endpoints support image input".into(),
+                    }),
+                    (Model::Garbled, true) => Err(Error::BadAnswer("invalid JSON".into())),
+                    (_, false) => Ok(StructuredReply {
+                        json: json!({ "summary": "A picture.", "fields": {}, "extras": [], "tags": [] }),
+                        model: "fake".into(),
+                    }),
+                };
+                match reply {
+                    Ok(reply) => return Ok(reply),
+                    Err(err) => failures.add(err),
+                }
+            }
+            Err(failures.into_error())
+        }
+    }
+
+    async fn organize_picture(models: &Models) -> Result<Enrichment, Error> {
+        let image = AnalysisImage {
+            media_type: "image/jpeg",
+            bytes: vec![0xff, 0xd8],
+            width: 1024,
+            height: 576,
+        };
+        let input = OrganizeInput {
+            bookmark: BookmarkInput {
+                title: "A picture",
+                url: "https://a.dev/picture.jpg",
+                browser_folder: None,
+                evidence: None,
+                page_kind: Some(Kind::Image),
+                page_fields: &Fields::new(),
+                image: Some(&image),
+            },
+            instructions: "",
+            guideline: None,
+            folders: &[],
+            tag_list: &TagList::default(),
+        };
+        organize(models, None::<&Provider>, &input).await
+    }
+
+    #[tokio::test]
+    async fn a_picture_every_model_refuses_is_organized_once_more_without_it() {
+        let models = Models::new(&[Model::Blind, Model::Blind]);
+
+        let enrichment = organize_picture(&models).await.expect("organized");
+
+        assert_eq!(enrichment.summary.as_deref(), Some("A picture."));
+        assert_eq!(models.requests(), [true, true, false]);
+    }
+
+    #[tokio::test]
+    async fn a_bad_answer_to_the_picture_is_not_asked_again_without_it() {
+        let models = Models::new(&[Model::Garbled]);
+
+        let result = organize_picture(&models).await;
+
+        assert!(matches!(result, Err(Error::BadAnswer(_))));
+        assert_eq!(models.requests(), [true]);
+    }
+
+    #[tokio::test]
+    async fn one_bad_answer_among_refusals_is_not_asked_again_without_the_picture() {
+        let models = Models::new(&[Model::Garbled, Model::Blind]);
+
+        let result = organize_picture(&models).await;
+
+        assert!(matches!(result, Err(Error::BadAnswer(_))));
+        assert_eq!(models.requests(), [true, true]);
     }
 }

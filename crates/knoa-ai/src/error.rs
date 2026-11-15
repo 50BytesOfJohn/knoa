@@ -36,13 +36,38 @@ impl Error {
     /// Another model might do better: the answer was malformed, or no endpoint serves the
     /// request (OpenRouter's 404 when a model lacks a required parameter).
     pub fn try_other_model(&self) -> bool {
+        matches!(self, Error::BadAnswer(_)) || self.is_refusal()
+    }
+
+    /// The endpoint refused the request itself, so it wasn't billed: a model that can't
+    /// take an image, or lacks a parameter the request requires.
+    pub fn is_refusal(&self) -> bool {
         matches!(
             self,
-            Error::BadAnswer(_)
-                | Error::Provider {
-                    status: 400 | 404 | 422,
-                    ..
-                }
+            Error::Provider {
+                status: 400 | 404 | 422,
+                ..
+            }
         )
+    }
+}
+
+/// The error a chain of fallback models reports when every one failed. A bad answer, which
+/// was billed, outranks a refusal, so the chain only reads as refused when no model took
+/// the request at all.
+#[derive(Debug, Default)]
+pub(crate) struct Failures(Option<Error>);
+
+impl Failures {
+    pub(crate) fn add(&mut self, err: Error) {
+        let billed = |err: &Error| matches!(err, Error::BadAnswer(_));
+        if !self.0.as_ref().is_some_and(billed) || billed(&err) {
+            self.0 = Some(err);
+        }
+    }
+
+    pub(crate) fn into_error(self) -> Error {
+        self.0
+            .unwrap_or_else(|| Error::BadAnswer("no chat model configured".into()))
     }
 }

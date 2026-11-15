@@ -5,7 +5,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{OpenRouter, ReportedUsage};
-use crate::{Content, Error, LanguageModel, Part, StructuredReply, StructuredRequest};
+use crate::{
+    Content, Error, LanguageModel, Part, StructuredReply, StructuredRequest, error::Failures,
+};
 
 #[derive(Deserialize)]
 struct Completion {
@@ -27,18 +29,18 @@ struct ChoiceMessage {
 
 impl LanguageModel for OpenRouter {
     async fn generate(&self, request: &StructuredRequest) -> Result<StructuredReply, Error> {
-        let mut last_error = Error::BadAnswer("no chat model configured".into());
+        let mut failures = Failures::default();
         for model in &self.chat_models {
             match self.complete(model, request).await {
                 Ok(reply) => return Ok(reply),
                 Err(err) if err.try_other_model() => {
                     tracing::debug!(model, "trying the next model: {err}");
-                    last_error = err;
+                    failures.add(err);
                 }
                 Err(err) => return Err(err),
             }
         }
-        Err(last_error)
+        Err(failures.into_error())
     }
 }
 
