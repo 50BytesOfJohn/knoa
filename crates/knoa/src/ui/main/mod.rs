@@ -17,6 +17,7 @@ mod overlay;
 mod search;
 mod settings;
 mod sidebar;
+mod tiles;
 mod trash;
 mod workspaces;
 

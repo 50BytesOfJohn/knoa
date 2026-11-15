@@ -15,7 +15,7 @@ use knoa_core::Place;
 
 use super::{MainView, search::SEARCH_AREA_HEIGHT, trash::TRASH_BAR_HEIGHT};
 use crate::ui::theme::{DETAIL_WIDTH, GUTTER, MARGIN, SIDEBAR_WIDTH, Theme};
-pub(super) use layout::LayoutCache;
+pub(super) use layout::{Arrangement, LayoutCache};
 use up_next::UP_NEXT_HEIGHT;
 
 const GAP: f32 = 16.;
@@ -80,7 +80,8 @@ impl MainView {
         } else if trash_bar {
             canvas = canvas.child(self.trash_bar(width, cx));
         }
-        for (group, y) in self.layout.groups.iter().zip(&self.layout.layout.headers) {
+        let headers = self.layout.groups.iter().zip(&self.layout.layout.headers);
+        for (group, y) in headers.filter(|(group, _)| !group.label.is_empty()) {
             canvas = canvas.child(
                 div()
                     .absolute()

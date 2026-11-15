@@ -8,7 +8,10 @@ use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId};
 
 use crate::ui::{
-    main::{MainView, bookmark_menu::with_bookmark_menu, cards, masonry::Placed},
+    main::{
+        MainView, bookmark_menu::with_bookmark_menu, cards, content::Arrangement, masonry::Placed,
+        tiles,
+    },
     theme::Theme,
 };
 
@@ -22,7 +25,13 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let id = bookmark.id;
-        let card = cards::render(bookmark, placed.width, show_summaries, cx);
+        let card = match self.layout.arrangement {
+            Arrangement::Cards => cards::render(bookmark, placed.width, show_summaries, cx),
+            Arrangement::Pictures => {
+                let selected = self.selected == Some(id);
+                tiles::render(bookmark, placed.width, selected, cx)
+            }
+        };
         let on_click = move |this: &mut MainView,
                              event: &ClickEvent,
                              window: &mut Window,
