@@ -61,7 +61,7 @@ pub fn decode(
         Codec::Jpeg => jpeg::decode(bytes, target_side, too_large),
         _ if pixels > OTHER_PIXELS => Err(too_large),
         Codec::Png => png::decode(bytes, too_large),
-        Codec::Webp => webp::decode(bytes, too_large),
+        Codec::Webp => webp::decode(bytes, (width, height), too_large),
         Codec::Gif => gif::decode(bytes, too_large),
     }
 }
