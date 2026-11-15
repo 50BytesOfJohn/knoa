@@ -187,7 +187,8 @@ resumes on its own once that one gets through, or when the user sets a new key.
    gets no folders. Values read from the page override the model's. When the workspace
    holds the AI to its tag list, tags not on it are dropped. A bookmark whose title is
    still its URL also gets a short title, which replaces the URL under the same rule as
-   the page's own title. For a linked image the model sees the AI copy, inline at high
+   the page's own title. Some endpoints answer that title empty whatever the schema says;
+   then the link's decoded file name, or its site, stands in rather than asking again. For a linked image the model sees the AI copy, inline at high
    detail in the bookmark's message, after a short system message on describing images;
    when every configured model refuses the request with the image (unbilled), the
    bookmark is organized again from the image's details alone. Image bookmarks organized

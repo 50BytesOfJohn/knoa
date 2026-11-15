@@ -32,7 +32,8 @@ pub fn answer_schema(kind: Kind, asks: &Asks<'_>) -> Value {
     });
     let mut required = vec!["summary", "fields", "extras", "tags"];
     if asks.title {
-        properties["title"] = json!({ "type": "string" });
+        // Without a minimum, models have filled the required title with "".
+        properties["title"] = json!({ "type": "string", "minLength": 1 });
         required.push("title");
     }
     if let Some(folders) = asks.folders.filter(|f| !f.is_empty()) {

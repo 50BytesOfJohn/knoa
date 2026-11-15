@@ -10,7 +10,9 @@ mod prompt;
 mod schema;
 
 pub use folders::{FilingInput, file_into_folders};
-use knoa_core::{AnalysisImage, Enrichment, Fields, FolderId, Kind, TagList};
+use knoa_core::{
+    AnalysisImage, Enrichment, Fields, FolderId, Kind, TagList, link_file_name, site_of,
+};
 
 use crate::{Classifier, Error, LanguageModel, StructuredRequest};
 
@@ -90,9 +92,13 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         // Chat models give no probability; record their picks as certain.
         None => answer.folders.iter().map(|id| (*id, 1.0)).collect(),
     };
+    let title = asks
+        .title
+        .then(|| usable_title(answer.title.take(), input.bookmark.url))
+        .flatten();
     Ok(Enrichment {
         kind: answer.kind,
-        title: answer.title.filter(|_| asks.title),
+        title,
         summary: answer.summary,
         fields: answer.fields,
         extras: answer.extras,
@@ -108,6 +114,16 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
 fn needs_title(bookmark: &BookmarkInput<'_>) -> bool {
     let title = bookmark.title.trim();
     title.is_empty() || title == bookmark.url
+}
+
+/// The model's title, unless it left it empty or repeated the URL, which some endpoints do
+/// whatever the schema says. Asking again would double the cost, so the link's file name
+/// or site stands in: still better than the URL.
+fn usable_title(title: Option<String>, url: &str) -> Option<String> {
+    title.filter(|title| title != url).or_else(|| {
+        tracing::debug!("the answer has no usable title, naming the bookmark after its link");
+        link_file_name(url).or_else(|| Some(site_of(url)).filter(|site| !site.is_empty()))
+    })
 }
 
 fn filing_input<'a>(input: &'a OrganizeInput<'_>, answer: &'a answer::Answer) -> FilingInput<'a> {
@@ -219,6 +235,51 @@ mod tests {
             tag_list: &TagList::default(),
         };
         organize(models, None::<&Provider>, &input).await
+    }
+
+    /// Answers every request with the same JSON.
+    struct Answers(serde_json::Value);
+
+    impl LanguageModel for Answers {
+        #[expect(
+            clippy::unused_async_trait_impl,
+            reason = "a real provider awaits its requests"
+        )]
+        async fn generate(&self, _: &StructuredRequest) -> Result<StructuredReply, Error> {
+            Ok(StructuredReply {
+                json: self.0.clone(),
+                model: "fake".into(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn a_link_the_model_leaves_untitled_is_named_after_its_file() {
+        let url = "https://w.wallhaven.cc/full/6l/wallhaven-%C3%A9.jpg";
+        let model = Answers(json!({
+            "title": " ", "summary": "A café.", "fields": {}, "extras": [], "tags": [],
+        }));
+        let input = OrganizeInput {
+            bookmark: BookmarkInput {
+                title: url,
+                url,
+                browser_folder: None,
+                evidence: None,
+                page_kind: Some(Kind::Image),
+                page_fields: &Fields::new(),
+                image: None,
+            },
+            instructions: "",
+            guideline: None,
+            folders: &[],
+            tag_list: &TagList::default(),
+        };
+
+        let enrichment = organize(&model, None::<&Provider>, &input)
+            .await
+            .expect("organized");
+
+        assert_eq!(enrichment.title.as_deref(), Some("wallhaven-é.jpg"));
     }
 
     #[tokio::test]
