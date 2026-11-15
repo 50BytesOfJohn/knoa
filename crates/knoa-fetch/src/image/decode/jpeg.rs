@@ -31,7 +31,10 @@ pub fn decode(bytes: &[u8], target_side: u32, allowance: &Allowance) -> Result<D
     let image = match info.pixel_format {
         PixelFormat::L8 => GrayImage::from_raw(width, height, pixels).map(DynamicImage::from),
         PixelFormat::RGB24 => RgbImage::from_raw(width, height, pixels).map(DynamicImage::from),
-        PixelFormat::CMYK32 | PixelFormat::L16 => return Err(Problem::Unsupported),
+        PixelFormat::CMYK32 => {
+            RgbImage::from_raw(width, height, cmyk_to_rgb(pixels)).map(DynamicImage::from)
+        }
+        PixelFormat::L16 => return Err(Problem::Unsupported),
     }
     .ok_or(Problem::Damaged)?;
     let orientation = decoder
@@ -42,11 +45,25 @@ pub fn decode(bytes: &[u8], target_side: u32, allowance: &Allowance) -> Result<D
 }
 
 /// Lossless JPEGs decode at full size into 16-bit samples whatever the scale, and only
-/// they have 16-bit gray. Print files in CMYK need a color profile to look right. All
-/// three are rare on the web.
+/// they have 16-bit gray. Both are archival and medical files, not web pictures.
 fn supported(info: jpeg_decoder::ImageInfo) -> bool {
-    info.coding_process != CodingProcess::Lossless
-        && matches!(info.pixel_format, PixelFormat::L8 | PixelFormat::RGB24)
+    info.coding_process != CodingProcess::Lossless && info.pixel_format != PixelFormat::L16
+}
+
+/// CMYK in place, as RGB. jpeg-decoder hands out ink amounts, Adobe's inverted storage
+/// already undone; without the file's color profile the colors are close, not exact.
+fn cmyk_to_rgb(mut pixels: Vec<u8>) -> Vec<u8> {
+    let count = pixels.len() / 4;
+    for i in 0..count {
+        let [c, m, y, k] = [0, 1, 2, 3].map(|channel| u16::from(pixels[i * 4 + channel]));
+        let light = |ink: u16| ((255 - ink) * (255 - k) / 255) as u8;
+        // The pixel's three bytes land on bytes already read, its own or earlier ones.
+        pixels[i * 3] = light(c);
+        pixels[i * 3 + 1] = light(m);
+        pixels[i * 3 + 2] = light(y);
+    }
+    pixels.truncate(count * 3);
+    pixels
 }
 
 /// The frame header: the size and each component's sampling, which jpeg-decoder keeps to
@@ -151,6 +168,21 @@ fn idct_size(width: u32, scaled: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cmyk_ink_becomes_rgb_light() {
+        let ink = vec![
+            0, 0, 0, 0, // paper
+            255, 0, 0, 0, // cyan
+            0, 0, 0, 255, // black
+            0, 255, 255, 0, // red
+        ];
+
+        assert_eq!(
+            cmyk_to_rgb(ink),
+            [255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0]
+        );
+    }
 
     #[test]
     fn a_lossless_jpeg_is_refused_before_decoding() {
