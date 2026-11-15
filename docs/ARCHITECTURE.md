@@ -35,7 +35,7 @@ One process. The UI thread only renders and handles input:
 | `knoa-core` | Domain types (`Workspace`, `Bookmark`, `Kind`, `Field`, `Folder`, `Query`), kind definitions | no |
 | `knoa-store` | SQLite schema, migrations, queries, full-text search, the job queue | no |
 | `knoa-browser` | Chromium profile discovery, `Bookmarks` parsing, file watching, opening links in a profile | no |
-| `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails | no |
+| `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails, image decoding | no |
 | `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
 | `knoa-sync` | Cloud mode's client: Clerk sign-in, the Knoa API and its socket | no |
 
@@ -69,7 +69,10 @@ The exact schema is written with `knoa-store`.
 
 SQLite via `rusqlite` (`bundled`), WAL mode, embedded versioned migrations. The database is
 `~/Library/Application Support/Knoa/knoa.db`. Thumbnails are cached as files in the app's
-cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md).
+cache directory. See [ADR 0002](adr/0002-sqlite-local-first-storage.md). For a link
+straight to an image file the cached file, and the one uploaded to the server, is a
+display copy of at most 1600 pixels, not the original
+([ADR 0016](adr/0016-images-seen-from-derived-copies.md)).
 
 Only distribution builds made with `KNOA_CHANNEL=release` use `Knoa`. All other builds,
 including optimized builds, keep their library and file credentials in `Knoa Dev` and
@@ -152,11 +155,21 @@ network requests), so quitting the app loses no work. When the provider rejects 
 the account is out of credits, the queue pauses and tries one bookmark every 5 minutes; it
 resumes on its own once that one gets through, or when the user sets a new key.
 
-1. **Fetch** the page with `reqwest` (plain HTTP, with timeout and size limit).
+1. **Fetch** the page with `reqwest` (plain HTTP, with timeout and size limit: 4 MiB of a
+   page, 24 MiB for a link straight to an image file, 8 MiB for a preview image; a cut-off
+   image is refused, never stored).
 2. **Extract** metadata, in this order:
    - site-specific extractors for popular sites (YouTube, Vimeo, IMDb, GitHub, ...);
    - structured data on the page: schema.org JSON-LD, Open Graph, oEmbed;
    - LLM extraction from the page text when the above is not enough.
+
+   A link straight to an image file is the bookmark itself. It is downloaded once and
+   decoded within a pixel budget that also holds in the cloud organizer's 128 MB Worker
+   (JPEGs are scaled down while decoding; larger files are refused). One decode gives the
+   display copy (JPEG, or PNG while it has transparency; a small file is kept as it is)
+   and a 1024 pixel JPEG for the AI. Its format, resolution, size and animation go into
+   the evidence, and resolution and format into the image kind's fields. An image that
+   can't be decoded (AVIF, HEIC, SVG, over budget) keeps those details and a note why.
 3. **Kind**: the page's own kind when it declared one, else one choice question to the
    classifier (OpenRouter Decisions), else a small chat call
    ([ADR 0013](adr/0013-kind-before-fields.md)).
@@ -166,7 +179,12 @@ resumes on its own once that one gets through, or when the user sets a new key.
    instructions, guideline and tag list, the extracted evidence and about 4k characters
    of page text. A bookmark that doesn't fit is stored as set aside, with the reason, and
    gets no folders. Values read from the page override the model's. When the workspace
-   holds the AI to its tag list, tags not on it are dropped.
+   holds the AI to its tag list, tags not on it are dropped. A bookmark whose title is
+   still its URL also gets a short title, which replaces the URL under the same rule as
+   the page's own title. For a linked image the model sees the AI copy, inline at high
+   detail in the bookmark's message, after a short system message on describing images;
+   when none of the configured models takes images, the bookmark is organized again from
+   the image's details alone.
 5. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
    bookmark's workspace
    (OpenRouter Decisions, with a sentinel question). A provider without a classifier

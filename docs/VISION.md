@@ -41,7 +41,8 @@ quality are a priority from the first milestone.
   why it was set, and can be undone in one click. User edits always win over the AI.
 - **Local and private by default.** In Local mode the library is stored on the user's
   machine. Only page fetches and LLM requests (to OpenRouter, with the user's own key)
-  leave it. Cloud mode is a choice: see below.
+  leave it; for a bookmark that links to an image, the request carries a downscaled copy
+  of that image. Cloud mode is a choice: see below.
 
 ## Library model
 
