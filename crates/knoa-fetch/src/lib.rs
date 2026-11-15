@@ -7,6 +7,7 @@
 mod access;
 #[cfg(not(target_arch = "wasm32"))]
 mod cache;
+mod evidence;
 mod html;
 mod http;
 mod image;
@@ -16,9 +17,9 @@ mod sites;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+use evidence::{Evidence, Quality, bare, evidence_json};
 pub use image::Preview;
 use knoa_core::{Fields, Kind, Page};
-use serde::Serialize;
 use serde_json::Value;
 use url::Url;
 
@@ -37,49 +38,11 @@ impl Error {
     }
 }
 
-/// How much the fetch could read. Decided here, not by the model: models claim "good"
-/// for pages they couldn't read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum Quality {
-    Good,
-    Partial,
-    TitleOnly,
-}
-
 /// Characters of page text the AI sees. Longer text didn't change kind, fields, tags or
 /// folders in the enrichment research; it only cost more.
 const PROMPT_TEXT_CHARS: usize = 4_000;
 /// Characters of page text kept locally for search.
 const SEARCH_TEXT_CHARS: usize = 100_000;
-
-#[derive(Serialize)]
-struct Evidence<'a> {
-    url: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    landed_on: Option<&'a str>,
-    quality: Quality,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    note: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    page_title: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    site_name: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    og_type: Option<&'a str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    language: Option<&'a str>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    structured_data: Vec<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    media: Option<&'a html::Media>,
-    #[serde(skip_serializing_if = "Fields::is_empty")]
-    known_fields: &'a Fields,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    text: &'a str,
-}
 
 pub struct Fetcher {
     http: http::Http,
@@ -274,24 +237,6 @@ async fn parse_html(body: String) -> html::HtmlMeta {
     html::parse(&body)
 }
 
-fn bare<'a>(url: &'a Url, quality: Quality, fields: &'a Fields) -> Evidence<'a> {
-    Evidence {
-        url: url.as_str(),
-        landed_on: None,
-        quality,
-        note: None,
-        page_title: None,
-        description: None,
-        site_name: None,
-        og_type: None,
-        language: None,
-        structured_data: Vec::new(),
-        media: None,
-        known_fields: fields,
-        text: "",
-    }
-}
-
 fn title_only(url: &Url, note: &str) -> Page {
     let fields = Fields::new();
     Page {
@@ -301,8 +246,4 @@ fn title_only(url: &Url, note: &str) -> Page {
         }),
         ..Page::default()
     }
-}
-
-fn evidence_json(evidence: &Evidence<'_>) -> String {
-    serde_json::to_string(evidence).unwrap_or_default()
 }
