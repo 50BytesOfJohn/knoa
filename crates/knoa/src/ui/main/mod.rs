@@ -41,7 +41,7 @@ use crate::{
     },
     ui::theme::Theme,
 };
-use content::LayoutCache;
+use content::{DecodedImages, LayoutCache};
 use detail::TagEdits;
 use keys::{
     CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
@@ -71,6 +71,7 @@ pub struct MainView {
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
     layout: LayoutCache,
+    decoded: DecodedImages,
     /// Until when Knoa takes focus back from a browser it opened a link in behind itself.
     keep_focus_until: Option<Instant>,
     _subscriptions: Vec<Subscription>,
@@ -120,6 +121,7 @@ impl MainView {
             overlay: None,
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
+            decoded: DecodedImages::default(),
             keep_focus_until: None,
             _subscriptions: subscriptions,
         }

@@ -2,6 +2,7 @@
 //! Only cards that intersect the viewport are built each frame.
 
 mod date_rail;
+mod decoded;
 mod empty_state;
 mod layout;
 mod placed_card;
@@ -15,6 +16,7 @@ use knoa_core::Place;
 
 use super::{MainView, search::SEARCH_AREA_HEIGHT, trash::TRASH_BAR_HEIGHT};
 use crate::ui::theme::{DETAIL_WIDTH, GUTTER, MARGIN, SIDEBAR_WIDTH, Theme};
+pub(super) use decoded::DecodedImages;
 pub(super) use layout::{Arrangement, LayoutCache};
 use up_next::UP_NEXT_HEIGHT;
 
@@ -68,6 +70,7 @@ impl MainView {
 
         let viewport_height = f32::from(window.viewport_size().height);
         let scroll_top = -f32::from(self.scroll.offset().y);
+        self.release_far_images(scroll_top, scroll_top + viewport_height, window, cx);
         let results = self.layout.results.clone();
         let show_summaries = Self::show_summaries(cx);
 
