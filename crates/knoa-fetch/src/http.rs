@@ -64,11 +64,24 @@ enum Limit {
 impl Limit {
     fn bytes(self, content_type: &str) -> usize {
         match self {
-            Limit::Page if content_type.starts_with("image/") => RAW_IMAGE_LIMIT,
+            Limit::Page if is_image(content_type) => RAW_IMAGE_LIMIT,
             Limit::Page => PAGE_LIMIT,
             Limit::Image => IMAGE_LIMIT,
         }
     }
+
+    /// Whether a body over the limit is worthless. A page's start still holds its title,
+    /// description and structured data; an image cut off is refused anyway.
+    fn whole_or_nothing(self, content_type: &str) -> bool {
+        match self {
+            Limit::Page => is_image(content_type),
+            Limit::Image => true,
+        }
+    }
+}
+
+fn is_image(content_type: &str) -> bool {
+    content_type.starts_with("image/")
 }
 
 impl Http {
@@ -116,10 +129,11 @@ async fn get(client: &Client, url: &Url, limit: Limit) -> Result<Response, Error
         .to_ascii_lowercase();
     let final_url = response.url().clone();
     let status = response.status();
+    let whole_or_nothing = limit.whole_or_nothing(&content_type);
     let limit = limit.bytes(&content_type);
     let (body, truncated) = match response.content_length() {
         // Not worth downloading only to cut off.
-        Some(length) if length > limit as u64 => (Vec::new(), true),
+        Some(length) if whole_or_nothing && length > limit as u64 => (Vec::new(), true),
         _ => platform::read_body(response, limit).await?,
     };
     Ok(Response {
@@ -129,4 +143,71 @@ async fn get(client: &Client, url: &Url, limit: Limit) -> Result<Response, Error
         body,
         truncated,
     })
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use tokio::{
+        io::{AsyncReadExt as _, AsyncWriteExt as _},
+        net::TcpListener,
+    };
+
+    use super::*;
+
+    /// Serves one response with `body`, announcing its length only when asked.
+    async fn serve(content_type: &'static str, body: Vec<u8>, with_length: bool) -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("a free port");
+        let address = listener.local_addr().expect("bound");
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("a connection");
+            let mut request = [0; 1024];
+            let _ = socket.read(&mut request).await;
+            let length = if with_length {
+                format!("Content-Length: {}\r\n", body.len())
+            } else {
+                String::new()
+            };
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\n{length}Connection: close\r\n\r\n"
+            );
+            // The client stops reading at its limit and hangs up, which fails these writes.
+            let _ = socket.write_all(head.as_bytes()).await;
+            let _ = socket.write_all(&body).await;
+        });
+        Url::parse(&format!("http://{address}/")).expect("valid URL")
+    }
+
+    #[tokio::test]
+    async fn a_page_over_the_limit_keeps_its_start_whether_or_not_its_length_is_known() {
+        let mut page = b"<html><head><title>Big page</title></head><body>".to_vec();
+        page.resize(PAGE_LIMIT + 1024, b'x');
+        let http = Http::new().expect("a client");
+
+        for with_length in [true, false] {
+            let url = serve("text/html", page.clone(), with_length).await;
+            let response = http.page(&url).await.expect("a response");
+
+            assert!(response.truncated, "with Content-Length: {with_length}");
+            assert_eq!(
+                response.body.len(),
+                PAGE_LIMIT,
+                "with Content-Length: {with_length}"
+            );
+            assert!(response.body.starts_with(b"<html><head><title>Big page"));
+        }
+    }
+
+    #[tokio::test]
+    async fn an_image_announced_over_the_limit_is_not_downloaded() {
+        let image = vec![0; RAW_IMAGE_LIMIT + 1];
+        let http = Http::new().expect("a client");
+
+        let url = serve("image/jpeg", image.clone(), true).await;
+        let announced = http.page(&url).await.expect("a response");
+        let url = serve("image/jpeg", image, false).await;
+        let unannounced = http.page(&url).await.expect("a response");
+
+        assert!(announced.truncated && announced.body.is_empty());
+        assert!(unannounced.truncated && unannounced.body.len() == RAW_IMAGE_LIMIT);
+    }
 }
