@@ -164,8 +164,9 @@ resumes on its own once that one gets through, or when the user sets a new key.
    - LLM extraction from the page text when the above is not enough.
 
    A link straight to an image file is the bookmark itself. It is downloaded once and
-   decoded within a pixel budget that also holds in the cloud organizer's 128 MB Worker
-   (JPEGs are scaled down while decoding; larger files are refused). One decode gives the
+   decoded within a pixel budget checked from its header: 100 MP in every format on the
+   Mac, and in the cloud organizer's 128 MB Worker 64 MP for baseline JPEGs (scaled down
+   while decoding) and 16 MP for the rest. Larger files are refused. One decode gives the
    display copy (JPEG, or PNG while it has transparency; a small file is kept as it is)
    and a 1024 pixel JPEG for the AI. Its format, resolution, size and animation go into
    the evidence, and resolution and format into the image kind's fields. An image that

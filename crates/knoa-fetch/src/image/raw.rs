@@ -160,10 +160,11 @@ mod tests {
 
     #[test]
     fn an_image_over_the_pixel_budget_is_described_without_decoding() {
-        // A PNG's signature and header, claiming 5000×5000 pixels.
+        // A PNG's signature and header, claiming 12000×12000 pixels: over the budget on
+        // every target.
         let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
-        png.extend(5000_u32.to_be_bytes());
-        png.extend(5000_u32.to_be_bytes());
+        png.extend(12000_u32.to_be_bytes());
+        png.extend(12000_u32.to_be_bytes());
         png.extend([8, 6, 0, 0, 0, 0, 0, 0, 0]);
 
         let image = read(&url(), png, "image/png", false);
@@ -171,11 +172,11 @@ mod tests {
         assert_eq!(
             image.problem,
             Some(Problem::TooManyPixels {
-                width: 5000,
-                height: 5000
+                width: 12000,
+                height: 12000
             })
         );
-        assert_eq!(image.facts.resolution().as_deref(), Some("5000×5000"));
+        assert_eq!(image.facts.resolution().as_deref(), Some("12000×12000"));
         assert!(image.preview.is_none() && image.analysis.is_none());
     }
 }
