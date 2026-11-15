@@ -47,6 +47,8 @@ impl MainView {
             .on_action(cx.listener(Self::open_selected))
             .absolute()
             .inset_0()
+            // Nothing beneath takes the pointer: no scrolling the grid, no card's menu.
+            .occlude()
             .flex()
             .flex_col()
             .bg(gpui::black().opacity(0.95))
@@ -54,7 +56,10 @@ impl MainView {
             // Clicking the backdrop closes, as in a browser's lightbox.
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
+                cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.close_overlay(window, cx);
+                }),
             )
             .child(self.viewer_bar(position, cx));
         // A bookmark deleted elsewhere while shown leaves the viewer empty but closable.

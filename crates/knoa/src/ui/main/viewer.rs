@@ -62,6 +62,14 @@ impl MainView {
         }
     }
 
+    /// Closes the viewer before an app-wide action moves focus elsewhere: behind it the
+    /// grid would take keys while the viewer still showed another picture.
+    pub(super) fn close_viewer_first(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
+        if self.viewed().is_some() {
+            self.close_overlay(window, cx);
+        }
+    }
+
     /// The bookmark the viewer shows, while it is open.
     fn viewed(&self) -> Option<BookmarkId> {
         match &self.overlay {

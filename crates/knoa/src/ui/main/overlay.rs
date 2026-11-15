@@ -106,6 +106,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        self.close_viewer_first(window, cx);
         let library = self.library.clone();
         let this = cx.entity().downgrade();
         let panel = cx.new(|cx| AddLink::new(library, this, window, cx));
@@ -118,6 +119,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        self.close_viewer_first(window, cx);
         self.show_settings(Page::General, window, cx);
     }
 }

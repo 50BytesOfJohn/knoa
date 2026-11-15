@@ -197,6 +197,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        self.close_viewer_first(window, cx);
         self.search.update(cx, |input, cx| input.focus(window, cx));
     }
 
