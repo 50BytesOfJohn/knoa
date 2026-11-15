@@ -134,7 +134,7 @@ impl MainView {
                     .on_action(cx.listener(Self::move_down))
                     .on_action(cx.listener(Self::open_selected))
                     .on_action(cx.listener(Self::open_selected_in_background))
-                    .on_action(cx.listener(Self::toggle_detail))
+                    .on_action(cx.listener(Self::quick_look))
                     .on_action(cx.listener(Self::toggle_up_next))
                     .on_action(cx.listener(Self::copy_link))
                     .on_action(cx.listener(Self::delete_selected))

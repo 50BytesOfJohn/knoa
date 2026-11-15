@@ -14,11 +14,13 @@ mod masonry;
 mod navigation;
 mod opening;
 mod overlay;
+mod picture;
 mod search;
 mod settings;
 mod sidebar;
 mod tiles;
 mod trash;
+mod viewer;
 mod workspaces;
 
 use std::time::Instant;
@@ -42,8 +44,9 @@ use crate::{
 use content::LayoutCache;
 use detail::TagEdits;
 use keys::{
-    CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft, MoveRight, MoveUp, NewLink,
-    OpenSelected, OpenSelectedInBackground, ToggleDetail, ToggleUpNext,
+    CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
+    MoveRight, MoveUp, NewLink, NextImage, OpenSelected, OpenSelectedInBackground, PreviousImage,
+    QuickLook, SaveImage, ToggleUpNext,
 };
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
@@ -54,6 +57,8 @@ pub struct MainView {
     organizer: Entity<Organizer>,
     search: Entity<InputState>,
     cards_focus: FocusHandle,
+    /// Held by the image viewer while it is open, so its keys replace the grid's.
+    viewer_focus: FocusHandle,
     scroll: ScrollHandle,
     selected: Option<BookmarkId>,
     detail_open: bool,
@@ -105,6 +110,7 @@ impl MainView {
             organizer,
             search,
             cards_focus,
+            viewer_focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
             selected: None,
             detail_open: false,
@@ -239,7 +245,7 @@ impl MainView {
         }
     }
 
-    fn toggle_detail(&mut self, _: &ToggleDetail, _: &mut Window, cx: &mut Context<'_, MainView>) {
+    fn toggle_detail(&mut self, cx: &mut Context<'_, MainView>) {
         self.detail_open = !self.detail_open && self.selected.is_some();
         cx.notify();
     }

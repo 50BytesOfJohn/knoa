@@ -15,7 +15,7 @@ use gpui::{
 use knoa_browser::Activation;
 use knoa_core::Bookmark;
 
-use super::{CopyLink, DeleteSelected, MainView, ToggleUpNext};
+use super::{CopyLink, DeleteSelected, MainView, QuickLook, ToggleUpNext};
 use crate::ui::{
     components::{Tone, button, icon, kind_icon, site_mark, tip},
     theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
@@ -82,12 +82,10 @@ impl MainView {
     fn detail_header(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Div {
         let theme = Theme::get(cx).clone();
         let has_cover = bookmark.image.is_some();
-        let mut header = div().relative().w_full().children(
-            bookmark
-                .image
-                .as_ref()
-                .map(|image| cover::image(image, &theme)),
-        );
+        let mut header = div()
+            .relative()
+            .w_full()
+            .children(self.detail_cover(bookmark, cx));
         let refresh = cover::refresh_status(bookmark.id, has_cover, cx);
         let (on_cover, under_byline) = if has_cover {
             (refresh, None)
@@ -118,6 +116,27 @@ impl MainView {
         header
             .children(on_cover.map(|pill| div().absolute().top_3().left_3().child(pill)))
             .child(self.close_button(has_cover, cx))
+    }
+
+    /// A picture's cover opens it in the viewer, the one place it shows at full size.
+    fn detail_cover(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Option<Div> {
+        let theme = Theme::get(cx);
+        let cover = cover::image(bookmark.image.as_ref()?, theme);
+        if self.picture_of(bookmark.id, cx).is_none() {
+            return Some(cover);
+        }
+        let id = bookmark.id;
+        Some(
+            div().child(
+                cover
+                    .id("detail-cover")
+                    .cursor_pointer()
+                    .tooltip(tip("View picture", Some(&QuickLook), theme))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_viewer(id, window, cx);
+                    })),
+            ),
+        )
     }
 
     fn byline(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Div {

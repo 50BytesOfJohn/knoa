@@ -71,7 +71,13 @@ impl MainView {
         if let Some(activation) = new_tab_activation(event) {
             self.open_bookmark(id, activation, cx);
         } else if event.standard_click() && event.click_count() >= 2 {
-            self.open_bookmark(id, Activation::Foreground, cx);
+            // In the Gallery the picture is the bookmark, so it opens in the viewer.
+            if self.layout.arrangement == Arrangement::Pictures && self.picture_of(id, cx).is_some()
+            {
+                self.open_viewer(id, window, cx);
+            } else {
+                self.open_bookmark(id, Activation::Foreground, cx);
+            }
         } else if event.standard_click() {
             self.select(id, cx);
         }

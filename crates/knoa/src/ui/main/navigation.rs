@@ -92,6 +92,20 @@ impl MainView {
         results.get(cards[next].index).map(|b| b.id)
     }
 
+    /// Scrolls the grid to the bookmark's card, if it has one.
+    pub(super) fn reveal_bookmark(&self, id: BookmarkId, window: &Window) {
+        let results = &self.layout.results;
+        let card = self
+            .layout
+            .layout
+            .cards
+            .iter()
+            .find(|c| results.get(c.index).is_some_and(|b| b.id == id));
+        if let Some(card) = card {
+            self.reveal(card, window);
+        }
+    }
+
     /// Scrolls just enough to bring the card fully into view.
     fn reveal(&self, card: &Placed, window: &Window) {
         let top_inset = cards_top();
