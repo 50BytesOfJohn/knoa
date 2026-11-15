@@ -19,13 +19,19 @@ pub fn decode(bytes: &[u8], target_side: u32, allowance: &Allowance) -> Result<D
     if !supported(info) {
         return Err(Problem::Unsupported);
     }
-    let (wanted_width, wanted_height) = scale::fit(width, height, target_side);
+    let progressive = info.coding_process == CodingProcess::DctProgressive;
+    let eighths = frame
+        .eighths_within(
+            scale::fit(width, height, target_side),
+            progressive,
+            allowance,
+        )
+        .ok_or_else(|| allowance.too_large.clone())?;
+    let (scaled_width, scaled_height) = frame.scaled(eighths);
     // Both fit: a JPEG's sides are 16-bit.
     let scaled = decoder
-        .scale(wanted_width as u16, wanted_height as u16)
+        .scale(scaled_width as u16, scaled_height as u16)
         .map_err(|_| Problem::Damaged)?;
-    let progressive = info.coding_process == CodingProcess::DctProgressive;
-    allowance.check(frame.peak_bytes(scaled, progressive))?;
     let pixels = decoder.decode().map_err(|_| Problem::Damaged)?;
     let (width, height) = (u32::from(scaled.0), u32::from(scaled.1));
     let image = match info.pixel_format {
@@ -110,16 +116,43 @@ impl Frame {
         }
     }
 
-    /// What decoding at `scaled` holds at its peak: each component's plane at that size,
-    /// the interleaved pixels (a gray plane is its own) and an EXIF turn's copy of them.
-    /// A progressive file also keeps every coefficient, two bytes per sample at full size,
-    /// until its last scan.
-    fn peak_bytes(&self, (scaled_width, scaled_height): (u16, u16), progressive: bool) -> u64 {
+    /// The DCT scale, in eighths, to decode at: the smallest that reaches `wanted`, or
+    /// when that doesn't fit `allowance` the largest smaller one that does. A picture
+    /// smaller than wanted beats none.
+    fn eighths_within(
+        &self,
+        (wanted_width, wanted_height): (u32, u32),
+        progressive: bool,
+        allowance: &Allowance,
+    ) -> Option<u32> {
+        let reaches = |eighths: u32| {
+            let (width, height) = self.scaled(eighths);
+            width >= wanted_width || height >= wanted_height
+        };
+        let preferred = EIGHTHS.into_iter().find(|&e| reaches(e)).unwrap_or(8);
+        EIGHTHS
+            .into_iter()
+            .rev()
+            .filter(|&eighths| eighths <= preferred)
+            .find(|&eighths| allowance.fits(self.peak_bytes(eighths, progressive)))
+    }
+
+    /// The decoded size at a DCT scale of `eighths`, rounded up as jpeg-decoder does.
+    fn scaled(&self, eighths: u32) -> (u32, u32) {
+        let side = |n: u32| (n * eighths).div_ceil(8);
+        (side(self.width), side(self.height))
+    }
+
+    /// What decoding at a DCT scale of `eighths` holds at its peak: each component's plane
+    /// at that scale, the interleaved pixels (a gray plane is its own) and an EXIF turn's
+    /// copy of them. A progressive file also keeps every coefficient, two bytes per sample
+    /// at full size, until its last scan.
+    fn peak_bytes(&self, eighths: u32, progressive: bool) -> u64 {
         let max_h = self.sampling.iter().map(|s| s.0).max().unwrap_or(1);
         let max_v = self.sampling.iter().map(|s| s.1).max().unwrap_or(1);
         let mcus_across = u64::from(self.width.div_ceil(8 * max_h));
         let mcus_down = u64::from(self.height.div_ceil(8 * max_v));
-        let idct = u64::from(idct_size(self.width, u32::from(scaled_width)));
+        let idct = u64::from(eighths);
         let mut bytes = 0;
         for &(h, v) in &self.sampling {
             let blocks = mcus_across * u64::from(h) * mcus_down * u64::from(v);
@@ -128,6 +161,7 @@ impl Frame {
                 bytes += blocks * 64 * 2;
             }
         }
+        let (scaled_width, scaled_height) = self.scaled(eighths);
         let components = self.sampling.len() as u64;
         let pixels = components * u64::from(scaled_width) * u64::from(scaled_height);
         let interleaved = if components > 1 { pixels } else { 0 };
@@ -157,17 +191,60 @@ fn parse(segment: &[u8]) -> Option<Frame> {
     })
 }
 
-/// The DCT size, in eighths, that decodes `width` pixels to `scaled`.
-fn idct_size(width: u32, scaled: u32) -> u32 {
-    [1, 2, 4, 8]
-        .into_iter()
-        .find(|eighths| (width * eighths).div_ceil(8) >= scaled)
-        .unwrap_or(8)
-}
+/// The DCT scales jpeg-decoder offers, in eighths, smallest first.
+const EIGHTHS: [u32; 4] = [1, 2, 4, 8];
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{super::budget::WORKER, *};
+
+    /// What the Worker leaves a decoder beside a body of 600 KB.
+    fn worker_allowance() -> Allowance {
+        Allowance::new(WORKER, 600_000, Problem::Damaged)
+    }
+
+    fn frame(width: u32, height: u32, sampling: &[(u32, u32)]) -> Frame {
+        Frame {
+            width,
+            height,
+            sampling: sampling.to_vec(),
+        }
+    }
+
+    const SAMPLING_420: [(u32, u32); 3] = [(2, 2), (1, 1), (1, 1)];
+    const SAMPLING_444: [(u32, u32); 3] = [(1, 1), (1, 1), (1, 1)];
+
+    #[test]
+    fn a_progressive_7_mp_photo_decodes_at_full_size_in_the_worker() {
+        // wallhaven-6le97q: half size would be 1152×1536, under the display size.
+        let frame = frame(2304, 3072, &SAMPLING_420);
+
+        let eighths = frame.eighths_within((1200, 1600), true, &worker_allowance());
+
+        assert_eq!(eighths, Some(8));
+    }
+
+    #[test]
+    fn a_progressive_photo_too_large_for_its_display_scale_decodes_smaller() {
+        let frame = frame(6000, 4000, &SAMPLING_420);
+
+        let eighths = frame.eighths_within((1600, 1067), true, &worker_allowance());
+
+        assert_eq!(
+            eighths.map(|eighths| frame.scaled(eighths)),
+            Some((1500, 1000))
+        );
+    }
+
+    #[test]
+    fn a_progressive_photo_whose_coefficients_alone_overflow_is_refused() {
+        // 20 MP at 4:4:4 keeps 120 MB of coefficients at any scale.
+        let frame = frame(5000, 4000, &SAMPLING_444);
+
+        let eighths = frame.eighths_within((1600, 1280), true, &worker_allowance());
+
+        assert_eq!(eighths, None);
+    }
 
     #[test]
     fn cmyk_ink_becomes_rgb_light() {

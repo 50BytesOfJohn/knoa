@@ -33,7 +33,7 @@ const PAGE_LIMIT: usize = 4 * 1024 * 1024;
 const IMAGE_LIMIT: usize = 8 * 1024 * 1024;
 /// A link to an image file is the bookmark itself, and wallpapers and photos run large.
 /// Kept within what the cloud organizer's 128 MB Worker can hold next to a decode.
-const RAW_IMAGE_LIMIT: usize = 24 * 1024 * 1024;
+pub(crate) const RAW_IMAGE_LIMIT: usize = 24 * 1024 * 1024;
 
 pub use platform::is_connect;
 

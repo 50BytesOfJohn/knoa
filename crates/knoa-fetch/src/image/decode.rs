@@ -1,6 +1,6 @@
 //! Decoding within a memory budget, checked against the file's headers before any pixels
-//! are allocated. The cloud organizer runs this in a 128 MB Worker next to a body of up to
-//! 24 MiB; the Mac allows much larger images.
+//! are allocated. The cloud organizer runs this in a 128 MB Worker; the Mac allows much
+//! larger images.
 
 mod budget;
 mod gif;
@@ -65,10 +65,11 @@ fn decode_within(
     target_side: u32,
     budget: Budget,
 ) -> Result<Decoded, Problem> {
-    let allowance = Allowance {
-        bytes: budget.bytes,
-        too_large: Problem::TooManyPixels { width, height },
-    };
+    let allowance = Allowance::new(
+        budget,
+        bytes.len() as u64,
+        Problem::TooManyPixels { width, height },
+    );
     if u64::from(width) * u64::from(height) > budget.pixels {
         return Err(allowance.too_large);
     }

@@ -166,10 +166,12 @@ resumes on its own once that one gets through, or when the user sets a new key.
    A link straight to an image file is the bookmark itself. It is downloaded once and
    decoded within a budget checked from its headers before any pixels are allocated: a
    pixel count (100 MP on the Mac, 64 MP in the cloud organizer's 128 MB Worker) and the
-   decoder's estimated peak memory for that format, sampling and bit depth (1 GiB on the
-   Mac, 64 MiB in the Worker, which keeps the whole pipeline under about 100 MB next to a
-   24 MiB body; the arithmetic is in `knoa-fetch`'s `decode/budget.rs`). JPEGs are scaled
-   down while decoding, large images are box-reduced before the final filter, and an
+   decoder's estimated peak memory for that format, sampling and bit depth, which must fit
+   beside the body actually downloaded (1 GiB beside the largest body on the Mac; in the
+   Worker the whole pipeline stays under 100 MB, so 75 to 84 MB depending on the body; the
+   arithmetic is in `knoa-fetch`'s `decode/budget.rs`). JPEGs are scaled down while
+   decoding, and one that doesn't fit at the display size decodes at a smaller scale and
+   gets a smaller copy. Large images are box-reduced before the final filter, and an
    animation decodes to its first frame. Larger files are refused. One decode gives the
    display copy (JPEG, or PNG while it has transparency; a small, still, upright file
    within the display size is kept as it is) and a 1024 pixel JPEG for the AI. Its
