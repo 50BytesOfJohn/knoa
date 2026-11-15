@@ -34,7 +34,8 @@ quality are a priority from the first milestone.
   translucent panels; a solid look by default.
 - **Content-aware cards.** Each kind of bookmark is presented in its own way: a video shows
   its thumbnail and duration, a movie its poster, year and cast, an article its image,
-  source and summary.
+  source and summary. Links to image files also gather in a Gallery of pictures alone,
+  with a full-window viewer.
 - **Fast.** Instant search, smooth scrolling, no waiting on local data. Network and AI work
   run in the background and never block the UI.
 - **Visible, reversible automation.** Every value the AI sets is marked as AI-made, shows

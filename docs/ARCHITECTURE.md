@@ -233,6 +233,19 @@ Keychain in release-channel builds and in a plain file in dev builds
   by date with a date rail, and a floating detail panel. The approved layout is in the
   [main screen design](design/main-screen.md); the research behind it is in
   [research](research/main-screen.md).
+- Places: Everything, Gallery, Up next, Unsorted, Not organized, Set aside and Trash.
+  The Gallery shows bookmarks of a media kind (today only images) while the workspace has
+  one. It is a device-side `Place`, not part of the sync protocol. Its results are laid
+  out as pictures only: each tile at the stored image's shape, cropped to a range, in one
+  continuous grid with the title and site over the picture on hover or selection.
+- Image viewer: a full-window overlay with its own key context, opened with Space on a
+  picture, a double-click on a Gallery tile or the detail panel's cover. It shows the
+  stored display copy no larger than its own size and moves through the pictures among
+  the current results. It can copy the picture to the clipboard as an image and save it
+  through the save panel.
+- GPUI keeps every image it decodes, in memory and in the GPU atlas, until told to drop
+  it. The card grid records the pictures it built and releases those more than a screen
+  beyond the viewport, except the selected bookmark's.
 - Settings: a sheet over the main screen with its own sidebar of app pages (General,
   Appearance, AI) and one page per workspace.
 - Masonry, glass panels over a wallpaper and the date rail are Knoa's own elements
