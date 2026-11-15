@@ -74,6 +74,7 @@ mod tests {
         assert_eq!(job.bookmark.id, added.id);
         let enrichment = Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: None,
             fields: knoa_core::Fields::new(),
             extras: Vec::new(),

@@ -212,6 +212,7 @@ impl Store {
 
     /// Stores the AI's answer and takes the bookmark off the queue. A bookmark the user kept
     /// is never set aside. A bookmark deleted for good while it was organized is skipped.
+    /// The AI's title replaces only the URL standing in for one, as the page's does.
     pub fn finish_organized(
         &mut self,
         id: BookmarkId,
@@ -224,7 +225,9 @@ impl Store {
             Ok(tx.execute(
             "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
                 status = 'organized', organized_at = ?7, error = NULL,
-                set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END WHERE id = ?1",
+                set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END,
+                title = CASE WHEN source IS NULL AND title = url THEN coalesce(?9, title) ELSE title END
+             WHERE id = ?1",
             params![
                 id.0,
                 enrichment.kind.slug(),
@@ -234,6 +237,7 @@ impl Store {
                 enrichment.model,
                 now,
                 enrichment.set_aside,
+                enrichment.title,
             ],
             )?)
         })?;
@@ -521,9 +525,42 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_ais_title_replaces_only_a_url_standing_in_for_one() {
+        let mut store = Store::open_in_memory().unwrap();
+        let added = store
+            .add_link(WORKSPACE, "https://w.example/full/a.jpg", 1)
+            .unwrap();
+        let links = [bookmark("https://b.dev/", "https://b.dev/", 2)];
+        store
+            .import(WORKSPACE, "test", &links, NewBookmarks::Organize)
+            .unwrap();
+        let answer = Enrichment {
+            title: Some("Neon workshop with a robot arm".into()),
+            ..enrichment()
+        };
+
+        let jobs = store.take_jobs(0, 2).unwrap();
+        for job in &jobs {
+            store
+                .finish_organized(job.bookmark.id, &answer, 10)
+                .unwrap();
+        }
+
+        for job in jobs {
+            let title = store.bookmark(job.bookmark.id).unwrap().unwrap().title;
+            if job.bookmark.id == added.id {
+                assert_eq!(title, "Neon workshop with a robot arm");
+            } else {
+                assert_eq!(title, "https://b.dev/", "a browser's own title stays");
+            }
+        }
+    }
+
     fn enrichment() -> Enrichment {
         Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: None,
             fields: Fields::new(),
             extras: Vec::new(),

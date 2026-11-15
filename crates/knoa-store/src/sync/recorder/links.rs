@@ -130,6 +130,7 @@ mod tests {
     fn organized(tags: &[&str]) -> Enrichment {
         Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: Some("About Rust".into()),
             fields: knoa_core::Fields::new(),
             extras: Vec::new(),

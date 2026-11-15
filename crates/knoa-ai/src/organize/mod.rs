@@ -56,14 +56,15 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
 ) -> Result<Enrichment, Error> {
     let kind = kind::pick(model, classifier, input).await?;
     let folders_in_answer = classifier.is_none();
+    let asks = schema::Asks {
+        folders: folders_in_answer.then_some(input.folders),
+        screening: input.guideline.is_some(),
+        title: needs_title(&input.bookmark),
+    };
     let request = |image| StructuredRequest {
         messages: prompt::messages(input, kind, folders_in_answer, image),
         schema_name: "bookmark",
-        schema: schema::answer_schema(
-            kind,
-            folders_in_answer.then_some(input.folders),
-            input.guideline.is_some(),
-        ),
+        schema: schema::answer_schema(kind, &asks),
         max_tokens: MAX_TOKENS,
     };
     let reply = match model.generate(&request(input.bookmark.image)).await {
@@ -89,6 +90,7 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     };
     Ok(Enrichment {
         kind: answer.kind,
+        title: answer.title.filter(|_| asks.title),
         summary: answer.summary,
         fields: answer.fields,
         extras: answer.extras,
@@ -97,6 +99,13 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         set_aside: answer.set_aside,
         model: reply.model,
     })
+}
+
+/// A link added by hand is titled with its URL until something names it. Pages usually do,
+/// an image file never does.
+fn needs_title(bookmark: &BookmarkInput<'_>) -> bool {
+    let title = bookmark.title.trim();
+    title.is_empty() || title == bookmark.url
 }
 
 fn filing_input<'a>(input: &'a OrganizeInput<'_>, answer: &'a answer::Answer) -> FilingInput<'a> {

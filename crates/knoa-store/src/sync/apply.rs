@@ -200,6 +200,7 @@ mod tests {
     fn organized(tags: &[&str]) -> Enrichment {
         Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: None,
             fields: knoa_core::Fields::new(),
             extras: Vec::new(),

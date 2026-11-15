@@ -113,6 +113,7 @@ mod tests {
                 id,
                 &Enrichment {
                     kind: Kind::Article,
+                    title: None,
                     summary: None,
                     fields: Fields::new(),
                     extras: Vec::new(),

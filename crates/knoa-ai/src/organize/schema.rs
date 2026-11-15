@@ -7,8 +7,17 @@ use serde_json::{Map, Value, json};
 
 use super::FolderInput;
 
-/// `screening` adds `fits` and `fit_reason`, the answer to the workspace's guideline.
-pub fn answer_schema(kind: Kind, folders: Option<&[FolderInput]>, screening: bool) -> Value {
+/// What the answer holds beyond the summary, fields, extras and tags.
+pub struct Asks<'a> {
+    /// The folders the chat model picks from, when there is no classifier.
+    pub folders: Option<&'a [FolderInput]>,
+    /// `fits` and `fit_reason`, the answer to the workspace's guideline.
+    pub screening: bool,
+    /// A title, for a bookmark that has none of its own.
+    pub title: bool,
+}
+
+pub fn answer_schema(kind: Kind, asks: &Asks<'_>) -> Value {
     let pair = json!({
         "type": "object",
         "additionalProperties": false,
@@ -22,13 +31,17 @@ pub fn answer_schema(kind: Kind, folders: Option<&[FolderInput]>, screening: boo
         "tags": { "type": "array", "items": { "type": "string" } },
     });
     let mut required = vec!["summary", "fields", "extras", "tags"];
-    if let Some(folders) = folders.filter(|f| !f.is_empty()) {
+    if asks.title {
+        properties["title"] = json!({ "type": "string" });
+        required.push("title");
+    }
+    if let Some(folders) = asks.folders.filter(|f| !f.is_empty()) {
         let ids: Vec<String> = folders.iter().map(|f| f.id.0.to_string()).collect();
         properties["folders"] =
             json!({ "type": "array", "items": { "type": "string", "enum": ids } });
         required.push("folders");
     }
-    if screening {
+    if asks.screening {
         properties["fits"] = json!({ "type": "boolean" });
         properties["fit_reason"] = json!({ "type": "string" });
         required.extend(["fits", "fit_reason"]);

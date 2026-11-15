@@ -308,6 +308,7 @@ mod tests {
             fields.insert("runtime".into(), json!(runtime));
             let enrichment = Enrichment {
                 kind: Kind::Movie,
+                title: None,
                 summary: Some("A film noir".into()),
                 fields,
                 extras: Vec::new(),

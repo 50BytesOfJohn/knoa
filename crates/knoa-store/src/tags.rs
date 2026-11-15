@@ -107,6 +107,7 @@ mod tests {
         let id = job.bookmark.id;
         let enrichment = Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: None,
             fields: knoa_core::Fields::new(),
             extras: Vec::new(),

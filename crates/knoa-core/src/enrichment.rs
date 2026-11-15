@@ -50,6 +50,8 @@ impl fmt::Debug for AnalysisImage {
 #[derive(Debug, Clone)]
 pub struct Enrichment {
     pub kind: Kind,
+    /// A title, written only for a bookmark whose title is still its URL.
+    pub title: Option<String>,
     pub summary: Option<String>,
     pub fields: Fields,
     pub extras: Vec<(String, String)>,

@@ -203,6 +203,7 @@ mod tests {
         let job = store.take_jobs(0, 1).unwrap().remove(0);
         let enrichment = Enrichment {
             kind: Kind::Article,
+            title: None,
             summary: None,
             fields: knoa_core::Fields::new(),
             extras: Vec::new(),
