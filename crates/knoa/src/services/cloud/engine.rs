@@ -210,11 +210,13 @@ impl Engine {
             return Ok(Round::OtherAccount(other));
         }
         let organizer = self.account.as_ref().map(|a| a.organizer);
-        if pushed.is_ok() && organizer == Some(Who::Cloud) {
-            self.hand_jobs_to_cloud(cx).await?;
-        }
         if wanted.pull {
             self.pull(cx).await?;
+        }
+        // After the pull, so the queue is handed over knowing what other Macs organized:
+        // the image backfill drops jobs whose answers arrived in it.
+        if pushed.is_ok() && organizer == Some(Who::Cloud) {
+            self.hand_jobs_to_cloud(cx).await?;
         }
         pushed?;
         thumbnails.download(self, cx).await?;

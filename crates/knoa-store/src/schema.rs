@@ -294,13 +294,17 @@ UPDATE bookmarks SET delivery = CASE
 DROP TABLE unsent_bookmarks;
 ",
     // Images linked straight to were organized from their URL alone. The AI sees them now,
-    // so they are organized once more; user tags, folders and exclusions still win.
+    // so they are organized once more; user tags, folders and exclusions still win. Every
+    // Mac of an account runs this, so the jobs are marked: one whose bookmark already has
+    // what only the AI's look gives (`medium`), from another Mac, is dropped.
     r"
-INSERT INTO jobs (bookmark_id)
-    SELECT id FROM bookmarks WHERE kind = 'image' AND status = 'organized' AND deleted_at IS NULL
-    ON CONFLICT DO UPDATE SET run_after = 0, folders_only = 0;
+ALTER TABLE jobs ADD COLUMN vision_backfill INTEGER NOT NULL DEFAULT 0;
+INSERT INTO jobs (bookmark_id, vision_backfill)
+    SELECT id, 1 FROM bookmarks WHERE kind = 'image' AND status = 'organized'
+        AND deleted_at IS NULL AND json_extract(fields, '$.medium') IS NULL
+    ON CONFLICT DO UPDATE SET run_after = 0, folders_only = 0, vision_backfill = 1;
 UPDATE bookmarks SET status = 'queued'
-    WHERE kind = 'image' AND status = 'organized' AND deleted_at IS NULL;
+    WHERE id IN (SELECT bookmark_id FROM jobs WHERE vision_backfill = 1);
 ",
 ];
 

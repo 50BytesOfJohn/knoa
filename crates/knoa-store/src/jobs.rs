@@ -76,6 +76,7 @@ impl Store {
     /// Takes up to `limit` due jobs and marks their bookmarks as organizing.
     pub fn take_jobs(&mut self, now: i64, limit: usize) -> Result<Vec<Job>> {
         let tx = self.conn.transaction()?;
+        drop_settled_backfills(&tx)?;
         let due: Vec<(i64, u32, bool)> = {
             let mut stmt = tx.prepare(
                 "SELECT j.bookmark_id, j.attempts, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
@@ -345,6 +346,7 @@ fn requeue(tx: &rusqlite::Transaction<'_>, id: BookmarkId, error: &str) -> Resul
     })
 }
 
+/// A request from the user replaces a waiting backfill, so it is never dropped.
 fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Result<()> {
     tx.execute(
         "UPDATE bookmarks SET status = 'queued' WHERE id = ?1 AND status != 'organizing'",
@@ -352,9 +354,31 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Resul
     )?;
     tx.execute(
         "INSERT INTO jobs (bookmark_id, folders_only) VALUES (?1, ?2) ON CONFLICT DO UPDATE
-         SET run_after = 0, folders_only = excluded.folders_only",
+         SET run_after = 0, folders_only = excluded.folders_only, vision_backfill = 0",
         params![id, folders_only],
     )?;
+    Ok(())
+}
+
+/// Drops the image backfill's waiting jobs whose bookmark another Mac organized from its
+/// picture since, as a pull shows: running them again would only pay for the same answer.
+pub(crate) fn drop_settled_backfills(tx: &rusqlite::Transaction<'_>) -> Result<()> {
+    const SETTLED: &str =
+        "SELECT j.bookmark_id FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+        WHERE j.vision_backfill = 1 AND b.status = 'queued'
+          AND json_extract(b.fields, '$.medium') IS NOT NULL";
+    let settled: Vec<i64> = tx
+        .prepare(SETTLED)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in settled {
+        tx.execute("DELETE FROM jobs WHERE bookmark_id = ?1", [id])?;
+        tx.execute(
+            "UPDATE bookmarks SET status = CASE WHEN organized_at IS NULL THEN 'new' ELSE 'organized' END
+             WHERE id = ?1",
+            [id],
+        )?;
+    }
     Ok(())
 }
 
