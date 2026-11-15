@@ -18,18 +18,21 @@ pub fn is_connect(err: &reqwest::Error) -> bool {
     err.is_connect()
 }
 
-/// Reads at most `limit` bytes: a huge page's start holds its metadata, and the rest
-/// isn't worth the memory.
-pub async fn read_body(mut response: reqwest::Response, limit: usize) -> reqwest::Result<Vec<u8>> {
+/// Reads at most `limit` bytes, and says whether the body went on: a huge page's start
+/// holds its metadata, and the rest isn't worth the memory.
+pub async fn read_body(
+    mut response: reqwest::Response,
+    limit: usize,
+) -> reqwest::Result<(Vec<u8>, bool)> {
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         body.extend_from_slice(&chunk);
         if body.len() > limit {
             body.truncate(limit);
-            break;
+            return Ok((body, true));
         }
     }
-    Ok(body)
+    Ok((body, false))
 }
 
 /// Only the bookmarked URL is checked before fetching, so a public page could otherwise

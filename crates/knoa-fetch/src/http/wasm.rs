@@ -16,17 +16,20 @@ pub fn is_connect(_err: &reqwest::Error) -> bool {
     false
 }
 
-/// Reads at most `limit` bytes: a huge page's start holds its metadata, and a Worker has
-/// little memory to spare.
-pub async fn read_body(response: reqwest::Response, limit: usize) -> reqwest::Result<Vec<u8>> {
+/// Reads at most `limit` bytes, and says whether the body went on: a huge page's start
+/// holds its metadata, and a Worker has little memory to spare.
+pub async fn read_body(
+    response: reqwest::Response,
+    limit: usize,
+) -> reqwest::Result<(Vec<u8>, bool)> {
     let mut body = Vec::new();
     let mut chunks = response.bytes_stream();
     while let Some(chunk) = chunks.next().await {
         body.extend_from_slice(&chunk?);
         if body.len() > limit {
             body.truncate(limit);
-            break;
+            return Ok((body, true));
         }
     }
-    Ok(body)
+    Ok((body, false))
 }

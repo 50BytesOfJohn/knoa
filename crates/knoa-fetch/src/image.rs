@@ -2,7 +2,7 @@
 
 use url::Url;
 
-use crate::http::{Http, IMAGE_LIMIT};
+use crate::http::Http;
 
 /// Smaller images are icons or tracking pixels, not previews.
 const MIN_WIDTH: usize = 120;
@@ -28,11 +28,12 @@ pub struct Preview {
 /// Downloads `url` and reads its size. `None` when it isn't a usable preview image.
 pub async fn download(http: &Http, url: &Url) -> Option<Preview> {
     let response = http
-        .bytes(url, IMAGE_LIMIT)
+        .image(url)
         .await
         .inspect_err(|err| tracing::debug!(%url, "image fetch failed: {err}"))
         .ok()?;
-    if !response.status.is_success() {
+    // A cut-off file still has a valid header, and would be stored and shown broken.
+    if !response.status.is_success() || response.truncated {
         return None;
     }
     let size = imagesize::blob_size(&response.body).ok()?;

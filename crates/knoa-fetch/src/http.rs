@@ -29,7 +29,11 @@ const BROWSER_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleW
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 const PAGE_LIMIT: usize = 4 * 1024 * 1024;
-pub const IMAGE_LIMIT: usize = 8 * 1024 * 1024;
+/// A preview image: larger ones are print originals, not previews.
+const IMAGE_LIMIT: usize = 8 * 1024 * 1024;
+/// A link to an image file is the bookmark itself, and wallpapers and photos run large.
+/// Kept within what the cloud organizer's 128 MB Worker can hold next to a decode.
+const RAW_IMAGE_LIMIT: usize = 24 * 1024 * 1024;
 
 pub use platform::is_connect;
 
@@ -43,6 +47,28 @@ pub struct Response {
     pub status: StatusCode,
     pub content_type: String,
     pub body: Vec<u8>,
+    /// The body was longer than the limit and holds only its start: fine for a page's
+    /// metadata, useless for an image.
+    pub truncated: bool,
+}
+
+/// How much of a body to read.
+#[derive(Debug, Clone, Copy)]
+enum Limit {
+    /// A bookmarked URL: a page, or an image file linked directly.
+    Page,
+    /// A preview image.
+    Image,
+}
+
+impl Limit {
+    fn bytes(self, content_type: &str) -> usize {
+        match self {
+            Limit::Page if content_type.starts_with("image/") => RAW_IMAGE_LIMIT,
+            Limit::Page => PAGE_LIMIT,
+            Limit::Image => IMAGE_LIMIT,
+        }
+    }
 }
 
 impl Http {
@@ -55,9 +81,9 @@ impl Http {
 
     /// Fetches a page, retrying once with a browser User-Agent when the site refuses Knoa's.
     pub async fn page(&self, url: &Url) -> Result<Response, Error> {
-        let first = get(&self.knoa, url, PAGE_LIMIT).await?;
+        let first = get(&self.knoa, url, Limit::Page).await?;
         if matches!(first.status.as_u16(), 403 | 406 | 419 | 429 | 503)
-            && let Ok(second) = get(&self.browser, url, PAGE_LIMIT).await
+            && let Ok(second) = get(&self.browser, url, Limit::Page).await
             && second.status.is_success()
         {
             return Ok(second);
@@ -65,13 +91,14 @@ impl Http {
         Ok(first)
     }
 
-    pub async fn bytes(&self, url: &Url, limit: usize) -> Result<Response, Error> {
-        get(&self.knoa, url, limit).await
+    /// Fetches a preview image.
+    pub async fn image(&self, url: &Url) -> Result<Response, Error> {
+        get(&self.knoa, url, Limit::Image).await
     }
 
     /// `None` for a non-success status, which for site APIs means "not something we know".
     pub async fn get_json<T: DeserializeOwned>(&self, url: &Url) -> Result<Option<T>, Error> {
-        let response = get(&self.knoa, url, PAGE_LIMIT).await?;
+        let response = get(&self.knoa, url, Limit::Page).await?;
         if !response.status.is_success() {
             return Ok(None);
         }
@@ -79,7 +106,7 @@ impl Http {
     }
 }
 
-async fn get(client: &Client, url: &Url, limit: usize) -> Result<Response, Error> {
+async fn get(client: &Client, url: &Url, limit: Limit) -> Result<Response, Error> {
     let response = client.get(url.clone()).timeout(TIMEOUT).send().await?;
     let content_type = response
         .headers()
@@ -89,11 +116,17 @@ async fn get(client: &Client, url: &Url, limit: usize) -> Result<Response, Error
         .to_ascii_lowercase();
     let final_url = response.url().clone();
     let status = response.status();
-    let body = platform::read_body(response, limit).await?;
+    let limit = limit.bytes(&content_type);
+    let (body, truncated) = match response.content_length() {
+        // Not worth downloading only to cut off.
+        Some(length) if length > limit as u64 => (Vec::new(), true),
+        _ => platform::read_body(response, limit).await?,
+    };
     Ok(Response {
         url: final_url,
         status,
         content_type,
         body,
+        truncated,
     })
 }
