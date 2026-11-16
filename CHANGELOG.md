@@ -3,6 +3,13 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.4.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.4.0) - 2026-11-16
+
+### Changed
+
+- Nest folders and allow emoji icons (model and sync) ([#41](https://github.com/50BytesOfJohn/knoa/pull/41))
+- Show nested folders as a tree on the Mac ([#42](https://github.com/50BytesOfJohn/knoa/pull/42))
+- File AI picks into the most specific folder ([#43](https://github.com/50BytesOfJohn/knoa/pull/43))
 ## [0.3.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.3.0) - 2026-11-15
 
 ### Added
