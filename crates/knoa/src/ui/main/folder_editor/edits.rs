@@ -11,14 +11,12 @@ impl FolderEditor {
         let Some(baseline) = &self.existing else {
             return;
         };
-        let Some(stored) = self
-            .library
-            .read(cx)
-            .folders()
-            .iter()
-            .find(|folder| folder.id == baseline.id)
-            .cloned()
-        else {
+        let tree = self.library.read(cx).folder_tree();
+        // Compared by the parent it shows under, as the editor shows it.
+        let Some(stored) = tree.get(baseline.id).map(|folder| Folder {
+            parent: tree.parent(folder.id).map(|f| f.id),
+            ..folder.clone()
+        }) else {
             return;
         };
         let edited = Folder {
@@ -27,6 +25,7 @@ impl FolderEditor {
             auto_assign: self.auto_assign,
             color: self.color,
             icon: self.icon.clone(),
+            parent: self.parent,
             ..baseline.clone()
         };
         let edits = FolderEdits::between(&baseline.clone().normalized(), &edited);
@@ -53,6 +52,7 @@ impl FolderEditor {
         self.color = current.color;
         self.icon = current.icon;
         self.auto_assign = current.auto_assign;
+        self.parent = current.parent;
         cx.notify();
     }
 }

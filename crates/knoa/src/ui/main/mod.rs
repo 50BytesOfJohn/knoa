@@ -5,12 +5,14 @@ mod bookmark_menu;
 mod cards;
 mod clipboard;
 mod content;
+mod delete_folder;
 mod detail;
 mod edits;
 mod folder_editor;
 mod groups;
 mod keys;
 mod masonry;
+mod menu_trigger;
 mod navigation;
 mod opening;
 mod overlay;
@@ -31,7 +33,7 @@ use gpui::{
     Task, Window, div, prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{BookmarkId, Place, WorkspaceId};
+use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
 
 use crate::{
     services::{cloud::Cloud, organizer::Organizer, thumbnails::Thumbnails},
@@ -46,11 +48,12 @@ use detail::TagEdits;
 use keys::{
     CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
     MoveRight, MoveUp, NewLink, NextImage, OpenSelected, OpenSelectedInBackground, PreviousImage,
-    QuickLook, SaveImage, ShowDetails, ToggleUpNext,
+    QuickLook, SaveImage, SelectFolder, ShowDetails, ToggleUpNext,
 };
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
 pub use sidebar::traffic_light_position;
+use sidebar::{Outline, SidebarDrop};
 
 pub struct MainView {
     library: Entity<Library>,
@@ -68,6 +71,9 @@ pub struct MainView {
     /// The bookmark whose link was just copied, until the task clears the confirmation.
     copied: Option<(BookmarkId, Task<()>)>,
     overlay: Option<Overlay>,
+    /// Which sidebar parents are collapsed, and the folder rows that leaves.
+    outline: Outline,
+    sidebar_drop: SidebarDrop,
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
     layout: LayoutCache,
@@ -119,6 +125,8 @@ impl MainView {
             tag_edits: None,
             copied: None,
             overlay: None,
+            outline: Outline::load(cx),
+            sidebar_drop: SidebarDrop::default(),
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
             decoded: DecodedImages::default(),
@@ -160,8 +168,15 @@ impl MainView {
             .update(cx, |library, _| library.set_selected(id));
     }
 
+    /// Shows `place`. A folder chosen from anywhere but its own row, such as a menu or
+    /// ⌘1 to ⌘9, has its parents opened so the selection is visible.
     pub fn set_place(&mut self, place: Place, window: &mut Window, cx: &mut Context<'_, MainView>) {
         self.confirm_empty_trash = false;
+        if let Place::Folder(id) = place {
+            let path = self.library.read(cx).folder_tree().path(id);
+            let parents: Vec<FolderId> = path.iter().rev().skip(1).map(|f| f.id).collect();
+            self.outline.reveal(&parents, cx);
+        }
         self.library
             .update(cx, |library, cx| library.set_place(place, cx));
         self.scroll
@@ -265,6 +280,27 @@ impl MainView {
         self.library.read(cx).bookmark(id).map(|b| b.url.clone())
     }
 
+    /// ⌘1 to ⌘9: the folder the sidebar shows that key beside.
+    fn select_folder(
+        &mut self,
+        action: &SelectFolder,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        if self.overlay.is_some() {
+            return;
+        }
+        let library = self.library.read(cx);
+        let generation = library.folders_generation();
+        let Some(id) = self
+            .outline
+            .nth(library.folder_tree(), generation, action.0)
+        else {
+            return;
+        };
+        self.set_place(Place::Folder(id), window, cx);
+    }
+
     fn toggle_up_next(&mut self, _: &ToggleUpNext, _: &mut Window, cx: &mut Context<'_, MainView>) {
         if let Some(id) = self.selected {
             self.set_up_next(id, cx);
@@ -290,6 +326,7 @@ impl Render for MainView {
             .on_action(cx.listener(Self::focus_search))
             .on_action(cx.listener(Self::new_link))
             .on_action(cx.listener(Self::show_details))
+            .on_action(cx.listener(Self::select_folder))
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
             .child(self.render_sidebar(window, cx))
