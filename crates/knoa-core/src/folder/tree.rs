@@ -292,12 +292,10 @@ mod tests {
         ]);
 
         assert_eq!(tree.len(), 8, "every folder is shown once");
-        for id in [1, 4, 7, 8] {
+        for id in [1, 2, 3, 4, 7, 8] {
             assert_eq!(tree.parent(FolderId(id)), None, "folder {id}");
         }
         assert_eq!(tree.depth(FolderId(6)), 2);
-        let cycle = [2, 3].map(|id| tree.depth(FolderId(id)));
-        assert!(cycle.contains(&0) && cycle.contains(&1), "{cycle:?}");
     }
 
     #[test]

@@ -1,5 +1,6 @@
 //! What a folder's `icon` column means: one of Knoa's glyphs, one emoji, or nothing.
 
+import { isPictographic } from "./pictographic";
 import { MAX_CHARS } from "./protocol";
 
 /** The glyph names Knoa draws, in picker order, as `FolderGlyph` in knoa-core. */
@@ -51,11 +52,14 @@ export function parseFolderIcon(value: string | null | undefined): FolderIcon | 
 }
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u;
+const FLAG = /^[\u{1f1e6}-\u{1f1ff}]{2}$/u;
+const KEYCAP = /^[0-9#*]\u{fe0f}?\u{20e3}$/u;
 
 /** Exactly one emoji: a single grapheme cluster that is pictographic, a flag or a keycap. */
 export function isEmoji(text: string): boolean {
 	if ([...text].length > MAX_CHARS.folder.icon) return false;
 	const segments = [...graphemes.segment(text)];
-	return segments.length === 1 && EMOJI.test(text);
+	const base = text.codePointAt(0);
+	return segments.length === 1 && base !== undefined
+		&& (isPictographic(base) || FLAG.test(text) || KEYCAP.test(text));
 }
