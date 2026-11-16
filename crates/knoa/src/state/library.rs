@@ -40,6 +40,8 @@ pub struct Library {
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
     folders: FolderTree,
+    /// Goes up whenever `folders` changes, so views can keep what they derive from it.
+    folders_generation: u64,
     /// The workspace's tags, most used first.
     tags: Vec<(String, usize)>,
     /// The bookmark the detail panel shows, loaded on its own so a change that moves it
@@ -80,6 +82,7 @@ impl Library {
             kind_counts: Vec::new(),
             counts: Counts::default(),
             folders: FolderTree::default(),
+            folders_generation: 0,
             tags: Vec::new(),
             selected: None,
             selected_bookmark: None,
@@ -155,6 +158,11 @@ impl Library {
     /// The workspace's folders as a tree, for depth, paths and moves.
     pub fn folder_tree(&self) -> &FolderTree {
         &self.folders
+    }
+
+    /// Changes exactly when [`Library::folder_tree`] does.
+    pub fn folders_generation(&self) -> u64 {
+        self.folders_generation
     }
 
     pub fn tags(&self) -> &[(String, usize)] {
@@ -305,7 +313,10 @@ impl Library {
         self.results = loaded.results;
         self.kind_counts = loaded.kind_counts;
         self.counts = loaded.counts;
-        self.folders = loaded.folders;
+        if self.folders != loaded.folders {
+            self.folders = loaded.folders;
+            self.folders_generation += 1;
+        }
         self.tags = loaded.tags;
         // The selection may have moved on while this was loading.
         if loaded.selected_id == self.selected {

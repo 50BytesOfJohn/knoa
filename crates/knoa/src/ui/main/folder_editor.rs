@@ -1,8 +1,11 @@
-//! Creating and editing a folder: name, what belongs in it, auto-assign, icon and colour.
+//! Creating and editing a folder: name, what belongs in it, its parent, auto-assign, icon
+//! and colour.
 
 mod color_picker;
 mod edits;
+mod emoji_picker;
 mod icon_picker;
+mod parent_picker;
 
 use gpui::{
     AppContext as _, Context, Entity, FontWeight, IntoElement, ParentElement as _, Render,
@@ -35,6 +38,9 @@ pub struct FolderEditor {
     auto_assign: bool,
     color: FolderColor,
     icon: Option<FolderIcon>,
+    parent: Option<FolderId>,
+    /// Any one emoji, typed or picked with the system's emoji picker.
+    emoji: Entity<InputState>,
     /// The custom hue, kept while an ink is picked so going back to it restores it.
     hue: Entity<SliderState>,
     library: Entity<Library>,
@@ -43,8 +49,10 @@ pub struct FolderEditor {
 }
 
 impl FolderEditor {
+    /// `existing` carries the parent it shows under; a new folder goes under `parent`.
     pub fn new(
         existing: Option<Folder>,
+        parent: Option<FolderId>,
         library: Entity<Library>,
         main: WeakEntity<MainView>,
         window: &mut Window,
@@ -67,13 +75,17 @@ impl FolderEditor {
         let next_ink = FolderColor::Ink(Ink::nth(library.read(cx).folders().len()));
         let color = existing.as_ref().map_or(next_ink, |f| f.color);
         let hue = color_picker::hue_state(color, cx);
+        let icon = existing.as_ref().and_then(|f| f.icon.clone());
+        let emoji = emoji_picker::emoji_state(icon.as_ref(), window, cx);
         FolderEditor {
             auto_assign: existing.as_ref().is_none_or(|f| f.auto_assign),
             color,
-            icon: existing.as_ref().and_then(|f| f.icon.clone()),
+            icon,
+            parent,
             // The limits' messages follow the text as it's typed.
             _subscriptions: vec![
                 color_picker::follow_hue(&hue, cx),
+                emoji_picker::follow_emoji(&emoji, window, cx),
                 cx.subscribe_in(
                     &library,
                     window,
@@ -83,6 +95,7 @@ impl FolderEditor {
                 cx.observe(&description, |_, _, cx| cx.notify()),
             ],
             hue,
+            emoji,
             existing,
             name,
             description,
@@ -102,6 +115,12 @@ impl FolderEditor {
             return;
         }
         let (color, icon, auto_assign) = (self.color, self.icon.clone(), self.auto_assign);
+        let parent = self.parent;
+        if let Some(parent) = parent {
+            let _ = self
+                .main
+                .update(cx, |main, cx| main.outline.expand(parent, cx));
+        }
         match &self.existing {
             Some(folder) => {
                 let edited = Folder {
@@ -110,6 +129,7 @@ impl FolderEditor {
                     auto_assign,
                     color,
                     icon,
+                    parent,
                     ..folder.clone()
                 };
                 let edits = FolderEdits::between(&folder.clone().normalized(), &edited);
@@ -121,6 +141,7 @@ impl FolderEditor {
             None => self.library.update(cx, |library, cx| {
                 let workspace = library.workspace_id();
                 let folder = NewFolder {
+                    parent,
                     description,
                     auto_assign,
                     color,
@@ -135,11 +156,11 @@ impl FolderEditor {
         self.close(window, cx);
     }
 
+    /// Hands over to the delete confirmation, which replaces the editor.
     fn delete(&mut self, id: FolderId, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
-        self.library.update(cx, |library, cx| {
-            library.change(cx, move |store| store.delete_folder(id));
+        let _ = self.main.update(cx, |main, cx| {
+            main.confirm_delete_folder(id, window, cx);
         });
-        self.close(window, cx);
     }
 
     fn close(&self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
@@ -213,7 +234,9 @@ impl Render for FolderEditor {
                             })),
                     ),
             )
+            .children(self.parent_picker(&theme, cx))
             .child(self.icon_picker(&theme, cx))
+            .child(self.emoji_picker(&theme, cx))
             .child(self.color_picker(&theme, cx))
             .child(
                 div()

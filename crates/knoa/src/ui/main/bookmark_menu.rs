@@ -14,7 +14,7 @@ use gpui_component::{
     menu::{ContextMenu, ContextMenuExt as _, PopupMenu, PopupMenuItem},
 };
 use knoa_browser::Activation;
-use knoa_core::{Bookmark, BookmarkId, Folder, FolderIcon, FolderId, Place};
+use knoa_core::{Bookmark, BookmarkId, Folder, FolderIcon, FolderId, FolderTree, Place};
 
 use super::{
     CopyLink, DeleteSelected, MainView, OpenSelected, OpenSelectedInBackground, QuickLook,
@@ -34,13 +34,16 @@ use crate::{
 const MENU_WIDTH: Pixels = px(240.);
 /// Longer folder names are cut so the check after them stays inside the fixed width.
 const FOLDER_NAME_CHARS: usize = 26;
+/// How far a subfolder sits in from its parent, and the characters of name that costs.
+const MENU_INDENT: Pixels = px(16.);
+const INDENT_CHARS: usize = 3;
 /// The size gpui-component gives a menu item's icon (`xsmall`).
 const MENU_ICON: Pixels = px(12.);
 
 /// Everything the menu shows, read once when it opens.
 struct Target {
     bookmark: Bookmark,
-    folders: Vec<Folder>,
+    folders: FolderTree,
     place: Place,
     cards_focus: FocusHandle,
     refresh: Option<Refresh>,
@@ -54,7 +57,7 @@ impl Target {
         let library = view.library.read(cx);
         Some(Target {
             bookmark: library.bookmark(id)?.clone(),
-            folders: library.folders().to_vec(),
+            folders: library.folder_tree().clone(),
             place: library.place(),
             cards_focus: view.cards_focus.clone(),
             refresh: Thumbnails::entity(cx).read(cx).refresh_of(id),
@@ -83,10 +86,7 @@ impl Target {
         let Place::Folder(viewed) = self.place else {
             return None;
         };
-        self.folders
-            .iter()
-            .find(|f| f.id == viewed)
-            .filter(|f| self.is_in(f.id))
+        self.folders.get(viewed).filter(|f| self.is_in(f.id))
     }
 }
 
@@ -209,7 +209,7 @@ fn filing_items(
     let folder_id = folder.id;
     menu.item(item(
         view,
-        format!("Remove from {}", folder.name),
+        format!("Remove from {}", target.folders.path_name(folder_id)),
         "folder-minus",
         id,
         move |this, id, cx| this.set_in_folder(id, folder_id, false, cx),
@@ -232,10 +232,11 @@ fn folder_submenu(
         );
     }
     let (view, id) = (view.clone(), target.bookmark.id);
-    let folders: Vec<(Folder, bool)> = target
+    let folders: Vec<(Folder, usize, bool)> = target
         .folders
+        .folders()
         .iter()
-        .map(|f| (f.clone(), target.is_in(f.id)))
+        .map(|f| (f.clone(), target.folders.depth(f.id), target.is_in(f.id)))
         .collect();
     menu.submenu_with_icon(
         Some(icon_asset("folder-plus")),
@@ -246,14 +247,14 @@ fn folder_submenu(
     )
 }
 
-/// One row per folder, tinted like the sidebar's. Checked ones hold the bookmark, and
-/// choosing one again takes it out. The check sits on the right because a left check
-/// would replace the folder's icon.
+/// One row per folder, tinted and indented like the sidebar's. Checked ones hold the
+/// bookmark, and choosing one again takes it out. The check sits on the right because a
+/// left check would replace the folder's icon.
 fn folder_items(
     menu: PopupMenu,
     view: &WeakEntity<MainView>,
     id: BookmarkId,
-    folders: &[(Folder, bool)],
+    folders: &[(Folder, usize, bool)],
     cx: &App,
 ) -> PopupMenu {
     let theme = Theme::get(cx);
@@ -261,19 +262,22 @@ fn folder_items(
         .min_w(MENU_WIDTH)
         .max_w(MENU_WIDTH)
         .check_side(Side::Right);
-    folders.iter().fold(menu, |menu, (folder, filed)| {
-        let (folder_id, filed) = (folder.id, *filed);
+    folders.iter().fold(menu, |menu, (folder, depth, filed)| {
+        let (folder_id, depth, filed) = (folder.id, *depth, *filed);
         let view = view.clone();
         let tint = theme.folder_color(folder.color);
-        let (icon, label) = (folder.icon.clone(), shorten(&folder.name));
+        let chars = FOLDER_NAME_CHARS - INDENT_CHARS * depth;
+        let (icon, label) = (folder.icon.clone(), shorten(&folder.name, chars));
         menu.item(
-            PopupMenuItem::element(move |_, _| folder_row(icon.as_ref(), tint, &label))
-                .checked(filed)
-                .on_click(move |_, _, cx| {
-                    let _ = view.update(cx, |this, cx| {
-                        this.set_in_folder(id, folder_id, !filed, cx);
-                    });
-                }),
+            PopupMenuItem::element(move |_, _| {
+                folder_row(icon.as_ref(), tint, &label).pl(MENU_INDENT * depth as f32)
+            })
+            .checked(filed)
+            .on_click(move |_, _, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    this.set_in_folder(id, folder_id, !filed, cx);
+                });
+            }),
         )
     })
 }
@@ -289,11 +293,11 @@ fn folder_row(icon: Option<&FolderIcon>, tint: Hsla, label: &str) -> Div {
         .child(div().flex_1().truncate().child(label.to_owned()))
 }
 
-fn shorten(name: &str) -> String {
-    if name.chars().count() <= FOLDER_NAME_CHARS {
+fn shorten(name: &str, chars: usize) -> String {
+    if name.chars().count() <= chars {
         return name.to_owned();
     }
-    let kept: String = name.chars().take(FOLDER_NAME_CHARS - 1).collect();
+    let kept: String = name.chars().take(chars - 1).collect();
     format!("{}…", kept.trim_end())
 }
 

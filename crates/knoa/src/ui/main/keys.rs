@@ -1,6 +1,6 @@
 //! The main screen's actions and the keys bound to them.
 
-use gpui::{App, KeyBinding, actions};
+use gpui::{Action, App, KeyBinding, actions};
 
 actions!(
     cards,
@@ -24,6 +24,16 @@ actions!(
     [PreviousImage, NextImage, CloseViewer, CopyImage, SaveImage]
 );
 actions!(knoa, [FocusSearch, OpenSettings, NewLink]);
+
+/// The keys for the first nine folders in the sidebar, which shows them beside each.
+const FOLDER_KEYS: [&str; 9] = [
+    "cmd-1", "cmd-2", "cmd-3", "cmd-4", "cmd-5", "cmd-6", "cmd-7", "cmd-8", "cmd-9",
+];
+
+/// Shows the sidebar's `n`th visible folder, counting from 0.
+#[derive(Clone, Debug, PartialEq, Action)]
+#[action(namespace = knoa, no_json)]
+pub struct SelectFolder(pub usize);
 
 /// Bindings for the card grid and the image viewer. They live in their own key contexts so
 /// they never fire while typing in the search field.
@@ -61,4 +71,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-n", NewLink, None),
     ]);
+    let folders = FOLDER_KEYS
+        .iter()
+        .enumerate()
+        .map(|(n, key)| KeyBinding::new(key, SelectFolder(n), Some("Main")));
+    cx.bind_keys(folders);
 }

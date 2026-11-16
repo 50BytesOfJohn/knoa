@@ -1,5 +1,5 @@
-//! The folder editor's icon grid: the folder shape, every glyph, and the folder's emoji
-//! when it has one.
+//! The folder editor's glyph grid: the folder shape and every glyph, all in the folder's
+//! color.
 
 use gpui::{
     Context, Div, InteractiveElement as _, ParentElement as _, StatefulInteractiveElement as _,
@@ -19,11 +19,7 @@ const GLYPH: f32 = 18.;
 impl FolderEditor {
     pub(super) fn icon_picker(&self, theme: &Theme, cx: &mut Context<'_, FolderEditor>) -> Div {
         let glyphs = FolderGlyph::ALL.iter().map(|&glyph| Some(glyph.into()));
-        let emoji = self
-            .icon
-            .clone()
-            .filter(|icon| matches!(icon, FolderIcon::Emoji(_)));
-        let choices = std::iter::once(None).chain(glyphs).chain(emoji.map(Some));
+        let choices = std::iter::once(None).chain(glyphs);
         let mut grid = div().flex().flex_wrap().gap_1();
         for (index, glyph) in choices.enumerate() {
             grid = grid.child(self.icon_cell(index, glyph, theme, cx));
@@ -63,8 +59,9 @@ impl FolderEditor {
                 px(GLYPH),
                 Finish::Line,
             ))
-            .on_click(cx.listener(move |this, _, _, cx| {
+            .on_click(cx.listener(move |this, _, window, cx| {
                 this.icon.clone_from(&icon);
+                this.clear_typed_emoji(window, cx);
                 cx.notify();
             }))
     }
