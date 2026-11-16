@@ -1,15 +1,20 @@
 //! A card at its place on the canvas, and what clicking a card does.
 
 use gpui::{
-    ClickEvent, Context, IntoElement, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, Window, div, px,
+    ClickEvent, Context, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use knoa_browser::Activation;
 use knoa_core::{Bookmark, BookmarkId};
 
 use crate::ui::{
     main::{
-        MainView, bookmark_menu::with_bookmark_menu, cards, content::Arrangement, masonry::Placed,
+        MainView,
+        bookmark_menu::with_bookmark_menu,
+        cards,
+        content::Arrangement,
+        masonry::Placed,
+        sidebar::{DragPreview, DraggedBookmark},
         tiles,
     },
     theme::Theme,
@@ -38,6 +43,10 @@ impl MainView {
                              cx: &mut Context<'_, MainView>| {
             this.click_card(id, event, window, cx);
         };
+        let dragged = DraggedBookmark {
+            id,
+            title: SharedString::from(bookmark.title.clone()),
+        };
         div()
             .absolute()
             .top(px(placed.y))
@@ -46,6 +55,9 @@ impl MainView {
             .child(with_bookmark_menu(
                 cards::interactive(placed.index, card, placed.height, theme)
                     .on_click(cx.listener(on_click))
+                    .on_drag(dragged, |dragged, _, _, cx| {
+                        DragPreview::bookmark(dragged).build(cx)
+                    })
                     .on_aux_click(cx.listener(on_click))
                     .child(
                         cards::open_button(placed.index, theme).on_click(cx.listener(

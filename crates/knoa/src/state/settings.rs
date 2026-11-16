@@ -1,6 +1,9 @@
 //! User settings, kept as a small JSON file next to the database.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
@@ -20,6 +23,8 @@ pub struct Settings {
     pub theme: String,
     pub show_up_next: bool,
     pub show_summaries: bool,
+    /// Sidebar folders shown collapsed, by local id. Kept on this Mac only.
+    pub collapsed_folders: BTreeSet<i64>,
     pub window: Option<WindowFrame>,
     /// The signed-in cloud account as last seen, so the app knows who organizes before
     /// the server answers. The token itself is with the credentials.
@@ -66,6 +71,7 @@ impl Default for Settings {
             theme: crate::ui::theme::DEFAULT_THEME.into(),
             show_up_next: true,
             show_summaries: true,
+            collapsed_folders: BTreeSet::new(),
             window: None,
             account: None,
             legacy: Legacy::default(),

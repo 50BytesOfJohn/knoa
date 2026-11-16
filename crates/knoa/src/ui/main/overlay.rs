@@ -9,7 +9,7 @@ use gpui::{
     prelude::FluentBuilder as _, px, size,
 };
 use gpui_component::switch::Switch;
-use knoa_core::{FolderId, WorkspaceId};
+use knoa_core::{Folder, FolderId, WorkspaceId};
 
 use super::{
     MainView, NewLink, OpenSettings,
@@ -34,6 +34,8 @@ pub enum Overlay {
     AddLink(Entity<AddLink>),
     /// The full-window image viewer.
     Viewer(Viewer),
+    /// Asking before a folder and its subfolders are deleted.
+    DeleteFolder(FolderId),
 }
 
 impl MainView {
@@ -48,23 +50,45 @@ impl MainView {
         cx.notify();
     }
 
+    /// Opens the folder editor on an existing folder.
     pub fn edit_folder(
         &mut self,
         folder: Option<FolderId>,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        let tree = self.library.read(cx).folder_tree();
         let existing = folder.and_then(|id| {
-            self.library
-                .read(cx)
-                .folders()
-                .iter()
-                .find(|f| f.id == id)
-                .cloned()
+            let shown_parent = tree.parent(id).map(|f| f.id);
+            tree.get(id).map(|f| Folder {
+                parent: shown_parent,
+                ..f.clone()
+            })
         });
+        let parent = existing.as_ref().and_then(|f| f.parent);
+        self.open_folder_editor(existing, parent, window, cx);
+    }
+
+    /// Opens the folder editor on a new folder under `parent`, or at the top level.
+    pub fn new_folder(
+        &mut self,
+        parent: Option<FolderId>,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        self.open_folder_editor(None, parent, window, cx);
+    }
+
+    fn open_folder_editor(
+        &mut self,
+        existing: Option<Folder>,
+        parent: Option<FolderId>,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
         let library = self.library.clone();
         let this = cx.entity().downgrade();
-        let editor = cx.new(|cx| FolderEditor::new(existing, library, this, window, cx));
+        let editor = cx.new(|cx| FolderEditor::new(existing, parent, library, this, window, cx));
         self.open_overlay(Overlay::Folder(editor), cx);
     }
 
@@ -158,6 +182,7 @@ impl MainView {
             Overlay::AddLink(panel) => panel.clone().into_any_element(),
             Overlay::ViewOptions => self.view_options(cx).into_any_element(),
             Overlay::Workspaces => self.workspace_switcher(cx).into_any_element(),
+            Overlay::DeleteFolder(id) => self.delete_folder_prompt(*id, cx).into_any_element(),
             // Not a panel: the viewer fills the window with its own backdrop.
             Overlay::Viewer(viewer) => {
                 let viewer = self.render_viewer(viewer.bookmark, viewer.notice(), window, cx);

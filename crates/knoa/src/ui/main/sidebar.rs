@@ -7,24 +7,30 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 use gpui_component::tooltip::Tooltip;
-use knoa_core::{FolderIcon, Ink, Place};
+use knoa_core::{Ink, Place};
 
+mod drop;
+mod folder_menu;
+mod folders;
 mod footer;
+mod outline;
+
+pub(super) use drop::{DragPreview, DraggedBookmark, SidebarDrop};
+
+pub(super) use outline::Outline;
 
 use super::{MainView, NewLink, Overlay};
 use crate::ui::{
-    components::{Finish, folder_mark, icon, workspace_mark},
+    components::{icon, workspace_mark},
     mascot::ai_mark,
     theme::{MARGIN, PANEL_RADIUS, ROW_HEIGHT, ROW_RADIUS, SIDEBAR_WIDTH, Theme},
 };
 
-/// What leads a place's row: a Lucide icon, the AI's dot for places about the AI, or a
-/// folder's own mark.
+/// What leads a place's row: a Lucide icon, or the AI's dot for places about the AI.
 #[derive(Clone, Copy)]
-enum PlaceMark<'a> {
+enum PlaceMark {
     Icon(&'static str),
     Ai,
-    Folder(Option<&'a FolderIcon>),
 }
 
 /// The sidebar's top row, shared with the traffic lights.
@@ -83,7 +89,6 @@ impl MainView {
         let library = self.library.read(cx);
         let counts = library.counts();
         let current = library.place();
-        let folders = library.folders().to_vec();
         let (name, color) = library
             .workspace()
             .map(|w| (w.name.clone(), w.color))
@@ -91,49 +96,7 @@ impl MainView {
 
         let list = self.places(counts, current, cx);
 
-        let mut folder_list = div().flex().flex_col().gap_0p5().px(ROW_INSET);
-        for (index, folder) in folders.iter().enumerate() {
-            let shortcut = (index < 9).then(|| format!("⌘{}", index + 1));
-            let color = theme.folder_color(folder.color);
-            let row = self.place_row(
-                Place::Folder(folder.id),
-                current,
-                &folder.name,
-                PlaceMark::Folder(folder.icon.as_ref()),
-                folder.count,
-                Some((color, shortcut)),
-                cx,
-            );
-            let id = folder.id;
-            folder_list = folder_list.child(
-                div()
-                    .id(("folder-row", id.0 as usize))
-                    .child(row)
-                    .on_mouse_down(
-                        gpui::MouseButton::Right,
-                        cx.listener(move |this, _, window, cx| {
-                            this.edit_folder(Some(id), window, cx);
-                        }),
-                    ),
-            );
-        }
-        folder_list = folder_list.child(
-            div()
-                .id("new-folder")
-                .flex()
-                .items_center()
-                .gap_2()
-                .h(ROW_HEIGHT)
-                .px(ROW_PADDING)
-                .rounded(ROW_RADIUS)
-                .text_sm()
-                .text_color(theme.muted)
-                .cursor_pointer()
-                .hover(|s| s.bg(theme.hover))
-                .child(icon("plus", px(15.), theme.muted))
-                .child("New folder")
-                .on_click(cx.listener(|this, _, window, cx| this.edit_folder(None, window, cx))),
-        );
+        let folder_list = self.folder_list(current, cx);
 
         div()
             .absolute()
@@ -238,7 +201,7 @@ impl MainView {
             if hideable && count == 0 && current != place {
                 continue;
             }
-            list = list.child(self.place_row(place, current, label, mark, count, None, cx));
+            list = list.child(self.place_row(place, current, label, mark, count, cx));
         }
         list
     }
@@ -296,64 +259,53 @@ impl MainView {
             }))
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn place_row(
         &self,
         place: Place,
         current: Place,
         label: &str,
-        mark: PlaceMark<'_>,
+        mark: PlaceMark,
         count: usize,
-        folder: Option<(gpui::Hsla, Option<String>)>,
         cx: &mut Context<'_, MainView>,
     ) -> AnyElement {
         let theme = Theme::get(cx);
         let selected = place == current;
-        let icon_color = match &folder {
-            Some((color, _)) => *color,
-            None if selected => theme.accent,
-            None => theme.muted,
-        };
+        let icon_color = if selected { theme.accent } else { theme.muted };
         let badge = match place {
             // Not organized only shows a count while the AI has work waiting.
             Place::NotOrganized if count == 0 => None,
             _ => Some(count),
         };
         let id = SharedString::from(format!("place-{label}"));
-        div()
+        row_frame(selected, theme)
             .id(id)
-            .flex()
-            .items_center()
-            .gap_2()
-            .h(ROW_HEIGHT)
             .px(ROW_PADDING)
-            .rounded(ROW_RADIUS)
-            .text_sm()
-            .cursor_pointer()
-            .when(selected, |s| {
-                s.bg(theme.hover).font_weight(FontWeight::MEDIUM)
-            })
             .hover(|s| s.bg(theme.hover))
             .child(match mark {
                 PlaceMark::Icon(name) => icon(name, px(15.), icon_color).into_any_element(),
                 PlaceMark::Ai => ai_mark(px(15.), theme.ai).into_any_element(),
-                PlaceMark::Folder(glyph) => {
-                    let finish = if selected {
-                        Finish::Tinted
-                    } else {
-                        Finish::Line
-                    };
-                    folder_mark(glyph, icon_color, px(15.), finish).into_any_element()
-                }
             })
             .child(div().flex_1().truncate().child(label.to_owned()))
-            .when_some(folder.and_then(|(_, key)| key), |s, key| {
-                s.child(div().text_xs().text_color(theme.faint).child(key))
-            })
             .when_some(badge.filter(|n| *n > 0), |s, n| {
                 s.child(div().text_xs().text_color(theme.muted).child(n.to_string()))
             })
             .on_click(cx.listener(move |this, _, window, cx| this.set_place(place, window, cx)))
             .into_any_element()
     }
+}
+
+/// A sidebar row's shape, shared by places and folders: height, rounding, type and the
+/// selected fill.
+fn row_frame(selected: bool, theme: &Theme) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .h(ROW_HEIGHT)
+        .rounded(ROW_RADIUS)
+        .text_sm()
+        .cursor_pointer()
+        .when(selected, |s| {
+            s.bg(theme.hover).font_weight(FontWeight::MEDIUM)
+        })
 }
