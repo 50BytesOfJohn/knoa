@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import icons from "../fixtures/folder-icons.json";
 import nested from "../fixtures/nested-folders.json";
 import { FakeServer } from "../src/fake-server";
 import { parseFolderIcon } from "../src/folder-icon";
@@ -54,6 +55,7 @@ describe("nested folders", () => {
 	it("fall back to the top level when a parent is missing, cyclic or too deep", () => {
 		const tree = new FolderTree([
 			folder("orphan", "gone"),
+			{ ...folder("foreign", "1"), workspace_id: "elsewhere" },
 			folder("a", "b"),
 			folder("b", "a"),
 			folder("1", null, 1),
@@ -62,10 +64,11 @@ describe("nested folders", () => {
 			folder("4", "3"),
 		]);
 
-		expect(tree.nodes).toHaveLength(7);
-		for (const id of ["orphan", "1", "4"]) expect(tree.parent(id)).toBeUndefined();
+		expect(tree.nodes).toHaveLength(8);
+		for (const id of ["orphan", "foreign", "a", "b", "1", "4"]) expect(tree.parent(id)).toBeUndefined();
 		expect(tree.pathName("3")).toBe("1 › 2 › 3");
 		expect(tree.checkMove("1", "3")).toBe("into_itself");
+		expect(tree.checkMove("1", "foreign")).toBe("unknown_parent");
 		expect(tree.checkNewChild("3")).toBe("too_deep");
 	});
 
@@ -94,10 +97,10 @@ describe("nested folders", () => {
 
 	it("read icons as glyphs, single emoji or nothing", () => {
 		expect(parseFolderIcon("read")).toEqual({ type: "glyph", name: "read" });
-		for (const emoji of ["🎨", "❤️", "👩🏽‍💻", "🇵🇱", "1️⃣"]) {
+		for (const emoji of icons.emoji) {
 			expect(parseFolderIcon(emoji)).toEqual({ type: "emoji", emoji });
 		}
-		for (const other of ["rocket", "A", "🎨🎨", " 🎨", "→", null]) {
+		for (const other of [...icons.invalid, null]) {
 			expect(parseFolderIcon(other)).toBeNull();
 		}
 	});

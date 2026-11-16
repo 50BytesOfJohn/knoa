@@ -16,14 +16,19 @@ impl Layout {
         for (at, folder) in folders.iter().enumerate() {
             index.entry(folder.id).or_insert(at);
         }
+        let mut parents: Vec<Option<usize>> = folders
+            .iter()
+            .map(|folder| folder.parent.and_then(|id| index.get(&id).copied()))
+            .collect();
+        detach_cycles(&mut parents);
         let mut layout = Layout {
             children: vec![Vec::new(); folders.len()],
             roots: Vec::new(),
         };
-        for (at, folder) in folders.iter().enumerate() {
-            match folder.parent.and_then(|id| index.get(&id).copied()) {
-                Some(parent) if parent != at => layout.children[parent].push(at),
-                _ => layout.roots.push(at),
+        for (at, parent) in parents.into_iter().enumerate() {
+            match parent {
+                Some(parent) => layout.children[parent].push(at),
+                None => layout.roots.push(at),
             }
         }
         layout
@@ -80,5 +85,27 @@ impl Walk<'_> {
             }
         }
         self.placed.iter().position(|placed| !placed)
+    }
+}
+
+/// Every member of a cycle is a root, rather than choosing an arbitrary parent to keep.
+fn detach_cycles(parents: &mut [Option<usize>]) {
+    let mut visited = vec![false; parents.len()];
+    for start in 0..parents.len() {
+        let mut path = Vec::new();
+        let mut at = Some(start);
+        while let Some(index) = at {
+            if visited[index] {
+                if let Some(cycle) = path.iter().position(|&item| item == index) {
+                    for &member in &path[cycle..] {
+                        parents[member] = None;
+                    }
+                }
+                break;
+            }
+            visited[index] = true;
+            path.push(index);
+            at = parents[index];
+        }
     }
 }
