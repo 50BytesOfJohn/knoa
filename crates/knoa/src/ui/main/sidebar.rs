@@ -130,6 +130,13 @@ impl MainView {
                     .mt_6()
                     .flex_1()
                     .overflow_y_scroll()
+                    .track_scroll(&self.sidebar_drop.scroll)
+                    .on_scroll(cx.listener(|this, _, _, cx| {
+                        if cx.has_active_drag() {
+                            this.sidebar_drop.end();
+                            cx.notify();
+                        }
+                    }))
                     .child(
                         div()
                             .px(CONTENT_INSET)

@@ -4,8 +4,8 @@
 use std::{rc::Rc, time::Duration};
 
 use gpui::{
-    AppContext as _, Context, DragMoveEvent, FontWeight, IntoElement, ParentElement as _, Pixels,
-    Point, Render, SharedString, Styled as _, Task, Window, div, px,
+    AppContext as _, Bounds, Context, DragMoveEvent, FontWeight, IntoElement, ParentElement as _,
+    Pixels, Point, Render, ScrollHandle, SharedString, Styled as _, Task, Window, div, px,
 };
 use knoa_core::{BookmarkId, FolderIcon, FolderId, FolderTree};
 
@@ -45,11 +45,17 @@ pub(super) enum DropSpot {
 /// The sidebar's part of a drag in progress.
 #[derive(Default)]
 pub(in crate::ui::main) struct SidebarDrop {
+    pub(super) scroll: ScrollHandle,
     spot: Option<DropSpot>,
     expanding: Option<(FolderId, Task<()>)>,
 }
 
 impl SidebarDrop {
+    // DragMoveEvent carries the unmasked row bounds, including the part scrolled away.
+    fn contains(&self, bounds: Bounds<Pixels>, position: Point<Pixels>) -> bool {
+        self.scroll.bounds().contains(&position) && bounds.contains(&position)
+    }
+
     pub(super) fn spot(&self) -> Option<DropSpot> {
         self.spot
     }
@@ -130,7 +136,7 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) {
         let bounds = event.bounds;
-        let spot = if bounds.contains(&event.event.position) {
+        let spot = if self.sidebar_drop.contains(bounds, event.event.position) {
             let dragged = event.drag(cx).0.id;
             let tree = self.library.read(cx).folder_tree();
             spot_in_row(
@@ -153,7 +159,10 @@ impl MainView {
         event: &DragMoveEvent<DraggedBookmark>,
         cx: &mut Context<'_, MainView>,
     ) {
-        let spot = if event.bounds.contains(&event.event.position) {
+        let spot = if self
+            .sidebar_drop
+            .contains(event.bounds, event.event.position)
+        {
             Some(DropSpot::Into(row.id))
         } else {
             self.spot_leaving(row.id)
@@ -177,7 +186,10 @@ impl MainView {
         event: &DragMoveEvent<DraggedFolder>,
         cx: &mut Context<'_, MainView>,
     ) {
-        let spot = if event.bounds.contains(&event.event.position) {
+        let spot = if self
+            .sidebar_drop
+            .contains(event.bounds, event.event.position)
+        {
             Some(DropSpot::End)
         } else if self.sidebar_drop.spot == Some(DropSpot::End) {
             None
@@ -185,6 +197,7 @@ impl MainView {
             return;
         };
         if self.sidebar_drop.spot != spot {
+            self.sidebar_drop.expanding = None;
             self.sidebar_drop.spot = spot;
             cx.notify();
         }
@@ -199,6 +212,7 @@ impl MainView {
         if self.sidebar_drop.spot == spot {
             return;
         }
+        self.sidebar_drop.expanding = None;
         self.sidebar_drop.spot = spot;
         if spot == Some(DropSpot::Into(row.id)) && row.disclosure == Disclosure::Collapsed {
             self.expand_after_hover(row.id, cx);
