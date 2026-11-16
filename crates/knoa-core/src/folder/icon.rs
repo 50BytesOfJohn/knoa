@@ -119,11 +119,17 @@ mod tests {
             FolderIcon::parse("read"),
             Some(FolderIcon::Glyph(_))
         ));
-        for emoji in ["🎨", "❤️", "👩🏽‍💻", "🇵🇱", "1️⃣", "🏳️‍🌈"]
-        {
-            assert_eq!(read(emoji).as_deref(), Some(emoji), "{emoji}");
+        let cases: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/folder-icons.json"
+        )))
+        .unwrap();
+        for emoji in cases["emoji"].as_array().unwrap() {
+            let emoji = emoji.as_str().unwrap();
+            assert_eq!(read(emoji).as_deref(), Some(emoji), "{emoji:?}");
         }
-        for other in ["", "rocket", "A", "🎨🎨", " 🎨", "→"] {
+        for other in cases["invalid"].as_array().unwrap() {
+            let other = other.as_str().unwrap();
             assert_eq!(read(other), None, "{other:?}");
         }
     }

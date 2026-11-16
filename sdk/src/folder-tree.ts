@@ -114,6 +114,9 @@ export class FolderTree {
 
 	/** Why `id` and its subfolders can't move under `parent`, or null when they can. */
 	checkMove(id: FolderId, parent: FolderId | null): MoveError | null {
+		if (parent && this.get(parent)?.workspace_id !== this.get(id)?.workspace_id) {
+			return "unknown_parent";
+		}
 		if (parent && this.subtree(id).some((folder) => folder.id === parent)) {
 			return "into_itself";
 		}
@@ -145,12 +148,18 @@ function byPosition(a: Folder, b: Folder): number {
  * reachable through a cycle, start subtrees of their own at the top level.
  */
 function layOut(folders: Folder[]): FolderNode[] {
-	const ids = new Set(folders.map((folder) => folder.id));
+	const byId = new Map(folders.map((folder) => [folder.id, folder]));
+	const parents = new Map<FolderId, FolderId | null>();
+	for (const folder of folders) {
+		const parent = byId.get(folder.parent_id ?? "");
+		parents.set(folder.id, parent?.workspace_id === folder.workspace_id ? parent.id : null);
+	}
+	detachCycles(parents);
 	const children = new Map<FolderId, Folder[]>();
 	const roots: Folder[] = [];
 	for (const folder of folders) {
-		const parent = folder.parent_id ?? null;
-		if (parent && parent !== folder.id && ids.has(parent)) {
+		const parent = parents.get(folder.id) ?? null;
+		if (parent) {
 			const siblings = children.get(parent) ?? [];
 			siblings.push(folder);
 			children.set(parent, siblings);
@@ -194,4 +203,23 @@ function subtreeEnds(nodes: readonly FolderNode[]): number[] {
 		open.push(at);
 	});
 	return ends;
+}
+
+/** Every member of a cycle is a root, as in knoa-core. */
+function detachCycles(parents: Map<FolderId, FolderId | null>): void {
+	const visited = new Set<FolderId>();
+	for (const start of parents.keys()) {
+		const path: FolderId[] = [];
+		let at: FolderId | null = start;
+		while (at !== null) {
+			if (visited.has(at)) {
+				const cycle = path.indexOf(at);
+				if (cycle >= 0) for (const member of path.slice(cycle)) parents.set(member, null);
+				break;
+			}
+			visited.add(at);
+			path.push(at);
+			at = parents.get(at) ?? null;
+		}
+	}
 }
