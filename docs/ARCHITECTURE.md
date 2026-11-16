@@ -45,7 +45,8 @@ Rust; `sdk/fixtures/` supplies the shared protocol examples used by the Rust tes
 
 ## Data model
 
-See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md).
+See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md) and, for folders,
+[ADR 0017](adr/0017-nested-folders-and-emoji-icons.md).
 
 - Workspaces own their bookmarks, folders, instructions, synced browser profiles, the
   profile their links open in, and an optional keep guideline ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md)). URLs are
@@ -59,7 +60,10 @@ See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md).
   60 characters, and a switch that holds the AI to the list. Empty by default.
 - Every AI-set value and folder link records its origin (AI or user). AI re-runs never
   overwrite user values.
-- Folders have a name, an optional description and an `auto_assign` flag (default on).
+- Folders have a name, an optional description, an `auto_assign` flag (default on), a
+  color, an icon (a glyph or one emoji) and an optional parent, at most three levels
+  deep. `FolderTree` in `knoa-core` (mirrored in `sdk/src/folder-tree.ts`) turns the
+  rows into the tree every view reads.
 - Folder exclusions store (bookmark, folder) pairs the user removed, so the AI never adds
   them back.
 
@@ -122,8 +126,8 @@ share. Signed out, the app is Local mode and none of this runs.
   access token is refreshed shortly before it runs out.
 - **Ids:** linking a library gives every workspace, folder and bookmark a sync id.
   Bookmark ids are UUID v5 of the URL under the workspace id, so two devices importing the
-  same bookmark converge on one row. A second device's workspaces and folders are matched
-  to the account's by name.
+  same bookmark converge on one row. A second device's workspaces are matched to the
+  account's by name, and its folders by path of names.
 - **Push:** every store change in a linked library also writes an outbox row with a
   client-made id, in the same transaction, recording only the columns that changed and
   who made them (user or AI). The sync loop sends the outbox after local changes and drops
@@ -197,7 +201,7 @@ resumes on its own once that one gets through, or when the user sets a new key.
    before the AI saw pixels are queued once more by a migration, as a backfill each Mac
    drops for a bookmark whose answer from another Mac has arrived.
 5. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
-   bookmark's workspace
+   bookmark's workspace, named by its full path
    (OpenRouter Decisions, with a sentinel question). A provider without a classifier
    picks folders in the chat call instead.
 6. **Store** the result with the model name. Without AI, steps 3 to 5 are skipped and the

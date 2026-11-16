@@ -10,7 +10,7 @@ old one.
 | [0002](0002-sqlite-local-first-storage.md) | SQLite for local storage, FTS5 for search | Accepted |
 | [0003](0003-openrouter-thin-client.md) | OpenRouter through a thin hand-written client | Accepted |
 | [0004](0004-hybrid-ui-components.md) | gpui-component for primitives, own design on top | Accepted |
-| [0005](0005-typed-bookmarks-and-folders.md) | Typed bookmarks and one-level folders | Accepted |
+| [0005](0005-typed-bookmarks-and-folders.md) | Typed bookmarks and one-level folders | Folders superseded by 0017 |
 | [0006](0006-tokio-runtime-for-network.md) | A dedicated tokio runtime for network work | Accepted |
 | [0007](0007-main-screen-rendering.md) | Masonry, glass panels and the date rail in GPUI | Accepted |
 | [0008](0008-credential-storage.md) | Keychain in signed builds, plain file in dev builds | Accepted |
@@ -22,3 +22,4 @@ old one.
 | [0014](0014-releases-and-updates.md) | Releases on GitHub, updates through Sparkle | Accepted |
 | [0015](0015-separate-read-connection.md) | One writer and one read-only reader for the database | Accepted |
 | [0016](0016-images-seen-from-derived-copies.md) | Images are stored and shown to the AI as derived copies | Accepted |
+| [0017](0017-nested-folders-and-emoji-icons.md) | Folders nest three levels deep, and an icon can be an emoji | Accepted |

@@ -60,9 +60,11 @@ quality are a priority from the first milestone.
   actor" or "videos longer than an hour" possible.
 - **Extras** hold facts the kind's fields don't cover. They are shown and searchable, but
   have no typed filters.
-- **Folders** are one level deep and created only by the user. A bookmark can be in
-  several folders. Each folder has:
+- **Folders** are created only by the user and nest up to three levels deep
+  ("Wallpapers › Anime"). A bookmark can be in several folders. Selecting a folder shows
+  its bookmarks and those of every folder under it. Each folder has:
   - an optional description of what belongs in it, which the AI uses for matching;
+  - a color and an icon: one of Knoa's glyphs or any single emoji;
   - an auto-assign switch, on by default, that lets the AI add new bookmarks to it;
   - a "find bookmarks that belong here" action (offered when the folder is empty) and a
     re-scan action. Both only add bookmarks. Bookmarks that no longer match are marked,
