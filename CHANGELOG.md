@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.4.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.4.1) - 2026-11-16
+
+### Changed
+
+- Highlight folder rows on hover right away ([#44](https://github.com/50BytesOfJohn/knoa/pull/44))
 ## [0.4.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.4.0) - 2026-11-16
 
 ### Changed
