@@ -136,6 +136,9 @@ impl MainView {
         };
         let receiving = matches!(target, Some(DropSpot::Into(_)));
         row_frame(selected, theme)
+            // Without an id the row has no element state to remember its hover in, so
+            // moving the pointer over it wouldn't repaint until something else did.
+            .id(("folder-row-body", row.id.0 as usize))
             .pl(ROW_PADDING + indent)
             .pr(if nested { px(2.) } else { ROW_PADDING })
             .hover(|s| s.bg(theme.hover))
