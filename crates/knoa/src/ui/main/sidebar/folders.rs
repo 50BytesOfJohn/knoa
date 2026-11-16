@@ -26,9 +26,6 @@ use crate::ui::{
 /// How far each level of folders sits in from its parent: one mark and its gap, so a
 /// child's mark starts under its parent's name.
 const INDENT: Pixels = px(23.);
-/// The space between rows, as between places, which belongs to the rows' drop areas so a drag never falls
-/// through a gap.
-const ROW_GAP: Pixels = px(2.);
 /// The disclosure chevron's hit area, kept on every row of a nested tree so counts line up.
 const DISCLOSURE: Pixels = px(16.);
 const DROP_LINE: Pixels = px(2.);
@@ -82,7 +79,8 @@ impl MainView {
         div()
             .id(("folder-row", id.0 as usize))
             .relative()
-            .py(ROW_GAP / 2.)
+            // Keep the places' spacing inside the drop area, with no gap before the first row.
+            .pb_0p5()
             .child(self.folder_row_body(row, selected, shortcut, nested, target, indent, cx))
             .when_some(target, |s, spot| {
                 s.child(drop_line(spot, ROW_PADDING + indent, accent))
@@ -190,7 +188,6 @@ impl MainView {
         div()
             .id("folders-end")
             .relative()
-            .pt(ROW_GAP / 2.)
             .pb(END_DROP_ROOM)
             .when(receiving, |s| {
                 s.child(drop_line(DropSpot::End, ROW_PADDING, theme.accent))
