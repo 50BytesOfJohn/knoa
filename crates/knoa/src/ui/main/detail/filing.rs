@@ -2,7 +2,7 @@
 //! in one click. Its chips are shared with the tags.
 
 use gpui::{
-    Context, Div, Hsla, InteractiveElement as _, ParentElement as _, Stateful,
+    Context, Div, Hsla, InteractiveElement as _, ParentElement as _, SharedString, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 use knoa_core::{Bookmark, Folder, FolderLink, Origin};
@@ -22,7 +22,13 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> Div {
         let theme = Theme::get(cx).clone();
-        let folders = self.library.read(cx).folders().to_vec();
+        let tree = self.library.read(cx).folder_tree();
+        // Named by path, since the chips list folders flat.
+        let folders: Vec<(Folder, SharedString)> = tree
+            .folders()
+            .iter()
+            .map(|f| (f.clone(), tree.path_name(f.id).into()))
+            .collect();
         if folders.is_empty() {
             return section("Folders", &theme).child(
                 div()
@@ -32,17 +38,17 @@ impl MainView {
             );
         }
         let link_of = |folder: &Folder| bookmark.folders.iter().find(|l| l.folder == folder.id);
-        let (filed, unfiled): (Vec<&Folder>, Vec<&Folder>) =
-            folders.iter().partition(|f| link_of(f).is_some());
+        let (filed, unfiled): (Vec<_>, Vec<_>) =
+            folders.iter().partition(|(f, _)| link_of(f).is_some());
         let picking = filed.is_empty() || self.folder_picker == Some(bookmark.id);
         let mut row = div().flex().flex_wrap().gap_1p5();
-        for folder in &filed {
+        for (folder, path) in &filed {
             let link = link_of(folder).copied();
-            row = row.child(self.filed_chip(bookmark, folder, link, &theme));
+            row = row.child(self.filed_chip(bookmark, folder, path, link, &theme));
         }
         if picking {
-            for folder in &unfiled {
-                row = row.child(self.unfiled_chip(bookmark, folder, &theme));
+            for (folder, path) in &unfiled {
+                row = row.child(self.unfiled_chip(bookmark, folder, path, &theme));
             }
         } else if !unfiled.is_empty() {
             row = row.child(self.more_folders_chip(bookmark, &theme, cx));
@@ -56,6 +62,7 @@ impl MainView {
         &self,
         bookmark: &Bookmark,
         folder: &Folder,
+        path: &SharedString,
         link: Option<FolderLink>,
         theme: &Theme,
     ) -> Stateful<Div> {
@@ -74,7 +81,7 @@ impl MainView {
             .bg(color.opacity(0.16))
             .text_color(theme.text)
             .child(removable(swatch(color), theme))
-            .child(folder.name.clone())
+            .child(path.clone())
             .when(by_ai, |s| s.child(ai_mark(px(12.), theme.ai)))
             .when_some(unsure, |s, p| {
                 s.child(
@@ -91,7 +98,13 @@ impl MainView {
             })
     }
 
-    fn unfiled_chip(&self, bookmark: &Bookmark, folder: &Folder, theme: &Theme) -> Stateful<Div> {
+    fn unfiled_chip(
+        &self,
+        bookmark: &Bookmark,
+        folder: &Folder,
+        path: &SharedString,
+        theme: &Theme,
+    ) -> Stateful<Div> {
         let color = theme.folder_color(folder.color);
         let (id, folder_id, library) = (bookmark.id, folder.id, self.library.clone());
         let hover = theme.soft;
@@ -101,7 +114,7 @@ impl MainView {
             .text_color(theme.muted)
             .hover(move |s| s.bg(hover))
             .child(icon("plus", px(12.), color))
-            .child(folder.name.clone())
+            .child(path.clone())
             .on_click(move |_, _, cx| {
                 library.update(cx, |library, cx| {
                     library.change(cx, move |store| store.add_to_folder(id, folder_id));
