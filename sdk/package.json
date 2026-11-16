@@ -9,7 +9,8 @@
     "./indexeddb": "./src/indexeddb.ts",
     "./kinds": "./src/kinds.ts",
     "./tag": "./src/tag.ts",
-    "./link": "./src/link.ts"
+    "./link": "./src/link.ts",
+    "./folder-icon": "./src/folder-icon.ts"
   },
   "scripts": {
     "test": "node scripts/check-kinds.mjs && vitest run",

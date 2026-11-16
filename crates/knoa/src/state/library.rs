@@ -9,7 +9,9 @@ use std::{
 };
 
 use gpui::{AppContext as _, Context, EventEmitter, Task};
-use knoa_core::{Bookmark, BookmarkId, Folder, Kind, Place, Query, Workspace, WorkspaceId};
+use knoa_core::{
+    Bookmark, BookmarkId, Folder, FolderTree, Kind, Place, Query, Workspace, WorkspaceId,
+};
 use knoa_store::{AddedLink, Counts, Store};
 
 use crate::state::{database::Database, settings::SettingsFile};
@@ -37,7 +39,7 @@ pub struct Library {
     results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
-    folders: Vec<Folder>,
+    folders: FolderTree,
     /// The workspace's tags, most used first.
     tags: Vec<(String, usize)>,
     /// The bookmark the detail panel shows, loaded on its own so a change that moves it
@@ -77,7 +79,7 @@ impl Library {
             results: Arc::default(),
             kind_counts: Vec::new(),
             counts: Counts::default(),
-            folders: Vec::new(),
+            folders: FolderTree::default(),
             tags: Vec::new(),
             selected: None,
             selected_bookmark: None,
@@ -145,7 +147,13 @@ impl Library {
         self.counts
     }
 
+    /// The workspace's folders in sidebar order: each followed by its subfolders.
     pub fn folders(&self) -> &[Folder] {
+        self.folders.folders()
+    }
+
+    /// The workspace's folders as a tree, for depth, paths and moves.
+    pub fn folder_tree(&self) -> &FolderTree {
         &self.folders
     }
 
@@ -305,7 +313,7 @@ impl Library {
         }
         // A folder that was deleted can't stay selected.
         if let Place::Folder(id) = self.place
-            && !self.folders.iter().any(|f| f.id == id)
+            && self.folders.get(id).is_none()
         {
             self.set_place(Place::Everything, cx);
         }
@@ -339,7 +347,7 @@ struct Loaded {
     results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
-    folders: Vec<Folder>,
+    folders: FolderTree,
     tags: Vec<(String, usize)>,
     /// The bookmark `selected` was loaded for: `None` there means it no longer exists.
     selected_id: Option<BookmarkId>,

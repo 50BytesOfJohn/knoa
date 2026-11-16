@@ -3,7 +3,7 @@
 use knoa_core::{FolderEdits, FolderIcon, FolderId};
 use rusqlite::params;
 
-use super::color_columns;
+use super::{color_columns, placement};
 use crate::{Result, Store, sync::Recorder};
 
 impl Store {
@@ -30,9 +30,15 @@ impl Store {
                 color.is_some(),
                 color.and_then(|(_, hue)| hue),
                 edits.icon.is_some(),
-                edits.icon.flatten().map(FolderIcon::name)
+                edits
+                    .icon
+                    .as_ref()
+                    .and_then(|icon| icon.as_ref().map(FolderIcon::stored))
             ],
         )?;
+        if let Some(parent) = edits.parent {
+            placement::place(&tx, id, parent)?;
+        }
         recorder.folder_changed(id.0, before)?;
         tx.commit()?;
         Ok(())
@@ -41,7 +47,7 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{FolderColor, Hue, Ink};
+    use knoa_core::{FolderColor, FolderGlyph, Hue, Ink, NewFolder};
 
     use super::*;
     use crate::test_support::WORKSPACE;
@@ -56,14 +62,14 @@ mod tests {
         let id = store
             .create_folder(
                 WORKSPACE,
-                "Reading",
-                "",
-                true,
-                FolderColor::Hue(Hue::new(120).unwrap()),
-                Some(FolderIcon::Read),
+                &NewFolder {
+                    color: FolderColor::Hue(Hue::new(120).unwrap()),
+                    icon: Some(FolderGlyph::Read.into()),
+                    ..NewFolder::named("Reading")
+                },
             )
             .unwrap();
-        let baseline = store.folders(WORKSPACE).unwrap().remove(0);
+        let baseline = store.folders(WORKSPACE).unwrap().folders()[0].clone();
         let mut edited = baseline.clone();
         edited.name = "Local name".into();
         edited.icon = None;
@@ -86,11 +92,11 @@ mod tests {
             )
             .unwrap();
 
-        let mut rebased = store.folders(WORKSPACE).unwrap().remove(0);
+        let mut rebased = store.folders(WORKSPACE).unwrap().folders()[0].clone();
         edits.apply_to(&mut rebased);
         store.edit_folder(id, &edits).unwrap();
 
-        let saved = store.folders(WORKSPACE).unwrap().remove(0);
+        let saved = store.folders(WORKSPACE).unwrap().folders()[0].clone();
         assert_eq!(
             saved, rebased,
             "refreshing and saving must preserve the same intent"

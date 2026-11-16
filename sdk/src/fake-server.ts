@@ -237,6 +237,10 @@ export class FakeServer {
 	private apply(m: Mutation): Omit<MutationResult, "mid"> {
 		if (m.actor === "ai" && this.userOwns(m)) return { status: "ignored" };
 		if (m.op === "delete") {
+			const parent =
+				m.entity === "folder"
+					? (this.tables.folder.get(m.key)?.parent_id ?? null)
+					: null;
 			const removed = deleteRow(this.tables, m.entity, m.key);
 			for (const row of removed) {
 				if (row.entity === m.entity && row.key === m.key) continue;
@@ -245,6 +249,7 @@ export class FakeServer {
 				else this.versions.delete(id(row));
 			}
 			this.bump(m.entity, m.key, true);
+			if (m.entity === "folder") this.moveUp(m.key, parent);
 			return { status: "applied" };
 		}
 		const creating = !this.tables[m.entity].has(m.key);
@@ -255,11 +260,22 @@ export class FakeServer {
 		) {
 			return { status: "rejected", reason: "quota" };
 		}
-		if (!putRow(this.tables, m.entity, m.key, m.data)) {
+		// As the API does, a row's id is its key.
+		const keyed = ID_KEYED.has(m.entity) ? { ...m.data, id: m.key } : m.data;
+		if (!putRow(this.tables, m.entity, m.key, keyed)) {
 			return { status: "rejected", reason: "invalid" };
 		}
 		this.bump(m.entity, m.key, false);
 		return { status: "applied" };
+	}
+
+	/** A deleted folder's subfolders move to its parent, as the protocol says. */
+	private moveUp(deleted: string, parent: string | null): void {
+		for (const [key, folder] of this.tables.folder) {
+			if (folder.parent_id !== deleted) continue;
+			this.tables.folder.set(key, { ...folder, parent_id: parent });
+			this.bump("folder", key, false);
+		}
 	}
 
 	private userOwns(m: Mutation): boolean {
@@ -296,6 +312,8 @@ export class FakeServer {
 		for (const socket of this.sockets) socket.deliver(message);
 	}
 }
+
+const ID_KEYED: ReadonlySet<Entity> = new Set(["workspace", "folder", "bookmark"]);
 
 const id = (row: { entity: Entity; key: Key }) =>
 	`${row.entity}\u0000${row.key}`;

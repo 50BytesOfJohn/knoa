@@ -1,16 +1,21 @@
 //! Linking the library to an account, and unlinking it.
 //!
-//! Linking gives every row its sync id, adopting the account's workspace or folder of the
-//! same name, and queues what the server doesn't have yet, in one transaction. What it
-//! matches against is only the account's workspaces, folders and bookmark ids, gathered
-//! page by page in [`AccountRows`]; the account's rows themselves arrive afterwards
-//! through ordinary pulls from cursor 0. A crash before the link leaves the library local
-//! as before, and one after it resumes the pull from the last page applied.
+//! Linking gives every row its sync id, adopting the account's workspace of the same name
+//! and folder of the same path of names, and queues what the server doesn't have yet, in
+//! one transaction. What it matches against is only the account's workspaces, folders and
+//! bookmark ids, gathered page by page in [`AccountRows`]; the account's rows themselves
+//! arrive afterwards through ordinary pulls from cursor 0. A crash before the link leaves
+//! the library local as before, and one after it resumes the pull from the last page
+//! applied.
 
 use std::collections::{HashMap, HashSet};
 
 use knoa_core::protocol::{Change, Changed, RowState, bookmark_id, new_id};
 use rusqlite::{Connection, OptionalExtension as _, params};
+
+mod folders;
+
+use folders::{RemoteFolder, adopt_folders, remote_folder_paths};
 
 use super::{
     Recorder,
@@ -20,14 +25,15 @@ use super::{
 };
 use crate::{Error, Result, Store};
 
-/// What linking needs to know of the account: its workspaces and folders by name, and
-/// which bookmarks it has. Built from pulled pages, as of the last one added.
+/// What linking needs to know of the account: its workspaces by name, its folders by name
+/// and parent, and which bookmarks it has. Built from pulled pages, as of the last one
+/// added.
 #[derive(Debug, Default)]
 pub struct AccountRows {
     /// Workspace name by id; `None` once deleted.
     workspaces: HashMap<String, Option<String>>,
-    /// Folder workspace id and name by id; `None` once deleted.
-    folders: HashMap<String, Option<(String, String)>>,
+    /// Folders by id; `None` once deleted.
+    folders: HashMap<String, Option<RemoteFolder>>,
     /// Whether each bookmark id is live.
     bookmarks: HashMap<String, bool>,
 }
@@ -42,7 +48,11 @@ impl AccountRows {
                     self.workspaces.insert(key, Some(same_name(&row.name)));
                 }
                 Changed::Folder(RowState::Live(row)) => {
-                    let folder = (row.workspace_id.clone(), same_name(&row.name));
+                    let folder = RemoteFolder {
+                        workspace: row.workspace_id.clone(),
+                        name: same_name(&row.name),
+                        parent: row.parent_id.clone(),
+                    };
                     self.folders.insert(key, Some(folder));
                 }
                 Changed::Bookmark(RowState::Live(_)) => {
@@ -119,8 +129,8 @@ impl Store {
 struct RemoteRows {
     /// Workspace id by name.
     workspaces: Vec<(String, String)>,
-    /// Folder id by workspace id and name.
-    folders: Vec<(String, String, String)>,
+    /// Folder id by workspace id and path of names.
+    folders: Vec<(String, String, Vec<String>)>,
     bookmarks: HashSet<String>,
 }
 
@@ -128,9 +138,7 @@ impl RemoteRows {
     fn new(account: AccountRows) -> RemoteRows {
         RemoteRows {
             workspaces: live(account.workspaces).collect(),
-            folders: live(account.folders)
-                .map(|(id, (workspace, name))| (id, workspace, name))
-                .collect(),
+            folders: remote_folder_paths(account.folders),
             bookmarks: account
                 .bookmarks
                 .into_iter()
@@ -174,34 +182,6 @@ fn adopt_workspaces(conn: &Connection, remote: &RemoteRows) -> Result<Vec<i64>> 
             new_id()
         };
         ids::set_sync_id(conn, Table::Workspaces, id, &key)?;
-        taken.insert(key);
-    }
-    Ok(new)
-}
-
-fn adopt_folders(conn: &Connection, remote: &RemoteRows) -> Result<Vec<i64>> {
-    let local = rows::<(i64, String, String)>(
-        conn,
-        "SELECT f.id, w.sync_id, f.name FROM folders f JOIN workspaces w ON w.id = f.workspace_id
-         ORDER BY f.position",
-    )?;
-    let mut taken = HashSet::new();
-    let mut new = Vec::new();
-    for (id, workspace, name) in local {
-        let name = same_name(&name);
-        let adopted = remote
-            .folders
-            .iter()
-            .find(|(key, remote_workspace, remote)| {
-                *remote_workspace == workspace && *remote == name && !taken.contains(key)
-            });
-        let key = if let Some((key, ..)) = adopted {
-            key.clone()
-        } else {
-            new.push(id);
-            new_id()
-        };
-        ids::set_sync_id(conn, Table::Folders, id, &key)?;
         taken.insert(key);
     }
     Ok(new)
@@ -254,7 +234,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{FolderColor, Ink, Origin, Query};
+    use knoa_core::{Ink, NewFolder, Origin, Query};
     use serde_json::{Value, json};
 
     use super::*;
@@ -270,7 +250,7 @@ mod tests {
     fn linking_adopts_same_named_rows_and_queues_the_rest() {
         let mut store = Store::open_in_memory().unwrap();
         let reading = store
-            .create_folder(WORKSPACE, "Reading", "", true, FolderColor::default(), None)
+            .create_folder(WORKSPACE, &NewFolder::named("Reading"))
             .unwrap();
         store
             .import(
@@ -379,7 +359,7 @@ mod tests {
     /// Local Personal with a Reading folder, and a Work workspace.
     fn local_library(store: &mut Store) {
         store
-            .create_folder(WORKSPACE, "Reading", "", true, FolderColor::default(), None)
+            .create_folder(WORKSPACE, &NewFolder::named("Reading"))
             .unwrap();
         store.create_workspace("Work", Ink::Moss).unwrap();
     }
@@ -429,5 +409,57 @@ mod tests {
 
         assert_eq!(mids(&store), queued);
         assert_eq!(workspace_names(&store), ["Personal", "Work"]);
+    }
+
+    #[test]
+    fn linking_adopts_folders_by_their_path_not_their_bare_name() {
+        let (art, anime) = (
+            "0b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+            "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+        );
+        let folder = |key: &str, name: &str, parent: Option<&str>, version: i64| {
+            change(
+                json!({ "entity": "folder", "key": key, "version": version, "deleted": false,
+                "data": { "id": key, "workspace_id": WORKSPACE_KEY, "parent_id": parent,
+                "name": name, "description": "", "auto_assign": true, "color": 0,
+                "hue": null, "icon": null, "position": 1 } }),
+            )
+        };
+        let account = [
+            change(
+                json!({ "entity": "workspace", "key": WORKSPACE_KEY, "version": 1,
+                "deleted": false, "data": workspace_row(WORKSPACE_KEY, "Personal") }),
+            ),
+            folder(anime, "Anime", Some(art), 2),
+            folder(art, "Art", None, 3),
+        ];
+        let mut store = Store::open_in_memory().unwrap();
+        let wallpapers = store
+            .create_folder(WORKSPACE, &NewFolder::named("Wallpapers"))
+            .unwrap();
+        let local_anime = NewFolder {
+            parent: Some(wallpapers),
+            ..NewFolder::named("Anime")
+        };
+        store.create_folder(WORKSPACE, &local_anime).unwrap();
+
+        link(&mut store, "user-1", &[&account]);
+
+        let tree = store.folders(WORKSPACE).unwrap();
+        let mut paths: Vec<String> = tree
+            .folders()
+            .iter()
+            .map(|f| tree.path_name(f.id))
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            ["Art", "Art › Anime", "Wallpapers", "Wallpapers › Anime"]
+        );
+        let sent: Vec<Value> = pushed(&store)
+            .into_iter()
+            .map(|m| m["data"]["name"].clone())
+            .collect();
+        assert_eq!(sent, ["Wallpapers", "Anime"], "parents go first");
     }
 }

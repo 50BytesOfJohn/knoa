@@ -21,10 +21,10 @@ use crate::ui::{
 /// What leads a place's row: a Lucide icon, the AI's dot for places about the AI, or a
 /// folder's own mark.
 #[derive(Clone, Copy)]
-enum PlaceMark {
+enum PlaceMark<'a> {
     Icon(&'static str),
     Ai,
-    Folder(Option<FolderIcon>),
+    Folder(Option<&'a FolderIcon>),
 }
 
 /// The sidebar's top row, shared with the traffic lights.
@@ -99,7 +99,7 @@ impl MainView {
                 Place::Folder(folder.id),
                 current,
                 &folder.name,
-                PlaceMark::Folder(folder.icon),
+                PlaceMark::Folder(folder.icon.as_ref()),
                 folder.count,
                 Some((color, shortcut)),
                 cx,
@@ -302,7 +302,7 @@ impl MainView {
         place: Place,
         current: Place,
         label: &str,
-        mark: PlaceMark,
+        mark: PlaceMark<'_>,
         count: usize,
         folder: Option<(gpui::Hsla, Option<String>)>,
         cx: &mut Context<'_, MainView>,

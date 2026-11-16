@@ -79,8 +79,9 @@ pub(crate) fn folder(conn: &Connection, id: i64) -> Result<Option<Synced<FolderP
     Ok(conn
         .query_row(
             "SELECT f.sync_id, w.sync_id, f.name, f.description, f.auto_assign, f.color, f.hue,
-                    f.icon, f.position
+                    f.icon, f.position, p.sync_id
              FROM folders f JOIN workspaces w ON w.id = f.workspace_id
+             LEFT JOIN folders p ON p.id = f.parent_id
              WHERE f.id = ?1 AND f.sync_id IS NOT NULL AND w.sync_id IS NOT NULL",
             [id],
             |row| {
@@ -89,6 +90,7 @@ pub(crate) fn folder(conn: &Connection, id: i64) -> Result<Option<Synced<FolderP
                     row: FolderPatch {
                         id: Some(key.clone()),
                         workspace_id: Some(row.get(1)?),
+                        parent_id: Some(row.get(9)?),
                         name: Some(row.get(2)?),
                         description: Some(row.get(3)?),
                         auto_assign: Some(row.get(4)?),
@@ -102,6 +104,16 @@ pub(crate) fn folder(conn: &Connection, id: i64) -> Result<Option<Synced<FolderP
             },
         )
         .optional()?)
+}
+
+/// The folder as a `put` of the whole row sends it: without `parent_id` at the top level.
+/// An API from before nesting refuses any mutation with a column it doesn't know, and a
+/// refused mutation is dropped for good, so the column only goes out when it says something.
+pub(crate) fn whole_folder(mut folder: Synced<FolderPatch>) -> Synced<FolderPatch> {
+    if folder.row.parent_id == Some(None) {
+        folder.row.parent_id = None;
+    }
+    folder
 }
 
 /// The bookmark's synced columns. The image columns are left out: the server sets them

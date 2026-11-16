@@ -7,7 +7,7 @@ use gpui::{
 };
 use gpui_component::tooltip::Tooltip;
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
-use knoa_core::{FolderIcon, Ink, Kind, protocol::max_chars::fits};
+use knoa_core::{FolderGlyph, FolderIcon, Ink, Kind, protocol::max_chars::fits};
 
 use crate::{
     assets::knoa_icon,
@@ -16,6 +16,9 @@ use crate::{
 
 /// How strongly the tinted finish fills a folder shape.
 const FOLDER_TINT: f32 = 0.18;
+/// An emoji's font size against its box. Emoji fill their em square, while the glyphs
+/// keep a margin inside theirs, so a full-size emoji looks larger beside them.
+const EMOJI_SCALE: f32 = 0.85;
 
 /// A Lucide icon by file name, e.g. `"bookmark"`.
 pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
@@ -40,8 +43,17 @@ pub enum Finish {
     Tinted,
 }
 
-/// A folder's mark: its glyph, or the folder shape when it has none.
-pub fn folder_mark(glyph: Option<FolderIcon>, color: Hsla, size: Pixels, finish: Finish) -> Div {
+/// A folder's mark: its glyph or emoji, or the folder shape when it has neither. Only the
+/// shape and glyphs take the folder's color.
+pub fn folder_mark(icon: Option<&FolderIcon>, color: Hsla, size: Pixels, finish: Finish) -> Div {
+    match icon {
+        Some(FolderIcon::Emoji(emoji)) => emoji_mark(emoji.as_str(), size),
+        Some(FolderIcon::Glyph(glyph)) => glyph_mark(Some(*glyph), color, size, finish),
+        None => glyph_mark(None, color, size, finish),
+    }
+}
+
+fn glyph_mark(glyph: Option<FolderGlyph>, color: Hsla, size: Pixels, finish: Finish) -> Div {
     let layer = |path: SharedString, color: Hsla| {
         svg()
             .path(path)
@@ -62,16 +74,23 @@ pub fn folder_mark(glyph: Option<FolderIcon>, color: Hsla, size: Pixels, finish:
                 color.opacity(FOLDER_TINT),
             ))
         })
-        .child(layer(folder_mark_path(glyph), color))
+        .child(layer(
+            knoa_icon(glyph.map_or("folder", FolderGlyph::name)),
+            color,
+        ))
 }
 
-/// The line mark of [`folder_mark`], for gpui-component pieces that take an `Icon`.
-pub fn folder_mark_asset(glyph: Option<FolderIcon>) -> gpui_component::Icon {
-    gpui_component::Icon::empty().path(folder_mark_path(glyph))
-}
-
-fn folder_mark_path(glyph: Option<FolderIcon>) -> SharedString {
-    knoa_icon(glyph.map_or("folder", FolderIcon::name))
+/// An emoji in the same box a glyph takes, so rows line up either way.
+fn emoji_mark(emoji: &str, size: Pixels) -> Div {
+    div()
+        .size(size)
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(size * EMOJI_SCALE)
+        .line_height(size)
+        .child(SharedString::from(emoji.to_owned()))
 }
 
 pub fn kind_icon(kind: Option<Kind>) -> &'static str {

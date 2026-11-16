@@ -20,6 +20,14 @@ pub(super) fn put(conn: &Connection, key: &str, row: Folder) -> Result<Outcome> 
     if pending.deleted {
         return Ok(Outcome::Done);
     }
+    let patch = rebased(FolderPatch::from(row), &pending)?;
+    let parent = match patch.parent_id.clone().flatten() {
+        Some(parent) => match ids::local_id(conn, Table::Folders, &parent)? {
+            Some(local) => Some(local),
+            None => return Ok(Outcome::WaitsForParent),
+        },
+        None => None,
+    };
     let id = if let Some(id) = ids::local_id(conn, Table::Folders, key)? {
         id
     } else {
@@ -29,9 +37,9 @@ pub(super) fn put(conn: &Connection, key: &str, row: Folder) -> Result<Outcome> 
         )?;
         conn.last_insert_rowid()
     };
-    let patch = rebased(FolderPatch::from(row), &pending)?;
     let mut columns = Columns::default();
     columns.add("workspace_id", patch.workspace_id.map(|_| workspace));
+    columns.add("parent_id", patch.parent_id.map(|_| parent));
     columns.add("name", patch.name);
     columns.add("description", patch.description);
     columns.add("auto_assign", patch.auto_assign);
@@ -43,8 +51,15 @@ pub(super) fn put(conn: &Connection, key: &str, row: Folder) -> Result<Outcome> 
     Ok(Outcome::Done)
 }
 
+/// Subfolders move up to the deleted folder's parent, as the server moves them: an older
+/// app can delete a folder without knowing it has any.
 pub(super) fn delete(conn: &Connection, key: &str) -> Result<Outcome> {
     if let Some(id) = ids::local_id(conn, Table::Folders, key)? {
+        conn.execute(
+            "UPDATE folders SET parent_id = (SELECT parent_id FROM folders WHERE id = ?1)
+             WHERE parent_id = ?1",
+            [id],
+        )?;
         conn.execute("DELETE FROM folders WHERE id = ?1", [id])?;
         outbox::forget(conn, Entity::Folder, key)?;
     }

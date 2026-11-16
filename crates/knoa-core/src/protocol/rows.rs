@@ -64,13 +64,19 @@ row_with_patch! {
     pub struct Folder, FolderPatch {
         pub id: String,
         pub workspace_id: String,
+        /// The parent folder's id; `None` at the top level. An API from before nesting
+        /// leaves it out of pulled rows and refuses it in pushed ones.
+        #[serde(default)]
+        pub parent_id: Option<String>,
         pub name: String,
         pub description: String,
         pub auto_assign: bool,
         pub color: u32,
         /// 45..=330 degrees; wins over `color`.
         pub hue: Option<u16>,
+        /// A glyph name or one emoji; anything else shows the folder shape.
         pub icon: Option<String>,
+        /// Order among the folder's siblings.
         pub position: i64,
     }
 }

@@ -35,7 +35,7 @@ const COLUMNS: &str = "b.id, b.url, b.title, b.site, b.added_at, b.kind, b.summa
 impl Store {
     /// Bookmarks matching `query`, best match first when there is text, newest first otherwise.
     pub fn search(&self, query: &Query, limit: usize) -> Result<Vec<Bookmark>> {
-        let filter = Filter::new(query);
+        let filter = self.filter(query)?;
         let sql = format!(
             "SELECT {COLUMNS} {} {} LIMIT {limit}",
             filter.sql,
@@ -61,7 +61,7 @@ impl Store {
             kind: None,
             ..query.clone()
         };
-        let filter = Filter::new(&query);
+        let filter = self.filter(&query)?;
         let sql = format!("SELECT b.kind, count(*) {} GROUP BY b.kind", filter.sql);
         let mut stmt = self.conn.prepare_cached(&sql)?;
         let rows = stmt.query_map(params_from_iter(&filter.params), |row| {
@@ -78,11 +78,21 @@ impl Store {
     }
 
     pub fn count(&self, query: &Query) -> Result<usize> {
-        let filter = Filter::new(query);
+        let filter = self.filter(query)?;
         let sql = format!("SELECT count(*) {}", filter.sql);
         Ok(self
             .conn
             .query_row(&sql, params_from_iter(&filter.params), |row| row.get(0))?)
+    }
+
+    /// The query's filter. A folder place takes in the folders under it, as the tree
+    /// shows them.
+    fn filter(&self, query: &Query) -> Result<Filter> {
+        let subtree = match query.place {
+            Place::Folder(id) => crate::folders::subtree(&self.conn, id)?,
+            _ => Vec::new(),
+        };
+        Ok(Filter::new(query, &subtree))
     }
 
     /// The workspace's place counts. The AI indicator counts every workspace's queue.

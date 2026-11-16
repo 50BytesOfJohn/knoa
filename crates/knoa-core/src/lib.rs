@@ -20,7 +20,10 @@ pub use bookmark::{
 };
 pub use enrichment::{AnalysisImage, Enrichment, Page};
 pub use field::{FieldDef, FieldType, Fields, format_duration};
-pub use folder::{Folder, FolderColor, FolderEdits, FolderIcon, FolderId, FolderLink, Hue, Ink};
+pub use folder::{
+    Emoji, Folder, FolderColor, FolderEdits, FolderGlyph, FolderIcon, FolderId, FolderLink,
+    FolderTree, Hue, Ink, MAX_FOLDER_DEPTH, MoveError, NewFolder,
+};
 pub use kind::{Kind, KindDef};
 pub use query::{Comparison, FieldFilter, Place, Query};
 pub use tag::{

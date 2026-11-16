@@ -295,7 +295,7 @@ mod tests {
     fn a_pull_holds_rows_and_tombstones() {
         let wire = json!({ "cursor": 42, "more": false, "changes": [
             { "entity": "folder", "key": "f1", "version": 41, "deleted": false, "data": {
-                "id": "f1", "workspace_id": "w1", "name": "Reading", "description": "",
+                "id": "f1", "workspace_id": "w1", "parent_id": null, "name": "Reading", "description": "",
                 "auto_assign": true, "color": 3, "hue": null, "icon": "book", "position": 2 } },
             { "entity": "bookmark", "key": "b1", "version": 42, "deleted": true },
         ]});
@@ -307,6 +307,7 @@ mod tests {
                     row: Changed::Folder(RowState::Live(Folder {
                         id: "f1".into(),
                         workspace_id: "w1".into(),
+                        parent_id: None,
                         name: "Reading".into(),
                         description: String::new(),
                         auto_assign: true,

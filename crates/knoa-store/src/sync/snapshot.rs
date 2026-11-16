@@ -78,7 +78,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{Enrichment, Fields, FolderColor, Kind, Page};
+    use knoa_core::{Enrichment, Fields, Kind, NewFolder, Page};
     use serde_json::{Value, json};
 
     use super::*;
@@ -94,7 +94,7 @@ mod tests {
         let folders: Vec<_> = ["AI", "User", "Excluded"]
             .map(|name| {
                 store
-                    .create_folder(WORKSPACE, name, "", true, FolderColor::default(), None)
+                    .create_folder(WORKSPACE, &NewFolder::named(name))
                     .unwrap()
             })
             .into();

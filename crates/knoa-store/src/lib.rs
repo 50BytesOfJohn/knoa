@@ -48,11 +48,19 @@ pub enum Error {
     NotLinked,
     #[error("sync id {0:?} isn't a UUID")]
     InvalidSyncId(String),
+    #[error("can't place the folder there: {0}")]
+    FolderPlacement(knoa_core::MoveError),
 }
 
 impl From<rusqlite::Error> for Error {
     fn from(err: rusqlite::Error) -> Error {
         Error::Sqlite(err)
+    }
+}
+
+impl From<knoa_core::MoveError> for Error {
+    fn from(err: knoa_core::MoveError) -> Error {
+        Error::FolderPlacement(err)
     }
 }
 

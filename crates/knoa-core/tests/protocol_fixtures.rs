@@ -33,6 +33,10 @@ fn every_server_answer_in_the_fixtures_round_trips() {
             env!("CARGO_MANIFEST_DIR"),
             "/../../sdk/fixtures/user-beats-ai.json"
         )),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/nested-folders.json"
+        )),
     ];
     for file in files {
         let fixture: Fixture = serde_json::from_str(file).unwrap();

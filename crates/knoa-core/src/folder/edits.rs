@@ -1,6 +1,6 @@
 //! Field-level changes to a folder, relative to an editor's baseline.
 
-use crate::{Folder, FolderColor, FolderIcon};
+use crate::{Folder, FolderColor, FolderIcon, FolderId};
 
 /// Only fields the user changed; an absent field leaves the current value alone.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -11,6 +11,8 @@ pub struct FolderEdits {
     pub color: Option<FolderColor>,
     /// `Some(None)` clears the value; `None` leaves it alone.
     pub icon: Option<Option<FolderIcon>>,
+    /// `Some(None)` moves the folder to the top level.
+    pub parent: Option<Option<FolderId>>,
 }
 
 impl FolderEdits {
@@ -22,7 +24,8 @@ impl FolderEdits {
                 .then(|| edited.description.clone()),
             auto_assign: (baseline.auto_assign != edited.auto_assign).then_some(edited.auto_assign),
             color: (baseline.color != edited.color).then_some(edited.color),
-            icon: (baseline.icon != edited.icon).then_some(edited.icon),
+            icon: (baseline.icon != edited.icon).then(|| edited.icon.clone()),
+            parent: (baseline.parent != edited.parent).then_some(edited.parent),
         }
     }
 
@@ -44,8 +47,11 @@ impl FolderEdits {
         if let Some(value) = self.color {
             current.color = value;
         }
-        if let Some(value) = self.icon {
-            current.icon = value;
+        if let Some(value) = &self.icon {
+            current.icon.clone_from(value);
+        }
+        if let Some(value) = self.parent {
+            current.parent = value;
         }
     }
 }
@@ -64,17 +70,17 @@ impl Folder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::FolderId;
 
     #[test]
     fn an_untouched_editor_has_no_edits_against_untrimmed_storage() {
         let stored = Folder {
             id: FolderId(1),
+            parent: None,
             name: " Reading ".into(),
             description: "Long articles\n".into(),
             auto_assign: true,
             color: FolderColor::default(),
-            icon: Some(FolderIcon::Read),
+            icon: Some(crate::FolderGlyph::Read.into()),
             count: 3,
         };
         // What the editor's inputs read back: each text field trimmed.

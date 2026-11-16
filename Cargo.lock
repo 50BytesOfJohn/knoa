@@ -3502,6 +3502,7 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_json",
+ "unicode-segmentation",
  "url",
  "uuid",
 ]

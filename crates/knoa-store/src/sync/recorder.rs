@@ -145,7 +145,8 @@ impl<'c> Recorder<'c> {
     }
 
     pub fn put_whole_folder(&self, id: i64) -> Result<()> {
-        self.put_whole(Entity::Folder, rows::folder(self.conn, id)?)
+        let row = rows::folder(self.conn, id)?.map(rows::whole_folder);
+        self.put_whole(Entity::Folder, row)
     }
 
     pub fn put_whole_bookmark(&self, id: i64) -> Result<()> {
@@ -221,7 +222,7 @@ fn changed_columns<P: Serialize>(before: &P, after: &P) -> Result<Map<String, Va
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{FolderColor, Ink, protocol::bookmark_id};
+    use knoa_core::{Ink, NewFolder, protocol::bookmark_id};
     use serde_json::json;
 
     use super::*;
@@ -236,7 +237,7 @@ mod tests {
         let id = import_one(&mut store);
         store.create_workspace("Work", Ink::Moss).unwrap();
         store
-            .create_folder(WORKSPACE, "Reading", "", true, FolderColor::default(), None)
+            .create_folder(WORKSPACE, &NewFolder::named("Reading"))
             .unwrap();
         store.add_tag(id, "rust", Origin::User).unwrap();
         store.trash(id, 10).unwrap();
@@ -290,7 +291,7 @@ mod tests {
         linked(&mut store);
         let work = store.create_workspace("Work", Ink::Moss).unwrap();
         store
-            .create_folder(work, "Reading", "", true, FolderColor::default(), None)
+            .create_folder(work, &NewFolder::named("Reading"))
             .unwrap();
         store
             .import(
@@ -309,5 +310,62 @@ mod tests {
             (&delete["entity"], &delete["op"]),
             (&json!("workspace"), &json!("delete"))
         );
+    }
+
+    /// Reading with Novels under it, both pushed.
+    fn nested(store: &mut Store) -> (knoa_core::FolderId, knoa_core::FolderId) {
+        let reading = store
+            .create_folder(WORKSPACE, &NewFolder::named("Reading"))
+            .unwrap();
+        let novels = NewFolder {
+            parent: Some(reading),
+            ..NewFolder::named("Novels")
+        };
+        let novels = store.create_folder(WORKSPACE, &novels).unwrap();
+        (reading, novels)
+    }
+
+    #[test]
+    fn parent_id_is_only_sent_when_it_says_something() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let (_, novels) = nested(&mut store);
+        let puts = pushed(&store);
+        store.settle(&applied(&store)).unwrap();
+
+        store.move_folder(novels, None).unwrap();
+
+        assert!(
+            puts[0]["data"].get("parent_id").is_none(),
+            "top level, whole row"
+        );
+        assert_eq!(puts[1]["data"]["parent_id"], puts[0]["key"]);
+        let [moved] = <[Value; 1]>::try_from(pushed(&store)).unwrap();
+        assert_eq!(moved["data"]["parent_id"], Value::Null, "{moved}");
+    }
+
+    #[test]
+    fn deleting_a_folder_deletes_its_subfolders_first() {
+        let mut store = Store::open_in_memory().unwrap();
+        linked(&mut store);
+        let (reading, _) = nested(&mut store);
+        let keys: Vec<Value> = pushed(&store)
+            .into_iter()
+            .map(|m| m["key"].clone())
+            .collect();
+        store.settle(&applied(&store)).unwrap();
+
+        store.delete_folder(reading).unwrap();
+
+        let deletes: Vec<(Value, Value)> = pushed(&store)
+            .into_iter()
+            .map(|m| (m["op"].clone(), m["key"].clone()))
+            .collect();
+        let delete = json!("delete");
+        assert_eq!(
+            deletes,
+            [(delete.clone(), keys[1].clone()), (delete, keys[0].clone())]
+        );
+        assert!(store.folders(WORKSPACE).unwrap().is_empty());
     }
 }

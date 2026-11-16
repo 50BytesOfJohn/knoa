@@ -41,6 +41,10 @@ impl Recorder<'_> {
             return Ok(None);
         };
         self.workspace_key(workspace)?;
+        // The server needs the parent folder before a child that names it.
+        if let Some(parent) = self.parent_folder(id)? {
+            self.folder_key(parent)?;
+        }
         let key = new_id();
         ids::set_sync_id(self.conn, Table::Folders, id, &key)?;
         self.put_whole_folder(id)?;
@@ -70,6 +74,16 @@ impl Recorder<'_> {
         ids::set_sync_id(self.conn, Table::Bookmarks, id, &key)?;
         self.put_whole_bookmark(id)?;
         Ok(Some(key))
+    }
+
+    fn parent_folder(&self, id: i64) -> Result<Option<i64>> {
+        Ok(self
+            .conn
+            .query_row("SELECT parent_id FROM folders WHERE id = ?1", [id], |row| {
+                row.get(0)
+            })
+            .optional()?
+            .flatten())
     }
 
     /// The workspace a folder or bookmark belongs to.

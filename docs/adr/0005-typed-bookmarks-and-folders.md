@@ -1,6 +1,7 @@
 # 0005: Typed bookmarks and one-level folders
 
-- Status: Accepted
+- Status: Accepted; the one-level folder rule is superseded by
+  [0017](0017-nested-folders-and-emoji-icons.md)
 - Date: 2026-11-04
 
 ## Context

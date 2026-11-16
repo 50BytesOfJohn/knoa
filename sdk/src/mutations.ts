@@ -17,6 +17,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import type { Library } from "./library";
 import { bookmarkIdFor, parseLink, siteOf } from "./link";
+import { folderTree } from "./select";
 import { MAX_TAG_CHARS, normalizeTag } from "./tag";
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -71,16 +72,23 @@ export function updateWorkspace(
 
 // ── Folders ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * A folder last among `parent`'s children, or at the top level. Check the place first with
+ * `folderTree(...).checkNewChild(parent)`: the server refuses a parent too deep.
+ */
 export function createFolder(
 	workspace: WorkspaceId,
 	name: string,
 	position: number,
 	color: number,
+	parent: FolderId | null = null,
 ): { id: FolderId; mutation: Mutation } {
 	const id = uuidv4();
-	const row: Folder = {
+	// Without `parent_id` at the top level: see `Folder.parent_id`.
+	const row: Omit<Folder, "parent_id"> & Partial<Pick<Folder, "parent_id">> = {
 		id,
 		workspace_id: workspace,
+		...(parent ? { parent_id: parent } : {}),
 		name: name.trim(),
 		description: "",
 		auto_assign: true,
@@ -96,8 +104,24 @@ export function renameFolder(id: FolderId, name: string): Mutation {
 	return put("folder", id, { name: name.trim() });
 }
 
-export function deleteFolder(id: FolderId): Mutation {
-	return remove("folder", id);
+/**
+ * Moves the folder and everything under it to `parent`, at `position` among its new
+ * siblings. Check the move first with `folderTree(...).checkMove(id, parent)`.
+ */
+export function moveFolder(
+	id: FolderId,
+	parent: FolderId | null,
+	position: number,
+): Mutation {
+	return put("folder", id, { parent_id: parent, position });
+}
+
+/** Deletes the folder and every folder under it, deepest first. Bookmarks stay. */
+export function deleteFolder(library: Library, id: FolderId): Mutation[] {
+	const folder = library.folder.get(id);
+	if (!folder) return [remove("folder", id)];
+	const subtree = folderTree(library, folder.workspace_id).subtree(id);
+	return subtree.reverse().map((f) => remove("folder", f.id));
 }
 
 // ── Bookmarks ──────────────────────────────────────────────────────────────────────────
