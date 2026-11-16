@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use knoa_core::{Folder, FolderIcon, FolderId, FolderTree, WorkspaceId};
+use knoa_core::{BookmarkId, Folder, FolderIcon, FolderId, FolderTree, WorkspaceId};
 use rusqlite::{Connection, OptionalExtension as _};
 use serde_json::json;
 
@@ -39,6 +39,23 @@ pub(crate) fn load_around(conn: &Connection, folder: FolderId) -> Result<Option<
         .query_row(
             "SELECT workspace_id FROM folders WHERE id = ?1",
             [folder.0],
+            |row| row.get(0),
+        )
+        .optional()?;
+    workspace
+        .map(|workspace| load(conn, WorkspaceId(workspace)))
+        .transpose()
+}
+
+/// The tree of the workspace that holds `bookmark`; `None` when there is no such bookmark.
+pub(crate) fn load_for_bookmark(
+    conn: &Connection,
+    bookmark: BookmarkId,
+) -> Result<Option<FolderTree>> {
+    let workspace: Option<i64> = conn
+        .query_row(
+            "SELECT workspace_id FROM bookmarks WHERE id = ?1",
+            [bookmark.0],
             |row| row.get(0),
         )
         .optional()?;

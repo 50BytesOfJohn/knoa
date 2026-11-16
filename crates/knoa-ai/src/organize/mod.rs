@@ -32,10 +32,35 @@ pub struct BookmarkInput<'a> {
     pub image: Option<&'a AnalysisImage>,
 }
 
+/// A folder the AI may file into.
 pub struct FolderInput {
+    pub id: FolderId,
+    /// The full path, "Wallpapers › Anime", so a subfolder is read in context.
+    pub name: String,
+    pub description: String,
+    /// The folders above it, top first, whether or not the AI may file into them.
+    pub ancestors: Vec<FolderAncestor>,
+}
+
+/// A folder above one the AI may file into: context for the question, and how a pick of
+/// both a folder and one under it is narrowed to the deeper one.
+pub struct FolderAncestor {
     pub id: FolderId,
     pub name: String,
     pub description: String,
+}
+
+impl FolderInput {
+    /// What the ancestors' descriptions say, as "Inside Wallpapers: desktop backgrounds.",
+    /// or nothing when none has one.
+    fn ancestry(&self) -> String {
+        self.ancestors
+            .iter()
+            .filter(|a| !a.description.trim().is_empty())
+            .map(|a| format!("Inside {}: {}", a.name, a.description.trim()))
+            .collect::<Vec<_>>()
+            .join(". ")
+    }
 }
 
 pub struct OrganizeInput<'a> {
@@ -90,7 +115,10 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         _ if answer.set_aside.is_some() => Vec::new(),
         Some(classifier) => file_into_folders(classifier, &filing_input(input, &answer)).await?,
         // Chat models give no probability; record their picks as certain.
-        None => answer.folders.iter().map(|id| (*id, 1.0)).collect(),
+        None => {
+            let picks: Vec<(FolderId, f32)> = answer.folders.iter().map(|id| (*id, 1.0)).collect();
+            folders::deepest(&picks, input.folders)
+        }
     };
     let title = asks
         .title
