@@ -28,6 +28,9 @@ use crate::ui::{
 const INDENT: Pixels = px(23.);
 /// The disclosure chevron's hit area, kept on every row of a nested tree so counts line up.
 const DISCLOSURE: Pixels = px(16.);
+/// Fixed trailing columns in nested libraries, including rows without a hint or count.
+const SHORTCUT_WIDTH: Pixels = px(24.);
+const COUNT_WIDTH: Pixels = px(24.);
 const DROP_LINE: Pixels = px(2.);
 /// Room under "New folder" to drop a folder at the end of the top level.
 const END_DROP_ROOM: Pixels = px(28.);
@@ -139,12 +142,19 @@ impl MainView {
             .when(receiving, |s| s.bg(theme.accent.opacity(0.18)))
             .child(folder_mark(row.icon.as_ref(), color, px(15.), finish))
             .child(div().flex_1().truncate().child(row.name.clone()))
-            .when_some(shortcut, |s, key| {
-                s.child(div().text_xs().text_color(theme.faint).child(key))
-            })
-            .when(!row.count.is_empty(), |s| {
+            .when(nested || shortcut.is_some(), |s| {
                 s.child(
                     div()
+                        .when(nested, |s| s.w(SHORTCUT_WIDTH).flex_none().text_right())
+                        .text_xs()
+                        .text_color(theme.faint)
+                        .children(shortcut),
+                )
+            })
+            .when(nested || !row.count.is_empty(), |s| {
+                s.child(
+                    div()
+                        .when(nested, |s| s.w(COUNT_WIDTH).flex_none().text_right())
                         .text_xs()
                         .text_color(theme.muted)
                         .child(row.count.clone()),

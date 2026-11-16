@@ -16,14 +16,13 @@ use super::FolderEditor;
 use crate::ui::theme::{ROW_RADIUS, Theme};
 
 /// Emoji for the folders people make most: reading, work, media, food, travel, home.
-/// Eighteen leave the field room at the end of the second row.
 const SUGGESTED: [&str; 18] = [
     "📚", "📰", "💻", "💼", "🎨", "🎵", "🎬", "📷", "🎮", "🍳", "✈️", "🏠", "🛒", "💡", "🌱", "❤️",
     "⭐", "📌",
 ];
 const CELL: f32 = 30.;
 const EMOJI_SIZE: f32 = 17.;
-const FIELD_WIDTH: f32 = 64.;
+const FIELD_WIDTH: f32 = 112.;
 
 /// The field, holding the folder's emoji when it has one.
 pub(super) fn emoji_state(
@@ -33,7 +32,7 @@ pub(super) fn emoji_state(
 ) -> Entity<InputState> {
     let current = emoji_of(icon).unwrap_or_default();
     cx.new(|cx| {
-        let mut state = InputState::new(window, cx).placeholder("Any");
+        let mut state = InputState::new(window, cx).placeholder("Type or paste");
         state.set_value(current, window, cx);
         state
     })
@@ -91,12 +90,22 @@ impl FolderEditor {
         let typed = emoji_of(self.icon.as_ref())
             .is_some_and(|current| !SUGGESTED.contains(&current.as_str()));
         let field_color = theme.folder_color(self.color);
-        grid.child(
+        div().flex().flex_col().gap_2().child(grid).child(
             div()
-                .w(px(FIELD_WIDTH))
-                .rounded(ROW_RADIUS)
-                .when(typed, |s| s.bg(field_color.opacity(0.16)))
-                .child(Input::new(&self.emoji).small()),
+                .flex()
+                .items_center()
+                .gap_3()
+                .text_sm()
+                .text_color(theme.muted)
+                .child("Any emoji")
+                .child(
+                    div().w(px(FIELD_WIDTH)).child(
+                        Input::new(&self.emoji)
+                            .small()
+                            .rounded(ROW_RADIUS)
+                            .when(typed, |s| s.bg(field_color.opacity(0.16))),
+                    ),
+                ),
         )
     }
 
