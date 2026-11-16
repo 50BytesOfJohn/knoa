@@ -19,7 +19,7 @@ macro_rules! knoa_icons {
     };
 }
 
-/// Every Knoa icon by asset path. The folder glyphs' names come from `FolderIcon`.
+/// Every Knoa icon by asset path. The folder glyphs' names come from `FolderGlyph`.
 const ICONS: &[(&str, &[u8])] = knoa_icons![
     "folder",
     "folder-filled",
@@ -77,7 +77,7 @@ impl AssetSource for Assets {
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::FolderIcon;
+    use knoa_core::FolderGlyph;
 
     use super::*;
 
@@ -85,7 +85,7 @@ mod tests {
     // would draw as nothing, with only a log line to say so.
     #[test]
     fn every_folder_glyph_has_its_icon() {
-        for glyph in FolderIcon::ALL {
+        for glyph in FolderGlyph::ALL {
             let path = knoa_icon(glyph.name());
             assert!(matches!(Assets.load(&path), Ok(Some(_))), "{path}");
         }

@@ -26,14 +26,16 @@ impl WorkspaceContext {
 
     fn read(store: &Store, id: WorkspaceId) -> knoa_store::Result<WorkspaceContext> {
         let workspace = store.workspace(id)?;
-        let folders = store
-            .folders(id)?
-            .into_iter()
+        let tree = store.folders(id)?;
+        // The full path, so "Anime" under "Wallpapers" is matched as wallpapers.
+        let folders = tree
+            .folders()
+            .iter()
             .filter(|f| f.auto_assign)
             .map(|f| FolderInput {
                 id: f.id,
-                name: f.name,
-                description: f.description,
+                name: tree.path_name(f.id),
+                description: f.description.clone(),
             })
             .collect();
         Ok(WorkspaceContext {

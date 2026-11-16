@@ -6,15 +6,15 @@
 //! are shown only when the menu is for the selected bookmark.
 
 use gpui::{
-    Action, App, Context, FocusHandle, InteractiveElement, IntoElement, ParentElement, Pixels,
-    SharedString, Styled, WeakEntity, Window, px,
+    Action, App, Context, Div, FocusHandle, Hsla, InteractiveElement, IntoElement, ParentElement,
+    Pixels, SharedString, Styled, WeakEntity, Window, div, px,
 };
 use gpui_component::{
     Side,
     menu::{ContextMenu, ContextMenuExt as _, PopupMenu, PopupMenuItem},
 };
 use knoa_browser::Activation;
-use knoa_core::{Bookmark, BookmarkId, Folder, FolderId, Place};
+use knoa_core::{Bookmark, BookmarkId, Folder, FolderIcon, FolderId, Place};
 
 use super::{
     CopyLink, DeleteSelected, MainView, OpenSelected, OpenSelectedInBackground, QuickLook,
@@ -23,7 +23,7 @@ use super::{
 use crate::{
     services::thumbnails::{Refresh, Thumbnails},
     ui::{
-        components::{folder_mark_asset, icon_asset},
+        components::{Finish, folder_mark, icon_asset},
         theme::Theme,
     },
 };
@@ -34,6 +34,8 @@ use crate::{
 const MENU_WIDTH: Pixels = px(240.);
 /// Longer folder names are cut so the check after them stays inside the fixed width.
 const FOLDER_NAME_CHARS: usize = 26;
+/// The size gpui-component gives a menu item's icon (`xsmall`).
+const MENU_ICON: Pixels = px(12.);
 
 /// Everything the menu shows, read once when it opens.
 struct Target {
@@ -263,9 +265,9 @@ fn folder_items(
         let (folder_id, filed) = (folder.id, *filed);
         let view = view.clone();
         let tint = theme.folder_color(folder.color);
+        let (icon, label) = (folder.icon.clone(), shorten(&folder.name));
         menu.item(
-            PopupMenuItem::new(shorten(&folder.name))
-                .icon(folder_mark_asset(folder.icon).text_color(tint))
+            PopupMenuItem::element(move |_, _| folder_row(icon.as_ref(), tint, &label))
                 .checked(filed)
                 .on_click(move |_, _, cx| {
                     let _ = view.update(cx, |this, cx| {
@@ -274,6 +276,17 @@ fn folder_items(
                 }),
         )
     })
+}
+
+/// The folder's mark and name laid out as a menu item lays out its icon and label, drawn
+/// here because a menu icon can only be an SVG and the mark can be an emoji.
+fn folder_row(icon: Option<&FolderIcon>, tint: Hsla, label: &str) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_x_1()
+        .child(folder_mark(icon, tint, MENU_ICON, Finish::Line))
+        .child(div().flex_1().truncate().child(label.to_owned()))
 }
 
 fn shorten(name: &str) -> String {

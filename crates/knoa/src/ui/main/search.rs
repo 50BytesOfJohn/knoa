@@ -38,11 +38,10 @@ impl MainView {
             Place::NotOrganized => Some("Not organized".to_owned()),
             Place::SetAside => Some("Set aside".to_owned()),
             Place::Trash => Some("Trash".to_owned()),
-            Place::Folder(id) => library
-                .folders()
-                .iter()
-                .find(|f| f.id == id)
-                .map(|f| f.name.clone()),
+            Place::Folder(id) => {
+                let tree = library.folder_tree();
+                tree.get(id).map(|_| tree.path_name(id))
+            }
         };
         let searching = !library.search().is_empty();
 

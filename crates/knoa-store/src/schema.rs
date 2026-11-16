@@ -306,6 +306,14 @@ INSERT INTO jobs (bookmark_id, vision_backfill)
 UPDATE bookmarks SET status = 'queued'
     WHERE id IN (SELECT bookmark_id FROM jobs WHERE vision_backfill = 1);
 ",
+    r"
+-- The folder this one sits in; NULL at the top level. The store deletes a folder's
+-- subfolders itself, one recorded delete each, so nothing cascades; SET NULL only keeps a
+-- stray reference from blocking a delete.
+ALTER TABLE folders ADD COLUMN parent_id INTEGER REFERENCES folders (id) ON DELETE SET NULL;
+-- Folder counts and places look links up by folder.
+CREATE INDEX bookmark_folders_folder ON bookmark_folders (folder_id);
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -447,6 +455,27 @@ mod tests {
         assert_eq!(count("SELECT count(*) FROM bookmark_folders"), 1);
         assert_eq!(count("SELECT count(*) FROM bookmark_tags"), 1);
         assert_eq!(count("SELECT count(*) FROM sync_state"), 0);
+    }
+
+    #[test]
+    fn a_folder_still_named_as_a_parent_can_be_deleted() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn).unwrap();
+        conn.execute_batch(
+            "INSERT INTO folders (id, name, position) VALUES (1, 'Wallpapers', 1);
+             INSERT INTO folders (id, name, position, parent_id) VALUES (2, 'Anime', 1, 1);",
+        )
+        .unwrap();
+
+        conn.execute("DELETE FROM folders WHERE id = 1", [])
+            .unwrap();
+
+        let parent: Option<i64> = conn
+            .query_row("SELECT parent_id FROM folders WHERE id = 2", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(parent, None, "the subfolder stays, at the top level");
     }
 
     #[test]

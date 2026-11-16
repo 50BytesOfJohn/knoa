@@ -15,7 +15,7 @@ use gpui_component::{
     switch::Switch,
 };
 use knoa_core::{
-    Folder, FolderColor, FolderEdits, FolderIcon, FolderId, Ink,
+    Folder, FolderColor, FolderEdits, FolderIcon, FolderId, Ink, NewFolder,
     protocol::max_chars::{self, fits},
 };
 
@@ -70,7 +70,7 @@ impl FolderEditor {
         FolderEditor {
             auto_assign: existing.as_ref().is_none_or(|f| f.auto_assign),
             color,
-            icon: existing.as_ref().and_then(|f| f.icon),
+            icon: existing.as_ref().and_then(|f| f.icon.clone()),
             // The limits' messages follow the text as it's typed.
             _subscriptions: vec![
                 color_picker::follow_hue(&hue, cx),
@@ -101,7 +101,7 @@ impl FolderEditor {
         {
             return;
         }
-        let (color, icon, auto_assign) = (self.color, self.icon, self.auto_assign);
+        let (color, icon, auto_assign) = (self.color, self.icon.clone(), self.auto_assign);
         match &self.existing {
             Some(folder) => {
                 let edited = Folder {
@@ -120,10 +120,15 @@ impl FolderEditor {
             }
             None => self.library.update(cx, |library, cx| {
                 let workspace = library.workspace_id();
+                let folder = NewFolder {
+                    description,
+                    auto_assign,
+                    color,
+                    icon,
+                    ..NewFolder::named(&name)
+                };
                 library.change(cx, move |store| {
-                    store
-                        .create_folder(workspace, &name, &description, auto_assign, color, icon)
-                        .map(drop)
+                    store.create_folder(workspace, &folder).map(drop)
                 });
             }),
         }

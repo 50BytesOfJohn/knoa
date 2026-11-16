@@ -1,6 +1,6 @@
 //! Turns a `Query` into SQL, and keeps the full-text index in step with the tables.
 
-use knoa_core::{Comparison, Kind, Place, Query};
+use knoa_core::{Comparison, FolderId, Kind, Place, Query};
 use rusqlite::{Connection, params, types::Value};
 
 /// Column weights for BM25, in `bookmarks_fts` column order: a title match counts most.
@@ -14,7 +14,8 @@ pub(crate) struct Filter {
 }
 
 impl Filter {
-    pub fn new(query: &Query) -> Filter {
+    /// `subtree` is the selected folder and every folder under it, for a folder place.
+    pub fn new(query: &Query, subtree: &[FolderId]) -> Filter {
         let mut filter = Filter {
             sql: String::from("FROM bookmarks b"),
             params: Vec::new(),
@@ -58,9 +59,16 @@ impl Filter {
                         .map(|kind| Value::Text(kind.slug().into())),
                 );
             }
-            Place::Folder(folder) => {
-                conditions.push("EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id AND bf.folder_id = ?)".into());
-                filter.params.push(Value::Integer(folder.0));
+            Place::Folder(_) => {
+                conditions.push(
+                    "EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id
+                             AND bf.folder_id IN (SELECT value FROM json_each(?)))"
+                        .into(),
+                );
+                let ids: Vec<i64> = subtree.iter().map(|id| id.0).collect();
+                filter
+                    .params
+                    .push(Value::Text(serde_json::json!(ids).to_string()));
             }
         }
         if let Some(kind) = query.kind {

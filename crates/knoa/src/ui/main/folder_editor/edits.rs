@@ -26,7 +26,7 @@ impl FolderEditor {
             description: self.description.read(cx).value().trim().to_owned(),
             auto_assign: self.auto_assign,
             color: self.color,
-            icon: self.icon,
+            icon: self.icon.clone(),
             ..baseline.clone()
         };
         let edits = FolderEdits::between(&baseline.clone().normalized(), &edited);

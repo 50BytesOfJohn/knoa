@@ -45,15 +45,26 @@ pub(super) fn apply(conn: &Connection, changes: &[Change]) -> Result<()> {
     for change in changes {
         hold(conn, change)?;
     }
-    // Parents before children, so a whole page applies in one pass.
+    // Parents before children, so a whole page applies in one pass per entity.
     for entity in Entity::ALL {
-        for change in held(conn, entity)? {
-            if apply_one(conn, change.clone())? == Outcome::Done {
-                release(conn, entity, &change.key)?;
-            }
-        }
+        while apply_held_of(conn, entity)? {}
     }
     Ok(())
+}
+
+/// One pass over what the inbox holds for `entity`. True when something applied while
+/// something else still waits: a folder can wait for a parent folder in the same page.
+fn apply_held_of(conn: &Connection, entity: Entity) -> Result<bool> {
+    let (mut applied, mut waiting) = (false, false);
+    for change in held(conn, entity)? {
+        if apply_one(conn, change.clone())? == Outcome::Done {
+            release(conn, entity, &change.key)?;
+            applied = true;
+        } else {
+            waiting = true;
+        }
+    }
+    Ok(applied && waiting)
 }
 
 /// Applies what still waits in the inbox, for a local change that lets it through: a new
@@ -102,8 +113,8 @@ fn hold(conn: &Connection, change: &Change) -> Result<()> {
 }
 
 fn held(conn: &Connection, entity: Entity) -> Result<Vec<Change>> {
-    // Deletions last: rows of one entity don't depend on each other, except that the last
-    // workspace's deletion waits for another workspace, which may come in the same page.
+    // Deletions last: the last workspace's deletion waits for another workspace, and a
+    // folder's for the moves of its subfolders, which may come in the same page.
     let mut stmt = conn.prepare_cached(
         "SELECT change FROM sync_inbox WHERE entity = ?1
          ORDER BY json_extract(change, '$.deleted'), version",
@@ -314,30 +325,34 @@ mod tests {
         assert_eq!(store.tags(WORKSPACE).unwrap(), []);
     }
 
-    #[test]
-    fn a_bookmarks_old_children_go_when_its_url_came_back_before_this_pull() {
-        let fixture: Value = serde_json::from_str(include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../sdk/fixtures/tombstone-revive.json"
-        )))
-        .unwrap();
-        let pages: Vec<PullResponse> = fixture["steps"]
+    fn pull_pages(fixture: &Value) -> Vec<PullResponse> {
+        fixture["steps"]
             .as_array()
             .unwrap()
             .iter()
             .filter(|step| step.get("pull").is_some())
             .map(|step| serde_json::from_value(step["expect"].clone()).unwrap())
-            .collect();
+            .collect()
+    }
+
+    fn inbox(store: &Store) -> i64 {
+        store
+            .conn
+            .query_row("SELECT count(*) FROM sync_inbox", [], |row| row.get(0))
+            .unwrap()
+    }
+
+    /// Links with the fixture's first pull and applies the others page by page.
+    fn pulled_fixture(fixture: &Value) -> Store {
+        let pages = pull_pages(fixture);
         let [first, rest @ ..] = pages.as_slice() else {
             panic!("the fixture pulls");
         };
         let mut store = Store::open_in_memory().unwrap();
         link(&mut store, "user-1", &[&first.changes]);
-
         for page in rest {
             store.apply_remote(&page.changes, page.cursor).unwrap();
         }
-
         let expected: BTreeMap<String, Vec<String>> =
             serde_json::from_value(fixture["replica"].clone()).unwrap();
         let held: BTreeMap<String, Vec<String>> = expected
@@ -345,6 +360,52 @@ mod tests {
             .map(|entity| (entity.clone(), synced_keys(&store, entity)))
             .collect();
         assert_eq!(held, expected);
+        store
+    }
+
+    #[test]
+    fn a_bookmarks_old_children_go_when_its_url_came_back_before_this_pull() {
+        let fixture: Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/tombstone-revive.json"
+        )))
+        .unwrap();
+        pulled_fixture(&fixture);
+    }
+
+    #[test]
+    fn folders_settle_under_their_parents_in_any_order_and_outlive_a_deleted_parent() {
+        let fixture: Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../sdk/fixtures/nested-folders.json"
+        )))
+        .unwrap();
+
+        let mut first = Store::open_in_memory().unwrap();
+        link(&mut first, "user-1", &[&pull_pages(&fixture)[0].changes]);
+        assert_eq!(
+            inbox(&first),
+            0,
+            "a child that comes before its parent still applies in the same pull"
+        );
+
+        let store = pulled_fixture(&fixture);
+
+        let expected: BTreeMap<String, Option<String>> =
+            serde_json::from_value(fixture["parents"].clone()).unwrap();
+        let mut stmt = store
+            .conn
+            .prepare(
+                "SELECT f.sync_id, p.sync_id FROM folders f
+                 LEFT JOIN folders p ON p.id = f.parent_id WHERE f.sync_id IS NOT NULL",
+            )
+            .unwrap();
+        let parents: BTreeMap<String, Option<String>> = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(parents, expected);
     }
 
     /// The protocol keys of the rows this Mac holds for `entity`.

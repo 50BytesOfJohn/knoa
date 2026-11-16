@@ -1,60 +1,52 @@
 //! Folders and folder membership.
 
 mod edits;
+mod placement;
+mod tree;
 
-use knoa_core::{BookmarkId, Folder, FolderColor, FolderIcon, FolderId, Hue, Ink, WorkspaceId};
+use knoa_core::{
+    BookmarkId, FolderColor, FolderIcon, FolderId, FolderTree, Hue, Ink, NewFolder, WorkspaceId,
+};
 use rusqlite::params;
 
 use crate::{Result, Store, search, sync::Recorder};
 
 impl Store {
-    /// A workspace's folders in sidebar order, with how many bookmarks each holds.
-    pub fn folders(&self, workspace: WorkspaceId) -> Result<Vec<Folder>> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT f.id, f.name, f.description, f.auto_assign, f.color, f.hue, f.icon,
-                    (SELECT count(*) FROM bookmark_folders bf JOIN bookmarks b ON b.id = bf.bookmark_id
-                     WHERE bf.folder_id = f.id AND b.deleted_at IS NULL)
-             FROM folders f WHERE f.workspace_id = ?1 ORDER BY f.position",
-        )?;
-        let rows = stmt.query_map([workspace.0], |row| {
-            Ok(Folder {
-                id: FolderId(row.get(0)?),
-                name: row.get(1)?,
-                description: row.get(2)?,
-                auto_assign: row.get(3)?,
-                color: stored_color(row.get(4)?, row.get(5)?),
-                icon: row
-                    .get::<_, Option<String>>(6)?
-                    .as_deref()
-                    .and_then(FolderIcon::from_name),
-                count: row.get(7)?,
-            })
-        })?;
-        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    /// A workspace's folders as the sidebar shows them, each with how many bookmarks it
+    /// and its subfolders hold.
+    pub fn folders(&self, workspace: WorkspaceId) -> Result<FolderTree> {
+        let tree = tree::load(&self.conn, workspace)?;
+        tree::with_counts(&self.conn, tree)
     }
 
+    /// Creates the folder last among its siblings.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::Error::FolderPlacement`] when the parent isn't in the workspace or is
+    /// already at the deepest level.
     pub fn create_folder(
         &mut self,
         workspace: WorkspaceId,
-        name: &str,
-        description: &str,
-        auto_assign: bool,
-        color: FolderColor,
-        icon: Option<FolderIcon>,
+        folder: &NewFolder,
     ) -> Result<FolderId> {
-        let (ink, hue) = color_columns(color);
+        let (ink, hue) = color_columns(folder.color);
         let tx = self.conn.transaction()?;
+        tree::load(&tx, workspace)?.check_new_child(folder.parent)?;
         tx.execute(
-            "INSERT INTO folders (workspace_id, name, description, auto_assign, color, hue, icon, position)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT coalesce(max(position), 0) + 1 FROM folders))",
+            "INSERT INTO folders (workspace_id, parent_id, name, description, auto_assign, color, hue,
+                                  icon, position)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 workspace.0,
-                name,
-                description,
-                auto_assign,
+                folder.parent.map(|parent| parent.0),
+                folder.name,
+                folder.description,
+                folder.auto_assign,
                 ink,
                 hue,
-                icon.map(FolderIcon::name),
+                folder.icon.as_ref().map(FolderIcon::stored),
+                placement::next_position(&tx, workspace.0, folder.parent)?,
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -63,34 +55,16 @@ impl Store {
         Ok(FolderId(id))
     }
 
-    pub fn update_folder(&mut self, folder: &Folder) -> Result<()> {
-        let (ink, hue) = color_columns(folder.color);
-        let tx = self.conn.transaction()?;
-        let recorder = Recorder::user(&tx)?;
-        let before = recorder.folder_before(folder.id.0)?;
-        tx.execute(
-            "UPDATE folders SET name = ?2, description = ?3, auto_assign = ?4, color = ?5, hue = ?6,
-                icon = ?7 WHERE id = ?1",
-            params![
-                folder.id.0,
-                folder.name,
-                folder.description,
-                folder.auto_assign,
-                ink,
-                hue,
-                folder.icon.map(FolderIcon::name),
-            ],
-        )?;
-        recorder.folder_changed(folder.id.0, before)?;
-        tx.commit()?;
-        Ok(())
-    }
-
-    /// Deletes the folder. Its bookmarks stay in the library.
+    /// Deletes the folder and every folder under it, deepest first. Their bookmarks stay
+    /// in the library.
     pub fn delete_folder(&mut self, id: FolderId) -> Result<()> {
         let tx = self.conn.transaction()?;
-        Recorder::user(&tx)?.deleting_folder(id.0)?;
-        tx.execute("DELETE FROM folders WHERE id = ?1", [id.0])?;
+        let recorder = Recorder::user(&tx)?;
+        // A subtree lists each parent before its children, so reversed it ends at `id`.
+        for folder in subtree(&tx, id)?.into_iter().rev() {
+            recorder.deleting_folder(folder.0)?;
+            tx.execute("DELETE FROM folders WHERE id = ?1", [folder.0])?;
+        }
         tx.commit()?;
         Ok(())
     }
@@ -155,6 +129,14 @@ impl Store {
     }
 }
 
+/// The folder and every folder under it; empty when there is no such folder.
+pub(crate) fn subtree(conn: &rusqlite::Connection, id: FolderId) -> Result<Vec<FolderId>> {
+    let tree = tree::load_around(conn, id)?;
+    Ok(tree.map_or_else(Vec::new, |tree| {
+        tree.subtree(id).iter().map(|f| f.id).collect()
+    }))
+}
+
 /// An ink from its stored index. Any number names some ink, so a bad value can't hide a
 /// folder or workspace.
 pub(crate) fn stored_ink(index: i64) -> Ink {
@@ -178,7 +160,7 @@ fn color_columns(color: FolderColor) -> (usize, Option<u16>) {
 
 #[cfg(test)]
 mod tests {
-    use knoa_core::{Enrichment, Kind, Query};
+    use knoa_core::{Enrichment, FolderGlyph, FolderIcon, Kind, Query};
 
     use super::*;
     use crate::{
@@ -198,7 +180,7 @@ mod tests {
             )
             .unwrap();
         let folder = store
-            .create_folder(WORKSPACE, "Reading", "", true, FolderColor::default(), None)
+            .create_folder(WORKSPACE, &NewFolder::named("Reading"))
             .unwrap();
         let job = store.take_jobs(0, 1).unwrap().remove(0);
         let enrichment = Enrichment {
@@ -229,16 +211,15 @@ mod tests {
     }
 
     #[test]
-    fn a_glyph_this_version_does_not_know_reads_as_the_folder_shape() {
+    fn an_icon_reads_back_as_an_emoji_or_as_the_folder_shape_when_unknown() {
         let mut store = Store::open_in_memory().unwrap();
         let id = store
             .create_folder(
                 WORKSPACE,
-                "Reading",
-                "",
-                true,
-                FolderColor::default(),
-                Some(FolderIcon::Read),
+                &NewFolder {
+                    icon: Some(FolderGlyph::Read.into()),
+                    ..NewFolder::named("Reading")
+                },
             )
             .unwrap();
         store
@@ -246,7 +227,13 @@ mod tests {
             .execute("UPDATE folders SET icon = 'rocket' WHERE id = ?1", [id.0])
             .unwrap();
 
-        let folder = store.folders(WORKSPACE).unwrap().remove(0);
-        assert_eq!(folder.icon, None);
+        let tree = store.folders(WORKSPACE).unwrap();
+        assert_eq!(tree.folders()[0].icon, None);
+        store
+            .conn
+            .execute("UPDATE folders SET icon = '🎨' WHERE id = ?1", [id.0])
+            .unwrap();
+        let tree = store.folders(WORKSPACE).unwrap();
+        assert_eq!(tree.folders()[0].icon, FolderIcon::parse("🎨"));
     }
 }
