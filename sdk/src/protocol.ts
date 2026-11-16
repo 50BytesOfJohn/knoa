@@ -54,13 +54,23 @@ export interface Workspace {
 export interface Folder {
 	id: FolderId;
 	workspace_id: WorkspaceId;
+	/**
+	 * The parent folder, in the same workspace; null at the top level. Folders nest at most
+	 * three levels (`MAX_FOLDER_DEPTH`). The server never stores a cycle, a missing parent or
+	 * a deeper tree, and clients show a folder whose parent breaks these at the top level.
+	 * A `put` leaves it out rather than sending null to create a top-level folder, so an
+	 * API from before nesting, which refuses columns it doesn't know, still takes it.
+	 */
+	parent_id: FolderId | null;
 	name: string;
 	description: string;
 	auto_assign: boolean;
 	color: number;
 	/** 45..=330 degrees; wins over `color`. */
 	hue: number | null;
+	/** A glyph name or one emoji (see `parseFolderIcon`); anything else is the folder shape. */
 	icon: string | null;
+	/** Order among the folder's siblings. */
 	position: number;
 }
 
@@ -203,7 +213,9 @@ export const MAX_TAGS_PER_BOOKMARK = 100;
  *   tombstones of their own, because its id comes from its URL: adding the URL again
  *   replaces the bookmark's tombstone, and a client that missed it learns from these
  *   that the old children are gone. A folder's or workspace's children get none: clients
- *   never reuse their ids.
+ *   never reuse their ids. A folder's subfolders aren't deleted with it: they move up to
+ *   its parent with new versions, so an app that doesn't know about nesting can't strand
+ *   them. Clients delete a whole subtree with one `delete` per folder, deepest first.
  *
  * A user's value beats the AI's: an `ai` mutation never changes or deletes a tag or folder
  * link whose origin is `user` or that is excluded, and never adds a link to a folder that

@@ -1,5 +1,6 @@
 export * from "./api";
 export * from "./client";
+export * from "./folder-icon";
 export * from "./indexeddb";
 export * from "./kinds";
 export type { Library } from "./library";

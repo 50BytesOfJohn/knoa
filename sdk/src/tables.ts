@@ -53,6 +53,7 @@ const DEFAULTS: { [E in Entity]: Partial<Rows[E]> } = {
 		tag_list: [],
 	},
 	folder: {
+		parent_id: null,
 		description: "",
 		auto_assign: true,
 		color: 0,
