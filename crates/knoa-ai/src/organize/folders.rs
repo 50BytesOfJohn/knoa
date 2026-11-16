@@ -1,4 +1,5 @@
-//! Folder matching with a yes/no classifier: one question per auto-assign folder.
+//! Folder matching with a yes/no classifier: one question per auto-assign folder, each
+//! asked on its own whatever its parent's answer, and the most specific match kept.
 
 use knoa_core::{FolderId, Kind};
 use serde_json::{Value, json};
@@ -36,14 +37,27 @@ pub async fn file_into_folders<C: Classifier>(
     }
     let questions: Vec<Question> = input.folders.iter().map(question).collect();
     let probabilities = classifier.classify(&state(input), &questions).await?;
-    Ok(choose(
-        input
-            .folders
-            .iter()
-            .map(|f| f.id)
-            .zip(probabilities)
-            .collect(),
-    ))
+    let scored = input.folders.iter().map(|f| f.id).zip(probabilities);
+    Ok(deepest(&choose(scored.collect()), input.folders))
+}
+
+/// The picks without any folder that has another pick under it: filed into "Wallpapers"
+/// and "Wallpapers › Anime", a bookmark goes into Anime alone, and still shows under
+/// Wallpapers. A parent with no picked subfolder keeps its pick.
+pub(super) fn deepest(picks: &[(FolderId, f32)], folders: &[FolderInput]) -> Vec<(FolderId, f32)> {
+    let is_above_a_pick = |id: FolderId| {
+        picks.iter().any(|(pick, _)| {
+            folders
+                .iter()
+                .find(|f| f.id == *pick)
+                .is_some_and(|f| f.ancestors.iter().any(|a| a.id == id))
+        })
+    };
+    picks
+        .iter()
+        .copied()
+        .filter(|&(id, _)| !is_above_a_pick(id))
+        .collect()
 }
 
 /// Raw probabilities run high across the board, so the rule is rank-based: the best folder
@@ -61,11 +75,15 @@ fn choose(mut scored: Vec<(FolderId, f32)>) -> Vec<(FolderId, f32)> {
 }
 
 fn question(folder: &FolderInput) -> Question {
-    let about = if folder.description.trim().is_empty() {
+    let mut about = if folder.description.trim().is_empty() {
         folder.name.clone()
     } else {
         folder.description.trim().to_owned()
     };
+    let ancestry = folder.ancestry();
+    if !ancestry.is_empty() {
+        about = format!("{about} ({ancestry})");
+    }
     Question {
         key: format!("folder_{}", folder.id.0),
         instructions: format!(
@@ -104,5 +122,34 @@ mod tests {
         ]);
         assert_eq!(picked, [(FolderId(2), 0.92), (FolderId(3), 0.85)]);
         assert_eq!(choose(vec![(FolderId(1), 0.65)]), []);
+    }
+
+    #[test]
+    fn a_pick_and_a_pick_under_it_keep_only_the_deeper_one() {
+        let folder = |id, above: &[i64]| FolderInput {
+            id: FolderId(id),
+            name: format!("f{id}"),
+            description: String::new(),
+            ancestors: above
+                .iter()
+                .map(|&a| crate::FolderAncestor {
+                    id: FolderId(a),
+                    name: format!("f{a}"),
+                    description: String::new(),
+                })
+                .collect(),
+        };
+        // 1 › 2 › 3, and 4 on its own.
+        let folders = [
+            folder(1, &[]),
+            folder(2, &[1]),
+            folder(3, &[1, 2]),
+            folder(4, &[]),
+        ];
+
+        let picked = deepest(&[(FolderId(1), 0.95), (FolderId(3), 0.9)], &folders);
+        assert_eq!(picked, [(FolderId(3), 0.9)]);
+        let unrelated = deepest(&[(FolderId(1), 0.95), (FolderId(4), 0.9)], &folders);
+        assert_eq!(unrelated, [(FolderId(1), 0.95), (FolderId(4), 0.9)]);
     }
 }

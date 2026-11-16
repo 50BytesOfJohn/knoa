@@ -1,6 +1,6 @@
 //! What the bookmark's workspace tells the AI.
 
-use knoa_ai::FolderInput;
+use knoa_ai::{FolderAncestor, FolderInput};
 use knoa_core::{TagList, WorkspaceId};
 use knoa_store::Store;
 
@@ -27,15 +27,28 @@ impl WorkspaceContext {
     fn read(store: &Store, id: WorkspaceId) -> knoa_store::Result<WorkspaceContext> {
         let workspace = store.workspace(id)?;
         let tree = store.folders(id)?;
-        // The full path, so "Anime" under "Wallpapers" is matched as wallpapers.
+        // The full path and the parents' descriptions, so "Anime" under "Wallpapers" is
+        // matched as wallpapers. Parents are listed whether or not they auto-assign.
         let folders = tree
             .folders()
             .iter()
             .filter(|f| f.auto_assign)
-            .map(|f| FolderInput {
-                id: f.id,
-                name: tree.path_name(f.id),
-                description: f.description.clone(),
+            .map(|f| {
+                let path = tree.path(f.id);
+                let ancestors = path[..path.len().saturating_sub(1)]
+                    .iter()
+                    .map(|a| FolderAncestor {
+                        id: a.id,
+                        name: tree.path_name(a.id),
+                        description: a.description.clone(),
+                    })
+                    .collect();
+                FolderInput {
+                    id: f.id,
+                    name: tree.path_name(f.id),
+                    description: f.description.clone(),
+                    ancestors,
+                }
             })
             .collect();
         Ok(WorkspaceContext {

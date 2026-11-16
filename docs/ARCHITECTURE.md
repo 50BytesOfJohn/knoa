@@ -201,9 +201,12 @@ resumes on its own once that one gets through, or when the user sets a new key.
    before the AI saw pixels are queued once more by a migration, as a backfill each Mac
    drops for a bookmark whose answer from another Mac has arrived.
 5. **Folders** come from a yes/no classifier, one question per auto-assign folder of the
-   bookmark's workspace, named by its full path
-   (OpenRouter Decisions, with a sentinel question). A provider without a classifier
-   picks folders in the chat call instead.
+   bookmark's workspace, named by its full path with its parents' descriptions as
+   context (OpenRouter Decisions, with a sentinel question). Each folder is asked about
+   on its own, never only when its parent matched. A provider without a classifier
+   picks folders in the chat call instead. Only the most specific AI pick in a branch
+   keeps a link: a pick under an AI link replaces it, and a pick above one is skipped.
+   Links the user made are never changed by this.
 6. **Store** the result with the model name. Without AI, steps 3 to 5 are skipped and the
    page's own metadata is stored.
 

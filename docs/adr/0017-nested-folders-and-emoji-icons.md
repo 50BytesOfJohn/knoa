@@ -40,7 +40,10 @@ apps (Mac 0.2.2) and the API predate nesting, so the change has to keep them wor
 - **Icons** stay one text column of at most 100 characters: a known glyph name is that
   glyph, a single emoji (one grapheme cluster) is that emoji, anything else is the folder
   shape. Only glyphs take the folder's color.
-- **AI filing** still asks about each auto-assign folder, named by its full path.
+- **AI filing** still asks about each auto-assign folder on its own, named by its full
+  path with its parents' descriptions as context. Only the deepest AI pick in a branch
+  keeps a link, across runs too: a later pick under an AI link replaces it, and one above
+  is skipped. User links and exclusions are never changed by this.
 - Free for everyone: no plan checks.
 
 ## Consequences

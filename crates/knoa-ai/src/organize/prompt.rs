@@ -142,6 +142,10 @@ fn folder_list(folders: &[FolderInput]) -> String {
         if !folder.description.trim().is_empty() {
             let _ = write!(list, ": {}", folder.description.trim());
         }
+        let ancestry = folder.ancestry();
+        if !ancestry.is_empty() {
+            let _ = write!(list, " ({ancestry})");
+        }
         list.push('\n');
     }
     list

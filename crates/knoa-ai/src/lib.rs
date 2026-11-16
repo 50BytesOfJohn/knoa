@@ -21,6 +21,7 @@ pub use model::{
     StructuredRequest,
 };
 pub use organize::{
-    BookmarkInput, FilingInput, FolderInput, OrganizeInput, file_into_folders, organize,
+    BookmarkInput, FilingInput, FolderAncestor, FolderInput, OrganizeInput, file_into_folders,
+    organize,
 };
 pub use provider::{Provider, ProviderConfig, ProviderKind};

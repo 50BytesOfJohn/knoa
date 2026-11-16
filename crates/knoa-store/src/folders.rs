@@ -104,14 +104,26 @@ impl Store {
     }
 
     /// Adds AI folder picks, skipping pairs the user removed and folders of other
-    /// workspaces. Never removes a link.
+    /// workspaces. Only the most specific AI link stays in a branch: a pick under an AI
+    /// link replaces it, and a pick above one is skipped, since the bookmark already shows
+    /// there. Links the user made are never touched, and nothing else is removed.
     pub(crate) fn add_ai_folders(
         tx: &rusqlite::Transaction<'_>,
         recorder: &Recorder<'_>,
         bookmark: BookmarkId,
         folders: &[(FolderId, f32)],
     ) -> Result<()> {
-        for (folder, probability) in folders {
+        if folders.is_empty() {
+            return Ok(());
+        }
+        let Some(tree) = tree::load_for_bookmark(tx, bookmark)? else {
+            return Ok(());
+        };
+        for &(folder, probability) in folders {
+            let below = tree.descendants(folder).iter().map(|f| f.id);
+            if has_ai_link(tx, bookmark, below)? {
+                continue;
+            }
             let added = tx.execute(
                 "INSERT INTO bookmark_folders (bookmark_id, folder_id, origin, probability)
                  SELECT ?1, ?2, 'ai', ?3
@@ -121,12 +133,42 @@ impl Store {
                  ON CONFLICT DO NOTHING",
                 params![bookmark.0, folder.0, probability],
             )?;
-            if added > 0 {
-                recorder.folder_link(bookmark.0, folder.0)?;
+            if added == 0 {
+                continue;
+            }
+            recorder.folder_link(bookmark.0, folder.0)?;
+            let path = tree.path(folder);
+            for ancestor in &path[..path.len().saturating_sub(1)] {
+                let removed = tx.execute(
+                    "DELETE FROM bookmark_folders
+                     WHERE bookmark_id = ?1 AND folder_id = ?2 AND origin = 'ai'",
+                    params![bookmark.0, ancestor.id.0],
+                )?;
+                if removed > 0 {
+                    recorder.folder_link(bookmark.0, ancestor.id.0)?;
+                }
             }
         }
         Ok(())
     }
+}
+
+/// Whether the bookmark is in any of `folders` through the AI.
+fn has_ai_link(
+    conn: &rusqlite::Connection,
+    bookmark: BookmarkId,
+    folders: impl Iterator<Item = FolderId>,
+) -> Result<bool> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT EXISTS (SELECT 1 FROM bookmark_folders
+                        WHERE bookmark_id = ?1 AND folder_id = ?2 AND origin = 'ai')",
+    )?;
+    for folder in folders {
+        if stmt.query_row(params![bookmark.0, folder.0], |row| row.get(0))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// The folder and every folder under it; empty when there is no such folder.
@@ -235,5 +277,87 @@ mod tests {
             .unwrap();
         let tree = store.folders(WORKSPACE).unwrap();
         assert_eq!(tree.folders()[0].icon, FolderIcon::parse("🎨"));
+    }
+
+    /// Files the store's one bookmark as the AI would, into `folders`.
+    fn ai_files(store: &mut Store, folders: &[FolderId]) -> Vec<(FolderId, knoa_core::Origin)> {
+        let bookmark = store.search(&Query::default(), 1).unwrap().remove(0).id;
+        store.queue(bookmark).unwrap();
+        let job = store.take_jobs(0, 1).unwrap().remove(0);
+        let enrichment = Enrichment {
+            kind: Kind::Article,
+            title: None,
+            summary: None,
+            fields: knoa_core::Fields::new(),
+            extras: Vec::new(),
+            tags: Vec::new(),
+            folders: folders.iter().map(|&f| (f, 0.9)).collect(),
+            set_aside: None,
+            model: "test".into(),
+        };
+        store
+            .finish_organized(job.bookmark.id, &enrichment, 10)
+            .unwrap();
+        let saved = store.search(&Query::default(), 1).unwrap().remove(0);
+        saved.folders.iter().map(|l| (l.folder, l.origin)).collect()
+    }
+
+    /// A store with one bookmark and Wallpapers › Anime.
+    fn wallpapers() -> (Store, FolderId, FolderId) {
+        let mut store = Store::open_in_memory().unwrap();
+        store
+            .import(
+                WORKSPACE,
+                "test",
+                &[bookmark("https://a.dev/", "A", 1)],
+                NewBookmarks::Organize,
+            )
+            .unwrap();
+        let parent = store
+            .create_folder(WORKSPACE, &NewFolder::named("Wallpapers"))
+            .unwrap();
+        let child = store
+            .create_folder(
+                WORKSPACE,
+                &NewFolder {
+                    parent: Some(parent),
+                    ..NewFolder::named("Anime")
+                },
+            )
+            .unwrap();
+        (store, parent, child)
+    }
+
+    #[test]
+    fn only_the_deepest_ai_pick_in_a_branch_keeps_its_link() {
+        use knoa_core::Origin::Ai;
+        let (mut store, parent, child) = wallpapers();
+
+        assert_eq!(ai_files(&mut store, &[parent]), [(parent, Ai)]);
+        assert_eq!(
+            ai_files(&mut store, &[child]),
+            [(child, Ai)],
+            "a deeper pick replaces it"
+        );
+        assert_eq!(
+            ai_files(&mut store, &[parent]),
+            [(child, Ai)],
+            "a pick above is skipped"
+        );
+        assert_eq!(ai_files(&mut store, &[parent, child]), [(child, Ai)]);
+    }
+
+    #[test]
+    fn a_deeper_ai_pick_leaves_a_folder_the_user_chose_above_it() {
+        use knoa_core::Origin::{Ai, User};
+        let (mut store, parent, child) = wallpapers();
+        ai_files(&mut store, &[parent]);
+        let bookmark = store.search(&Query::default(), 1).unwrap().remove(0).id;
+        store.add_to_folder(bookmark, parent).unwrap();
+
+        let mut links = ai_files(&mut store, &[child]);
+        links.sort_by_key(|(folder, _)| *folder);
+
+        assert_eq!(links, [(parent, User), (child, Ai)]);
     }
 }
