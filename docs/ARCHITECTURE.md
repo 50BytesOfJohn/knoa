@@ -205,7 +205,7 @@ resumes on its own once that one gets through, or when the user sets a new key.
    context (OpenRouter Decisions, with a sentinel question). Each folder is asked about
    on its own, never only when its parent matched. A provider without a classifier
    picks folders in the chat call instead. Only the most specific AI pick in a branch
-   keeps a link: a pick under an AI link replaces it, and a pick above one is skipped.
+   keeps a link: a pick under an AI link replaces it, and a pick above any existing membership is skipped.
    Links the user made are never changed by this.
 6. **Store** the result with the model name. Without AI, steps 3 to 5 are skipped and the
    page's own metadata is stored.

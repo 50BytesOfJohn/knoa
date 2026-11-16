@@ -4,6 +4,8 @@ mod edits;
 mod placement;
 mod tree;
 
+use std::collections::HashSet;
+
 use knoa_core::{
     BookmarkId, FolderColor, FolderIcon, FolderId, FolderTree, Hue, Ink, NewFolder, WorkspaceId,
 };
@@ -105,8 +107,8 @@ impl Store {
 
     /// Adds AI folder picks, skipping pairs the user removed and folders of other
     /// workspaces. Only the most specific AI link stays in a branch: a pick under an AI
-    /// link replaces it, and a pick above one is skipped, since the bookmark already shows
-    /// there. Links the user made are never touched, and nothing else is removed.
+    /// link replaces it, and a pick above any membership is skipped, since the bookmark
+    /// already shows there. Links the user made are never touched.
     pub(crate) fn add_ai_folders(
         tx: &rusqlite::Transaction<'_>,
         recorder: &Recorder<'_>,
@@ -119,9 +121,13 @@ impl Store {
         let Some(tree) = tree::load_for_bookmark(tx, bookmark)? else {
             return Ok(());
         };
+        let mut memberships = folder_memberships(tx, bookmark)?;
         for &(folder, probability) in folders {
-            let below = tree.descendants(folder).iter().map(|f| f.id);
-            if has_ai_link(tx, bookmark, below)? {
+            if tree
+                .descendants(folder)
+                .iter()
+                .any(|f| memberships.contains(&f.id))
+            {
                 continue;
             }
             let added = tx.execute(
@@ -136,6 +142,7 @@ impl Store {
             if added == 0 {
                 continue;
             }
+            memberships.insert(folder);
             recorder.folder_link(bookmark.0, folder.0)?;
             let path = tree.path(folder);
             for ancestor in &path[..path.len().saturating_sub(1)] {
@@ -145,6 +152,7 @@ impl Store {
                     params![bookmark.0, ancestor.id.0],
                 )?;
                 if removed > 0 {
+                    memberships.remove(&ancestor.id);
                     recorder.folder_link(bookmark.0, ancestor.id.0)?;
                 }
             }
@@ -153,22 +161,15 @@ impl Store {
     }
 }
 
-/// Whether the bookmark is in any of `folders` through the AI.
-fn has_ai_link(
+/// All current memberships, including manual links, read once for a filing run.
+fn folder_memberships(
     conn: &rusqlite::Connection,
     bookmark: BookmarkId,
-    folders: impl Iterator<Item = FolderId>,
-) -> Result<bool> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT EXISTS (SELECT 1 FROM bookmark_folders
-                        WHERE bookmark_id = ?1 AND folder_id = ?2 AND origin = 'ai')",
-    )?;
-    for folder in folders {
-        if stmt.query_row(params![bookmark.0, folder.0], |row| row.get(0))? {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+) -> Result<HashSet<FolderId>> {
+    let mut stmt =
+        conn.prepare_cached("SELECT folder_id FROM bookmark_folders WHERE bookmark_id = ?1")?;
+    let rows = stmt.query_map([bookmark.0], |row| row.get(0).map(FolderId))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// The folder and every folder under it; empty when there is no such folder.
@@ -345,6 +346,16 @@ mod tests {
             "a pick above is skipped"
         );
         assert_eq!(ai_files(&mut store, &[parent, child]), [(child, Ai)]);
+    }
+
+    #[test]
+    fn ai_skips_ancestors_of_a_manual_membership() {
+        use knoa_core::Origin::User;
+        let (mut store, parent, child) = wallpapers();
+        let bookmark = store.search(&Query::default(), 1).unwrap().remove(0).id;
+        store.add_to_folder(bookmark, child).unwrap();
+
+        assert_eq!(ai_files(&mut store, &[parent]), [(child, User)]);
     }
 
     #[test]
