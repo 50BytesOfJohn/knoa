@@ -4,15 +4,15 @@ use std::rc::Rc;
 
 use gpui::{
     Animation, AnimationExt as _, AnyElement, Context, InteractiveElement as _, IntoElement,
-    ParentElement as _, Radians, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Transformation, div,
+    ParentElement as _, Pixels, Radians, SharedString, StatefulInteractiveElement as _,
+    Styled as _, Transformation, div,
 };
 use knoa_core::Place;
 use knoa_store::Counts;
 
 use super::{
-    SidebarEvent, SidebarView,
-    row::{ICON, ROW_GAP, count, label, row_frame},
+    LIST_TOP, SidebarEvent, SidebarView,
+    row::{ICON, ROW_GAP, ROW_HEIGHT, count, label, row_frame},
 };
 use crate::{
     assets::line_icon,
@@ -31,17 +31,37 @@ struct PlaceRow {
 /// The places shown for the current counts, kept until the counts or the place change.
 #[derive(Default)]
 pub(super) struct PlaceRows {
-    made_for: Option<(Counts, Place)>,
+    made_for: Option<(PlaceCounts, Place)>,
     rows: Rc<[PlaceRow]>,
 }
 
+/// The library's counts as the places show them: all but `organizing`, which counts the
+/// queue across every workspace and is followed through the batch instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct PlaceCounts(Counts);
+
+impl PlaceCounts {
+    pub fn of(counts: Counts) -> PlaceCounts {
+        PlaceCounts(Counts {
+            organizing: 0,
+            ..counts
+        })
+    }
+}
+
 impl PlaceRows {
-    fn rows(&mut self, counts: Counts, current: Place) -> Rc<[PlaceRow]> {
+    fn rows(&mut self, counts: PlaceCounts, current: Place) -> Rc<[PlaceRow]> {
         if self.made_for != Some((counts, current)) {
-            self.rows = visible_places(counts, current).into();
+            self.rows = visible_places(counts.0, current).into();
             self.made_for = Some((counts, current));
         }
         self.rows.clone()
+    }
+
+    /// How far down the list's content the row of `place` ends, while it is shown.
+    fn bottom(&self, place: Place) -> Option<Pixels> {
+        let index = self.rows.iter().position(|row| row.place == place)?;
+        Some(LIST_TOP + ROW_HEIGHT * (index + 1) as f32 + ROW_GAP * index as f32)
     }
 }
 
@@ -120,13 +140,27 @@ impl SidebarView {
                 self.organizer.read(cx).status(),
                 AiStatus::Ready | AiStatus::Cloud
             );
-        let rows = self.places.rows(counts, current);
+        let rows = self.places.rows(PlaceCounts::of(counts), current);
+        let turning = organizing && self.not_organized_in_view();
         let mut list = div().flex().flex_col().gap(ROW_GAP);
         for (index, row) in rows.iter().enumerate() {
             let selected = row.place == current;
-            list = list.child(place_row(row, index, selected, organizing, cx));
+            list = list.child(place_row(row, index, selected, turning, cx));
         }
         list
+    }
+
+    /// Whether any of Not organized's row shows in the list. A turning animation asks for
+    /// the next frame even while scrolled out of sight, so out of sight it stands still.
+    /// GPUI redraws the sidebar whenever the list scrolls, which keeps this current.
+    fn not_organized_in_view(&self) -> bool {
+        let Some(bottom) = self.places.bottom(Place::NotOrganized) else {
+            return false;
+        };
+        let scroll = &self.drop.scroll;
+        // The offset is clamped only at layout, after this render.
+        let scrolled = (-scroll.offset().y).clamp(Pixels::ZERO, scroll.max_offset().y);
+        bottom > scrolled
     }
 }
 
@@ -134,15 +168,15 @@ fn place_row(
     row: &PlaceRow,
     index: usize,
     selected: bool,
-    organizing: bool,
+    turning: bool,
     cx: &mut Context<'_, SidebarView>,
 ) -> AnyElement {
     let theme = Theme::get(cx);
     let place = row.place;
     let color = if selected { theme.accent } else { theme.muted };
     let icon = svg_icon(row.icon.clone(), ICON, color);
-    let icon = if place == Place::NotOrganized && organizing {
-        turning(icon)
+    let icon = if place == Place::NotOrganized && turning {
+        turning_icon(icon)
     } else {
         icon.into_any_element()
     };
@@ -157,7 +191,7 @@ fn place_row(
 
 /// The dashed circle turning slowly while the AI works. Still with Reduce Motion, which
 /// GPUI's animations follow.
-fn turning(icon: gpui::Svg) -> AnyElement {
+fn turning_icon(icon: gpui::Svg) -> AnyElement {
     let turn = Animation::new(motion::SLOW_TURN)
         .repeat()
         .with_max_fps(motion::LOOP_FPS);

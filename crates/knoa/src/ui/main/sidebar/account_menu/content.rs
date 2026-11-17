@@ -183,7 +183,7 @@ fn item(
         .text_color(theme.text)
         .cursor_pointer()
         .hover(move |s| s.bg(hover))
-        .on_click(cx.listener(move |this, _, _, cx| this.choose(action, cx)))
+        .on_click(cx.listener(move |this, _, window, cx| this.choose(action, window, cx)))
         .child(svg_icon(icon, ITEM_ICON, theme.muted))
         .child(label)
         .into_any_element()

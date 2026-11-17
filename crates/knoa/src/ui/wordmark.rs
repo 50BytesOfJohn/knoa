@@ -20,7 +20,7 @@ pub fn written_wordmark(id: impl Into<ElementId>, height: Pixels, ink: Hsla) -> 
     frame(height, &shape).with_animation(
         id,
         Animation::new(Duration::from_secs_f32(total / 1000.)),
-        move |el, delta| el.child(drawing(shape, ink, Some(delta * total))),
+        move |el, delta| el.child(drawing(shape, ink, delta * total)),
     )
 }
 
@@ -104,7 +104,7 @@ fn frame(height: Pixels, shape: &Shape) -> Div {
     div().flex_none().h(height).w(height * shape.aspect())
 }
 
-fn drawing(shape: Shape, ink: Hsla, elapsed: Option<f32>) -> impl IntoElement {
+fn drawing(shape: Shape, ink: Hsla, elapsed: f32) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, (), window, _| paint(&shape, bounds, ink, elapsed, window),
@@ -112,14 +112,8 @@ fn drawing(shape: Shape, ink: Hsla, elapsed: Option<f32>) -> impl IntoElement {
     .size_full()
 }
 
-/// Paints the wordmark as it looks `elapsed` ms into writing it, or finished for `None`.
-fn paint(
-    shape: &Shape,
-    bounds: Bounds<Pixels>,
-    ink: Hsla,
-    elapsed: Option<f32>,
-    window: &mut Window,
-) {
+/// Paints the wordmark as it looks `elapsed` ms into writing it.
+fn paint(shape: &Shape, bounds: Bounds<Pixels>, ink: Hsla, elapsed: f32, window: &mut Window) {
     let scale = f32::from(bounds.size.height) / shape.size[1];
     let at = |[x, y]: [f32; 2]| {
         point(
@@ -130,7 +124,7 @@ fn paint(
     let timeline = Timeline::new();
 
     for (stroke, timing) in STROKES.iter().zip(timeline.strokes) {
-        let written = elapsed.map_or(1., |t| timing.progress(t));
+        let written = timing.progress(elapsed);
         if written > 0. {
             paint_stroke(
                 stroke,
@@ -143,8 +137,7 @@ fn paint(
         }
     }
 
-    let (opacity, lift) =
-        elapsed.map_or((1., 0.), |t| dot_drop((t - timeline.dot_start) / DOT_DROP));
+    let (opacity, lift) = dot_drop((elapsed - timeline.dot_start) / DOT_DROP);
     if opacity > 0. {
         let radius = px(shape.weight * scale);
         let center = at([shape.dot[0], shape.dot[1] + lift]);

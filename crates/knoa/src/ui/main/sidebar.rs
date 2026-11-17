@@ -23,6 +23,7 @@ mod footer;
 mod outline;
 mod places;
 mod row;
+mod shown;
 mod status;
 mod status_card;
 mod titlebar;
@@ -33,8 +34,11 @@ pub(super) use drop::DraggedBookmark;
 
 use super::settings::Page;
 use crate::{
-    services::{cloud::Cloud, organizer::Organizer},
-    state::library::Library,
+    services::{
+        cloud::Cloud,
+        organizer::{AiStatus, Organizer},
+    },
+    state::{library::Library, settings::SettingsFile},
     ui::theme::{MARGIN, PANEL_RADIUS, Theme},
 };
 use account::Identity;
@@ -42,6 +46,7 @@ use account_menu::AccountMenu;
 use drop::SidebarDrop;
 use outline::Outline;
 use places::PlaceRows;
+use shown::{CloudShown, LibraryShown};
 use status_card::StatusCard;
 
 /// The sidebar's top row, shared with the traffic lights.
@@ -60,6 +65,8 @@ const LIGHTS_GAP: Pixels = px(10.);
 const TRAFFIC_LIGHT_FRAME: Pixels = px(14.);
 /// The workspace button's padding before its mark.
 const WORKSPACE_PADDING: Pixels = px(7.);
+/// Space above the first place, inside the scrolling list.
+const LIST_TOP: Pixels = px(2.);
 /// Group name for the whole sidebar, whose hover shows the new folder button.
 const SIDEBAR_GROUP: &str = "sidebar";
 
@@ -89,8 +96,6 @@ pub(super) enum SidebarEvent {
     EditFolder(FolderId),
     DeleteFolder(FolderId),
     OpenSettings(Page),
-    /// A menu the sidebar opened has closed, so focus can go back to the cards.
-    ReturnFocus,
 }
 
 pub(super) struct SidebarView {
@@ -108,7 +113,15 @@ pub(super) struct SidebarView {
     account_menu: AccountMenu,
     /// The workspace switcher is open, so its button stays lit.
     workspaces_open: bool,
+    /// What the sidebar last drew from the library, the organizer and the cloud.
+    shown: Shown,
     _subscriptions: Vec<Subscription>,
+}
+
+struct Shown {
+    library: LibraryShown,
+    organizer: AiStatus,
+    cloud: CloudShown,
 }
 
 impl EventEmitter<SidebarEvent> for SidebarView {}
@@ -117,12 +130,34 @@ impl SidebarView {
     pub(super) fn new(library: Entity<Library>, cx: &mut Context<'_, SidebarView>) -> SidebarView {
         let organizer = Organizer::entity(cx);
         let cloud = Cloud::entity(cx);
+        let shown = Shown {
+            library: LibraryShown::of(library.read(cx)),
+            organizer: organizer.read(cx).status().clone(),
+            cloud: CloudShown::of(cloud.read(cx), SettingsFile::get(cx), false),
+        };
+        // Each update redraws the sidebar only when it changes what the sidebar shows.
         // The batch and its progress come with the library, and the sync time and the
         // changes waiting with the cloud.
         let subscriptions = vec![
-            cx.observe(&library, |_, _, cx| cx.notify()),
-            cx.observe(&organizer, |_, _, cx| cx.notify()),
-            cx.observe(&cloud, |_, _, cx| cx.notify()),
+            cx.observe(&library, |this, library, cx| {
+                let now = LibraryShown::of(library.read(cx));
+                if shown::update(&mut this.shown.library, now) {
+                    cx.notify();
+                }
+            }),
+            cx.observe(&organizer, |this, organizer, cx| {
+                let now = organizer.read(cx).status().clone();
+                if shown::update(&mut this.shown.organizer, now) {
+                    cx.notify();
+                }
+            }),
+            cx.observe(&cloud, |this, cloud, cx| {
+                let menu_open = this.account_menu.is_open();
+                let now = CloudShown::of(cloud.read(cx), SettingsFile::get(cx), menu_open);
+                if shown::update(&mut this.shown.cloud, now) {
+                    cx.notify();
+                }
+            }),
         ];
         SidebarView {
             library,
@@ -136,6 +171,7 @@ impl SidebarView {
             identity: Identity::default(),
             account_menu: AccountMenu::default(),
             workspaces_open: false,
+            shown,
             _subscriptions: subscriptions,
         }
     }
@@ -206,7 +242,7 @@ impl Render for SidebarView {
                             cx.notify();
                         }
                     }))
-                    .pt(px(2.))
+                    .pt(LIST_TOP)
                     .px(INSET)
                     .child(self.place_list(current, cx))
                     .child(self.folder_header(cx))

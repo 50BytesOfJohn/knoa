@@ -87,7 +87,6 @@ impl MainView {
             SidebarEvent::EditFolder(id) => self.edit_folder(Some(id), window, cx),
             SidebarEvent::DeleteFolder(id) => self.confirm_delete_folder(id, window, cx),
             SidebarEvent::OpenSettings(page) => self.show_settings(page, window, cx),
-            SidebarEvent::ReturnFocus => self.cards_focus.focus(window, cx),
         }
     }
 

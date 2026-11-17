@@ -254,7 +254,9 @@ Keychain in release-channel builds and in a plain file in dev builds
   [main screen design](design/main-screen.md) and the [sidebar design](design/sidebar.md);
   the research behind it is in [research](research/main-screen.md).
 - The sidebar and the main view are sibling views, each drawn from its own cache, so the
-  sidebar's hovers and animations never rebuild the cards. Animations follow macOS's
+  sidebar's hovers and animations never rebuild the cards. The sidebar redraws for a
+  library, organizer or cloud update only when it changes what the sidebar shows, not for
+  new search results or another sync round. Animations follow macOS's
   Reduce Motion, which the app hands to GPUI at launch and whenever it changes.
 - Places: Everything, Gallery, Up next, Unsorted, Not organized, Set aside and Trash.
   The Gallery shows bookmarks of a media kind (today only images) while the workspace has
