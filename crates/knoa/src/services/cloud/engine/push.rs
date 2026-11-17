@@ -6,7 +6,7 @@ use gpui::AsyncApp;
 use knoa_core::protocol::{MAX_PUSH, MutationResult, MutationStatus, RejectReason};
 
 use super::{Engine, Failure, net};
-use crate::services::cloud::SyncStatus;
+use crate::services::cloud::{Notice, Rejection, SyncStatus};
 
 impl Engine {
     /// Sends the outbox, a batch at a time, until it is empty. True when the server
@@ -76,12 +76,12 @@ impl Engine {
     async fn refused(&self, refused: &Refused, cx: &mut AsyncApp) -> Result<(), Failure> {
         let limit = self.account.as_ref().map_or(0, |a| a.limits.bookmarks);
         let unsent = self.store(cx, |store| store.unsent_bookmarks()).await?;
-        let notice = refused.notice(limit, unsent);
-        if let Some(notice) = &notice {
+        let notices = refused.notices(limit, unsent);
+        for notice in &notices {
             tracing::warn!("{notice}");
         }
         self.this
-            .update(cx, |this, cx| this.set_push_notice(notice, cx))
+            .update(cx, |this, cx| this.set_push_notices(notices, cx))
             .map_err(|_| Failure::Stopped)
     }
 }
@@ -139,23 +139,19 @@ impl Refused {
     }
 
     /// `unsent`: the bookmarks the plan's limit keeps on this Mac, from this push or before.
-    fn notice(&self, limit: u64, unsent: usize) -> Option<String> {
-        let quota = (unsent > 0).then(|| {
-            format!(
-                "Your plan holds {limit} bookmarks, so {unsent} new bookmarks stayed on this Mac only."
-            )
-        });
-        let other = if self.invalid {
-            Some("Some changes couldn't be synced and stayed on this Mac only.")
+    fn notices(&self, limit: u64, unsent: usize) -> Vec<Notice> {
+        let quota = (unsent > 0).then_some(Notice::PlanLimit { limit, unsent });
+        let rejected = if self.invalid {
+            Some(Rejection::Invalid)
         } else if self.too_large {
-            Some("Some changes were too large to sync and stayed on this Mac only.")
+            Some(Rejection::TooLarge)
         } else {
             None
         };
-        match (quota, other) {
-            (Some(quota), Some(other)) => Some(format!("{quota} {other}")),
-            (quota, other) => quota.or(other.map(str::to_owned)),
-        }
+        quota
+            .into_iter()
+            .chain(rejected.map(Notice::Rejected))
+            .collect()
     }
 }
 

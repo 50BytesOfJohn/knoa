@@ -31,14 +31,13 @@ pub(super) enum Disclosure {
 }
 
 /// The collapsed parents, kept in settings on this Mac, and the rows they leave visible.
-pub(in crate::ui::main) struct Outline {
+pub(super) struct Outline {
     collapsed: BTreeSet<FolderId>,
     /// Goes up whenever `collapsed` changes.
     generation: u64,
     /// The library's folder generation and ours the rows were made for.
     made_for: Option<(u64, u64)>,
     rows: Rc<[Rc<FolderRow>]>,
-    nested: bool,
 }
 
 impl Outline {
@@ -53,7 +52,6 @@ impl Outline {
             generation: 0,
             made_for: None,
             rows: Rc::from([]),
-            nested: false,
         }
     }
 
@@ -63,15 +61,9 @@ impl Outline {
         let key = (tree_generation, self.generation);
         if self.made_for != Some(key) {
             self.rows = visible_rows(tree, &self.collapsed).into();
-            self.nested = tree.is_nested();
             self.made_for = Some(key);
         }
         self.rows.clone()
-    }
-
-    /// Whether any folder has a parent, as of the last [`Outline::rows`].
-    pub(super) fn is_nested(&self) -> bool {
-        self.nested
     }
 
     /// The `n`th visible folder, counting from 0, as ⌘1 to ⌘9 pick them.
@@ -86,22 +78,27 @@ impl Outline {
         self.changed(cx);
     }
 
-    /// Shows the folder's children.
-    pub fn expand(&mut self, id: FolderId, cx: &mut App) {
-        if self.collapsed.remove(&id) {
+    /// Shows the folder's children. Returns whether it was collapsed.
+    pub fn expand(&mut self, id: FolderId, cx: &mut App) -> bool {
+        let collapsed = self.collapsed.remove(&id);
+        if collapsed {
             self.changed(cx);
         }
+        collapsed
     }
 
-    /// Opens each of `parents`, so whatever is under them is visible.
-    pub fn reveal(&mut self, parents: &[FolderId], cx: &mut App) {
+    /// Opens each of `parents`, so whatever is under them is visible. Returns whether any
+    /// was collapsed.
+    pub fn reveal(&mut self, parents: &[FolderId], cx: &mut App) -> bool {
         let before = self.collapsed.len();
         for id in parents {
             self.collapsed.remove(id);
         }
-        if self.collapsed.len() != before {
+        let opened = self.collapsed.len() != before;
+        if opened {
             self.changed(cx);
         }
+        opened
     }
 
     fn changed(&mut self, cx: &mut App) {

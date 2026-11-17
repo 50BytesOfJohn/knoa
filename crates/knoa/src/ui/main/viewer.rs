@@ -41,12 +41,12 @@ impl MainView {
             return;
         }
         self.set_selected(Some(id), cx);
-        self.overlay = Some(Overlay::Viewer(Viewer {
+        let viewer = Viewer {
             bookmark: id,
             notice: None,
-        }));
+        };
+        self.set_overlay(Some(Overlay::Viewer(viewer)), cx);
         self.viewer_focus.focus(window, cx);
-        cx.notify();
     }
 
     /// Space: the viewer for a picture, the detail panel for anything else.

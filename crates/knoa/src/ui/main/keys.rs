@@ -23,9 +23,9 @@ actions!(
     viewer,
     [PreviousImage, NextImage, CloseViewer, CopyImage, SaveImage]
 );
-actions!(knoa, [FocusSearch, OpenSettings, NewLink]);
+actions!(knoa, [FocusSearch, OpenSettings, NewLink, NewFolder]);
 
-/// The keys for the first nine folders in the sidebar, which shows them beside each.
+/// The keys for the first nine folders in the sidebar.
 const FOLDER_KEYS: [&str; 9] = [
     "cmd-1", "cmd-2", "cmd-3", "cmd-4", "cmd-5", "cmd-6", "cmd-7", "cmd-8", "cmd-9",
 ];
@@ -70,7 +70,9 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-k", FocusSearch, None),
         KeyBinding::new("cmd-,", OpenSettings, None),
         KeyBinding::new("cmd-n", NewLink, None),
+        KeyBinding::new("shift-cmd-n", NewFolder, None),
     ]);
+    super::sidebar::bind_account_menu_keys(cx);
     let folders = FOLDER_KEYS
         .iter()
         .enumerate()

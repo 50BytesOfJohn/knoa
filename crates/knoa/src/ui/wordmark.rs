@@ -13,12 +13,6 @@ use lyon_tessellation::{LineCap, LineJoin};
 
 use crate::ui::theme::BRAND_RED;
 
-/// "Knoa" without its full stop, for places where the mascot stands in for the dot.
-pub fn wordmark_letters(height: Pixels, ink: Hsla) -> Div {
-    let shape = Shape::new(height).without_dot();
-    frame(height, &shape).child(drawing(shape, ink, None))
-}
-
 /// The wordmark writing itself once, when it first appears.
 pub fn written_wordmark(id: impl Into<ElementId>, height: Pixels, ink: Hsla) -> impl IntoElement {
     let shape = Shape::new(height);
@@ -26,7 +20,7 @@ pub fn written_wordmark(id: impl Into<ElementId>, height: Pixels, ink: Hsla) -> 
     frame(height, &shape).with_animation(
         id,
         Animation::new(Duration::from_secs_f32(total / 1000.)),
-        move |el, delta| el.child(drawing(shape, ink, Some(delta * total))),
+        move |el, delta| el.child(drawing(shape, ink, delta * total)),
     )
 }
 
@@ -81,7 +75,7 @@ struct Shape {
     weight: f32,
     origin: [f32; 2],
     size: [f32; 2],
-    dot: Option<[f32; 2]>,
+    dot: [f32; 2],
 }
 
 impl Shape {
@@ -97,17 +91,7 @@ impl Shape {
             weight,
             origin,
             size: [right - origin[0], bottom - origin[1]],
-            dot: Some(dot),
-        }
-    }
-
-    /// Ends at the last letter's tail, with no room kept for the dot.
-    fn without_dot(self) -> Shape {
-        let right = TAIL_END_X + self.weight / 2.;
-        Shape {
-            size: [right - self.origin[0], self.size[1]],
-            dot: None,
-            ..self
+            dot,
         }
     }
 
@@ -120,7 +104,7 @@ fn frame(height: Pixels, shape: &Shape) -> Div {
     div().flex_none().h(height).w(height * shape.aspect())
 }
 
-fn drawing(shape: Shape, ink: Hsla, elapsed: Option<f32>) -> impl IntoElement {
+fn drawing(shape: Shape, ink: Hsla, elapsed: f32) -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, (), window, _| paint(&shape, bounds, ink, elapsed, window),
@@ -128,14 +112,8 @@ fn drawing(shape: Shape, ink: Hsla, elapsed: Option<f32>) -> impl IntoElement {
     .size_full()
 }
 
-/// Paints the wordmark as it looks `elapsed` ms into writing it, or finished for `None`.
-fn paint(
-    shape: &Shape,
-    bounds: Bounds<Pixels>,
-    ink: Hsla,
-    elapsed: Option<f32>,
-    window: &mut Window,
-) {
+/// Paints the wordmark as it looks `elapsed` ms into writing it.
+fn paint(shape: &Shape, bounds: Bounds<Pixels>, ink: Hsla, elapsed: f32, window: &mut Window) {
     let scale = f32::from(bounds.size.height) / shape.size[1];
     let at = |[x, y]: [f32; 2]| {
         point(
@@ -146,7 +124,7 @@ fn paint(
     let timeline = Timeline::new();
 
     for (stroke, timing) in STROKES.iter().zip(timeline.strokes) {
-        let written = elapsed.map_or(1., |t| timing.progress(t));
+        let written = timing.progress(elapsed);
         if written > 0. {
             paint_stroke(
                 stroke,
@@ -159,13 +137,10 @@ fn paint(
         }
     }
 
-    let (opacity, lift) =
-        elapsed.map_or((1., 0.), |t| dot_drop((t - timeline.dot_start) / DOT_DROP));
-    if let Some(dot) = shape.dot
-        && opacity > 0.
-    {
+    let (opacity, lift) = dot_drop((elapsed - timeline.dot_start) / DOT_DROP);
+    if opacity > 0. {
         let radius = px(shape.weight * scale);
-        let center = at([dot[0], dot[1] + lift]);
+        let center = at([shape.dot[0], shape.dot[1] + lift]);
         let bounds = Bounds::new(
             point(center.x - radius, center.y - radius),
             size(radius * 2., radius * 2.),

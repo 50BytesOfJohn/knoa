@@ -13,6 +13,8 @@ use crate::channel::Channel;
 #[derive(Debug, Clone)]
 pub struct CloudConfig {
     pub sync: Config,
+    /// Knoa on the web, the app the account opens in a browser.
+    pub web: Url,
     /// Where a free account goes to subscribe.
     pub pricing: Url,
     /// The web page that opens the subscriber's billing portal.
@@ -50,6 +52,7 @@ fn staging() -> anyhow::Result<CloudConfig> {
             )?,
             client_id: var("KNOA_CLERK_CLIENT_ID", "C8fhAQh3MI0bMg9O"),
         },
+        web: parse_named("KNOA_WEB_URL", web)?,
         pricing: parse_named("KNOA_WEB_URL", &format!("{web}/pricing"))?,
         billing: parse_named("KNOA_WEB_URL", &format!("{web}/billing"))?,
     })
@@ -77,6 +80,7 @@ fn production() -> Option<CloudConfig> {
             issuer: Url::parse("https://clerk.useknoa.app").ok()?,
             client_id: client_id.to_owned(),
         },
+        web: Url::parse("https://useknoa.app").ok()?,
         pricing: Url::parse("https://useknoa.app/pricing").ok()?,
         billing: Url::parse("https://useknoa.app/billing").ok()?,
     })

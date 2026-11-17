@@ -23,3 +23,4 @@ old one.
 | [0015](0015-separate-read-connection.md) | One writer and one read-only reader for the database | Accepted |
 | [0016](0016-images-seen-from-derived-copies.md) | Images are stored and shown to the AI as derived copies | Accepted |
 | [0017](0017-nested-folders-and-emoji-icons.md) | Folders nest three levels deep, and an icon can be an emoji | Accepted |
+| [0018](0018-native-phone-apps.md) | Native phone apps, each with its own sync client | Accepted |

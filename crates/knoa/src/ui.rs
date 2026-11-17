@@ -3,6 +3,7 @@
 pub mod components;
 mod main;
 pub mod mascot;
+pub mod motion;
 mod onboarding;
 pub mod theme;
 pub mod wordmark;
@@ -22,7 +23,7 @@ use crate::state::{
 pub struct RootView {
     library: Entity<Library>,
     onboarding: Option<Entity<onboarding::Onboarding>>,
-    main: Option<Entity<main::MainView>>,
+    main: Option<main::MainScreen>,
 }
 
 impl RootView {
@@ -60,15 +61,12 @@ impl Render for RootView {
             let library = self.library.clone();
             let main = self
                 .main
-                .get_or_insert_with(|| cx.new(|cx| main::MainView::new(library, window, cx)))
-                .clone();
+                .get_or_insert_with(|| main::MainScreen::new(library, window, cx));
             if wants_account {
                 let main = main.clone();
-                cx.defer_in(window, move |_, window, cx| {
-                    main.update(cx, |main, cx| main.open_account(window, cx));
-                });
+                cx.defer_in(window, move |_, window, cx| main.open_account(window, cx));
             }
-            main.into_any_element()
+            main.render(window).into_any_element()
         } else {
             self.main = None;
             let library = self.library.clone();

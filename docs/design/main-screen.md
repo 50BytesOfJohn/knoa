@@ -48,6 +48,8 @@ The window background is a solid colour by default, or a wallpaper the user pick
 
 ### Sidebar (left, floating, ~240 px)
 
+Superseded by [sidebar.md](sidebar.md). Kept here as the v1 record.
+
 1. **Titlebar:** the traffic lights on the left; on the right the **workspace button**
    (the workspace's coloured mark and a chevron, its name on hover) and **add link**.
    The workspace stays small because most people keep one; the bookmark count lives on

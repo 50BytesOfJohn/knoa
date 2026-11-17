@@ -53,10 +53,27 @@ const ICONS: &[(&str, &[u8])] = knoa_icons![
     "game",
 ];
 
+/// Lucide icons under this prefix are drawn with a lighter line than Lucide's own 2.
+const LINE_ICONS: &str = "icons/line/";
+const LUCIDE_STROKE: &str = r#"stroke-width="2""#;
+const LINE_STROKE: &str = r#"stroke-width="1.75""#;
+
+/// The asset path of a Lucide icon with the lighter line the sidebar uses, made at
+/// compile time so rendering it allocates nothing: `line_icon!("layers")`.
+macro_rules! line_icon {
+    ($name:literal) => {
+        gpui::SharedString::new_static(concat!("icons/line/", $name, ".svg"))
+    };
+}
+pub(crate) use line_icon;
+
 pub struct Assets;
 
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+        if let Some(name) = path.strip_prefix(LINE_ICONS) {
+            return lighter_line(name);
+        }
         match ICONS.iter().find(|(icon, _)| *icon == path) {
             Some((_, data)) => Ok(Some(Cow::Borrowed(data))),
             None => gpui_kit_assets::AllAssets.load(path),
@@ -73,6 +90,16 @@ impl AssetSource for Assets {
         );
         Ok(paths)
     }
+}
+
+/// The Lucide icon `name` with its stroke width replaced. GPUI caches what it draws from
+/// an asset, so this runs once per icon and size, not per frame.
+fn lighter_line(name: &str) -> gpui::Result<Option<Cow<'static, [u8]>>> {
+    let Some(svg) = gpui_kit_assets::AllAssets.load(&format!("icons/{name}"))? else {
+        return Ok(None);
+    };
+    let svg = String::from_utf8_lossy(&svg).replace(LUCIDE_STROKE, LINE_STROKE);
+    Ok(Some(Cow::Owned(svg.into_bytes())))
 }
 
 #[cfg(test)]

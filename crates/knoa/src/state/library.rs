@@ -14,7 +14,7 @@ use knoa_core::{
 };
 use knoa_store::{AddedLink, Counts, Store};
 
-use crate::state::{database::Database, settings::SettingsFile};
+use crate::state::{batch::Batch, database::Database, settings::SettingsFile};
 
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
@@ -39,6 +39,8 @@ pub struct Library {
     results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
+    /// The organizing queue's current run, followed through `counts.organizing`.
+    batch: Batch,
     folders: FolderTree,
     /// Goes up whenever `folders` changes, so views can keep what they derive from it.
     folders_generation: u64,
@@ -81,6 +83,7 @@ impl Library {
             results: Arc::default(),
             kind_counts: Vec::new(),
             counts: Counts::default(),
+            batch: Batch::default(),
             folders: FolderTree::default(),
             folders_generation: 0,
             tags: Vec::new(),
@@ -148,6 +151,10 @@ impl Library {
 
     pub fn counts(&self) -> Counts {
         self.counts
+    }
+
+    pub fn batch(&self) -> Batch {
+        self.batch
     }
 
     /// The workspace's folders in sidebar order: each followed by its subfolders.
@@ -313,6 +320,7 @@ impl Library {
         self.results = loaded.results;
         self.kind_counts = loaded.kind_counts;
         self.counts = loaded.counts;
+        self.batch.update(self.counts.organizing);
         if self.folders != loaded.folders {
             self.folders = loaded.folders;
             self.folders_generation += 1;
