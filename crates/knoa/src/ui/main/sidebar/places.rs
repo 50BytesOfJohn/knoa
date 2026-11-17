@@ -141,11 +141,15 @@ impl SidebarView {
                 AiStatus::Ready | AiStatus::Cloud
             );
         let rows = self.places.rows(PlaceCounts::of(counts), current);
-        let turning = organizing && self.not_organized_in_view();
+        let in_view = self.not_organized_in_view();
+        let turning = organizing && in_view;
         let mut list = div().flex().flex_col().gap(ROW_GAP);
         for (index, row) in rows.iter().enumerate() {
             let selected = row.place == current;
             list = list.child(place_row(row, index, selected, turning, cx));
+        }
+        if organizing {
+            list = self.recheck_in_view_after_layout(list, in_view, cx);
         }
         list
     }
@@ -158,9 +162,34 @@ impl SidebarView {
             return false;
         };
         let scroll = &self.drop.scroll;
-        // The offset is clamped only at layout, after this render.
+        // Until layout clamps it, the offset can be past the end of a list that shrank.
         let scrolled = (-scroll.offset().y).clamp(Pixels::ZERO, scroll.max_offset().y);
         bottom > scrolled
+    }
+
+    /// Redraws the sidebar on the next frame when layout moved Not organized into or out
+    /// of view after `rendered` was decided. Layout clamps the scroll offset when the list
+    /// shrinks or grows taller, without redrawing the sidebar.
+    fn recheck_in_view_after_layout(
+        &self,
+        list: gpui::Div,
+        rendered: bool,
+        cx: &mut Context<'_, SidebarView>,
+    ) -> gpui::Div {
+        let sidebar = cx.weak_entity();
+        // The places' children are prepainted after the list has clamped its offset.
+        list.on_children_prepainted(move |_, window, cx| {
+            let Ok(in_view) = sidebar.read_with(cx, |sidebar, _| sidebar.not_organized_in_view())
+            else {
+                return;
+            };
+            if in_view != rendered {
+                let sidebar = sidebar.clone();
+                window.on_next_frame(move |_, cx| {
+                    let _ = sidebar.update(cx, |_, cx| cx.notify());
+                });
+            }
+        })
     }
 }
 
