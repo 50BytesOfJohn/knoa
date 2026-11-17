@@ -13,6 +13,9 @@ import type {
 	PullResponse,
 	PushRequest,
 	PushResponse,
+	SaveRequest,
+	SaveResponse,
+	WorkspacesResponse,
 } from "./protocol";
 import { MAX_PULL } from "./protocol";
 
@@ -97,6 +100,14 @@ export class Api {
 
 	organize(body: OrganizeRequest): Promise<OrganizeResponse> {
 		return this.call("POST", "/v1/organize", body);
+	}
+
+	workspaces(): Promise<WorkspacesResponse> {
+		return this.call("GET", "/v1/workspaces");
+	}
+
+	save(body: SaveRequest): Promise<SaveResponse> {
+		return this.call("POST", "/v1/bookmarks", body);
 	}
 
 	imageUrl(imageKey: string): string {
