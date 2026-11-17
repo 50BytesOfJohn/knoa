@@ -12,7 +12,7 @@ use gpui::{AppContext as _, Context, EventEmitter, Task};
 use knoa_core::{
     Bookmark, BookmarkId, Folder, FolderTree, Kind, Place, Query, Workspace, WorkspaceId,
 };
-use knoa_store::{AddedLink, Counts, Store};
+use knoa_store::{AddedLink, Counts, NewLink, Store};
 
 use crate::state::{batch::Batch, database::Database, settings::SettingsFile};
 
@@ -294,8 +294,11 @@ impl Library {
     ) -> Task<knoa_store::Result<AddedLink>> {
         let (database, workspace) = (self.database.clone(), self.workspace);
         let now = jiff::Timestamp::now().as_second();
-        let task =
-            cx.background_spawn(async move { database.write().add_link(workspace, &url, now) });
+        let task = cx.background_spawn(async move {
+            database
+                .write()
+                .add_link(workspace, &NewLink::new(&url), now)
+        });
         cx.spawn(async move |this, cx| {
             let added = task.await;
             let _ = this.update(cx, Library::refresh);

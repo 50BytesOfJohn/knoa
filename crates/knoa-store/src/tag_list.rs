@@ -15,7 +15,7 @@ impl Store {
         if !tag_fits(&tag) {
             return Ok(());
         }
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let listed = load(&tx, workspace)?;
         if listed.len() < MAX_LISTED_TAGS && !listed.iter().any(|t| t.name == tag) {
             let recorder = Recorder::user(&tx)?;
@@ -30,7 +30,7 @@ impl Store {
     /// Takes a tag off the list. Bookmarks keep it. Emptying the list also lets the AI
     /// add its own tags again, so a disabled switch never shows on.
     pub fn unlist_tag(&mut self, workspace: WorkspaceId, tag: &str) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         let before = recorder.workspace_before(workspace.0)?;
         tx.execute(

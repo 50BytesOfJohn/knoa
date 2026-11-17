@@ -38,6 +38,8 @@ One process. The UI thread only renders and handles input:
 | `knoa-fetch` | Page fetch, metadata and JSON-LD extraction, site extractors, thumbnails, image decoding | no |
 | `knoa-ai` | `LanguageModel` and `Classifier` traits, the OpenRouter backend, the organizer | no |
 | `knoa-sync` | Cloud mode's client: Clerk sign-in, the Knoa API and its socket | no |
+| `knoa-paths` | The build's channel (Knoa or Knoa Dev) and where its library lives | no |
+| `knoa-bridge` | Native messaging host: the browser extension saves links through it ([ADR 0019](adr/0019-browser-extension.md)) | no |
 
 `sdk/` is the shared `@knoa/sync` TypeScript package for the web app, browser extension
 and API repository. `sdk/src/protocol.ts` is the wire contract mirrored by Rust;
@@ -112,6 +114,11 @@ Knoa, a native alert shows the reason and the app quits when it is dismissed.
   it; bookmarking it again in the same profile brings it back
   ([ADR 0012](adr/0012-deleting-bookmarks-through-trash.md)).
 - Links added by hand go straight into the organizing queue and are always kept.
+- The browser extension saves links in Local mode through `knoa-bridge`, which the app
+  registers with every installed browser at launch. The bridge writes to the library
+  directly, then pokes the app over `bridge.sock` to refresh and organize. A page
+  snapshot it sends stays in the job row and replaces the page fetch
+  ([ADR 0019](adr/0019-browser-extension.md)).
 - The first import stores metadata only. AI processing of those bookmarks starts when the
   user triggers it. Later bookmarks are processed automatically.
 
@@ -139,14 +146,16 @@ share. Signed out, the app is Local mode and none of this runs.
   came after its cursor, one transaction per page. Columns with a pending local change
   keep the local value. A socket pokes the app when something changed; a pull every few
   minutes covers a missed poke.
-- **Device-only data** never syncs: browser profiles, the job queue, page evidence,
-  `deleted_urls` and AI usage. Thumbnails go through the server's image store instead of
+- **Device-only data** never syncs: browser profiles, the job queue (with the browser
+  extension's page snapshots), page evidence, `deleted_urls` and AI usage. Thumbnails go through the server's image store instead of
   the rows.
 - **Who organizes:** the account says. With Pro, the server's organizer (the same
   `knoa-core`, `knoa-fetch` and `knoa-ai` crates compiled to WebAssembly by the
   Cloudflare Worker in the private API repository) does it, and this
   Mac hands its queue to the server instead of running it. On the free plan this Mac
   organizes with the user's own key, pushes the results and uploads the thumbnails.
+- **Browser extension:** signed in, it saves through the API instead of the bridge, and
+  the bookmark reaches this Mac by sync.
 - **Account page** in Settings: sign in and out, the plan and its usage, AI access, and
   how sync is doing. AI access settings are fetched when the page is shown and saved on
   change, separately from library sync. Pro accounts can set a default and workspace
@@ -293,7 +302,8 @@ macOS only. The alpha is distributed as a signed and notarized app bundle.
 `crates/knoa/bundle/`: the `Info.plist` and `AppIcon.icon`, the Icon Composer source of the
 app icon. Xcode's `actool` compiles the icon into `Assets.car`, which macOS 26+ shows in
 every icon appearance, and `AppIcon.icns` for older systems. Local bundles are signed ad hoc
-and omit Sparkle. `KNOA_DEV=1` selects the debug profile; `scripts/package.sh` explicitly sets `KNOA_CHANNEL=release` for distribution.
+and omit Sparkle. `knoa-bridge` goes into `Contents/MacOS` beside the app and is signed
+before it. `KNOA_DEV=1` selects the debug profile; `scripts/package.sh` explicitly sets `KNOA_CHANNEL=release` for distribution.
 
 ## Releases and updates
 

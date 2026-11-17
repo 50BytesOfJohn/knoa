@@ -13,7 +13,7 @@ use crate::{Result, Store, sync::Recorder};
 impl Store {
     /// Moves a bookmark to Trash and takes it off the organizing queue.
     pub fn trash(&mut self, id: BookmarkId, now: i64) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         Recorder::user(&tx)?.on_bookmark(id.0, || {
             tx.execute(
                 "UPDATE bookmarks SET deleted_at = ?2,
@@ -30,7 +30,7 @@ impl Store {
 
     /// Takes a bookmark out of Trash, back to where it was.
     pub fn restore(&mut self, id: BookmarkId) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         Recorder::user(&tx)?.on_bookmark(id.0, || {
             tx.execute(
                 "UPDATE bookmarks SET deleted_at = NULL WHERE id = ?1",
@@ -60,7 +60,7 @@ impl Store {
 
     /// Deletes the bookmarks matching `condition`, which takes one parameter.
     fn purge(&mut self, condition: &str, param: i64) -> Result<usize> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         if recorder.is_linked() {
             let ids: Vec<i64> = {

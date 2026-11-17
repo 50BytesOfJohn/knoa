@@ -33,7 +33,7 @@ impl Store {
         folder: &NewFolder,
     ) -> Result<FolderId> {
         let (ink, hue) = color_columns(folder.color);
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tree::load(&tx, workspace)?.check_new_child(folder.parent)?;
         tx.execute(
             "INSERT INTO folders (workspace_id, parent_id, name, description, auto_assign, color, hue,
@@ -60,7 +60,7 @@ impl Store {
     /// Deletes the folder and every folder under it, deepest first. Their bookmarks stay
     /// in the library.
     pub fn delete_folder(&mut self, id: FolderId) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         // A subtree lists each parent before its children, so reversed it ends at `id`.
         for folder in subtree(&tx, id)?.into_iter().rev() {
@@ -72,7 +72,7 @@ impl Store {
     }
 
     pub fn add_to_folder(&mut self, bookmark: BookmarkId, folder: FolderId) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "DELETE FROM folder_exclusions WHERE bookmark_id = ?1 AND folder_id = ?2",
             params![bookmark.0, folder.0],
@@ -90,7 +90,7 @@ impl Store {
     /// Takes a bookmark out of a folder and remembers it, so the AI never adds it back.
     /// This is also the one-click undo for a folder the AI picked.
     pub fn remove_from_folder(&mut self, bookmark: BookmarkId, folder: FolderId) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "DELETE FROM bookmark_folders WHERE bookmark_id = ?1 AND folder_id = ?2",
             params![bookmark.0, folder.0],

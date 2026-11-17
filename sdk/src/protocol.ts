@@ -431,6 +431,37 @@ export interface OrganizeResponse {
 	pending: number;
 }
 
+/** `GET /v1/workspaces`: the account's workspaces, for clients that keep no replica. */
+export interface WorkspacesResponse {
+	workspaces: { id: WorkspaceId; name: string }[];
+}
+
+/**
+ * `POST /v1/bookmarks`: save one link, for clients that keep no replica (the browser
+ * extension). A new URL becomes a kept bookmark queued for organizing; one in Trash comes
+ * back; one already in the library stays as it is. 403 `quota` at the plan's limit.
+ */
+export interface SaveRequest {
+	workspace_id: WorkspaceId;
+	url: string;
+	/** The tab's title, used as the bookmark's title instead of the URL. */
+	title?: string;
+	/**
+	 * The page as the user saw it, cut down by the extension: read instead of fetching the
+	 * page, then deleted. At most `MAX_SNAPSHOT_BYTES` of UTF-8, or 413.
+	 */
+	snapshot?: string;
+}
+
+export type SaveOutcome = "added" | "restored" | "existing";
+
+export interface SaveResponse {
+	bookmark_id: BookmarkId;
+	outcome: SaveOutcome;
+}
+
+export const MAX_SNAPSHOT_BYTES = 1024 * 1024;
+
 /**
  * `PUT /v1/images/<bookmark_id>` with the image as the body (png, jpeg, gif or webp, at
  * most 8 MiB) and `x-image-width` / `x-image-height` headers stores a thumbnail a device

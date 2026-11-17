@@ -29,9 +29,11 @@ gpui-kit-assets = "=0.9.0"
 lyon_tessellation = "1"
 
 knoa-ai = { path = "crates/knoa-ai" }
+knoa-bridge = { path = "crates/knoa-bridge" }
 knoa-browser = { path = "crates/knoa-browser" }
 knoa-core = { path = "crates/knoa-core" }
 knoa-fetch = { path = "crates/knoa-fetch" }
+knoa-paths = { path = "crates/knoa-paths" }
 knoa-store = { path = "crates/knoa-store" }
 knoa-sync = { path = "crates/knoa-sync" }
 

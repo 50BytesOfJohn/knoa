@@ -26,15 +26,28 @@ impl Fetcher {
 
     /// [`Fetcher::fetch_with_preview`], with the preview stored in the thumbnail cache.
     pub async fn fetch(&self, url: &str) -> Result<CachedPage, Error> {
+        Ok(self.cache(self.fetch_with_preview(url).await?).await)
+    }
+
+    /// [`Fetcher::fetch_snapshot`], with the preview stored in the thumbnail cache.
+    pub async fn fetch_snapshot_cached(
+        &self,
+        url: &str,
+        html: String,
+    ) -> Result<CachedPage, Error> {
+        Ok(self.cache(self.fetch_snapshot(url, html).await?).await)
+    }
+
+    async fn cache(&self, fetched: Fetched) -> CachedPage {
         let Fetched {
             mut page,
             preview,
             analysis,
-        } = self.fetch_with_preview(url).await?;
+        } = fetched;
         if let Some(preview) = preview {
             page.image = store(&preview, &self.image_cache).await;
         }
-        Ok(CachedPage { page, analysis })
+        CachedPage { page, analysis }
     }
 
     /// Downloads a bookmark's image on its own, like a thumbnail another device stored on

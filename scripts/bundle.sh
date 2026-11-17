@@ -32,18 +32,26 @@ actool() {
 }
 actool --version >/dev/null 2>&1 || { echo "bundle.sh: actool not found; install Xcode 26 or later" >&2; exit 1; }
 
-build_binary() {
+# The app and knoa-bridge, the browser extension's native messaging host, go into
+# Contents/MacOS: the app registers the bridge with the browsers from there.
+build_binaries() {
+    local macos=$1
+    local packages=(-p knoa -p knoa-bridge)
     if [[ $DEV == 1 ]]; then
-        cargo build
-        cp target/debug/knoa "$1"
+        cargo build "${packages[@]}"
+        cp target/debug/knoa "$macos/Knoa"
+        cp target/debug/knoa-bridge "$macos/knoa-bridge"
     elif [[ ${KNOA_UNIVERSAL:-0} == 1 ]]; then
-        cargo build --release --locked --target aarch64-apple-darwin
-        cargo build --release --locked --target x86_64-apple-darwin
-        lipo -create -output "$1" \
+        cargo build --release --locked --target aarch64-apple-darwin "${packages[@]}"
+        cargo build --release --locked --target x86_64-apple-darwin "${packages[@]}"
+        lipo -create -output "$macos/Knoa" \
             target/aarch64-apple-darwin/release/knoa target/x86_64-apple-darwin/release/knoa
+        lipo -create -output "$macos/knoa-bridge" \
+            target/aarch64-apple-darwin/release/knoa-bridge target/x86_64-apple-darwin/release/knoa-bridge
     else
-        cargo build --release --locked
-        cp target/release/knoa "$1"
+        cargo build --release --locked "${packages[@]}"
+        cp target/release/knoa "$macos/Knoa"
+        cp target/release/knoa-bridge "$macos/knoa-bridge"
     fi
 }
 
@@ -101,12 +109,15 @@ sign() {
         codesign "${flags[@]}" "$framework/Versions/B/Updater.app"
         codesign "${flags[@]}" "$framework"
     fi
+    local bundle_id
+    bundle_id=$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")
+    codesign "${flags[@]}" --identifier "$bundle_id.bridge" "$APP/Contents/MacOS/knoa-bridge"
     codesign "${flags[@]}" "$APP"
 }
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-build_binary "$APP/Contents/MacOS/Knoa"
+build_binaries "$APP/Contents/MacOS"
 write_info_plist
 compile_icon
 if [[ ${KNOA_CHANNEL:-} == release ]]; then

@@ -22,7 +22,7 @@ use crate::{Error, Result, Store};
 impl Store {
     /// Applies one page of pulled changes and moves the cursor to `cursor`, together.
     pub fn apply_remote(&mut self, changes: &[Change], cursor: i64) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         if !linked(&tx)? {
             return Err(Error::NotLinked);
         }

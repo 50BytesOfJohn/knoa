@@ -42,7 +42,7 @@ const ON_SERVER: &str = "b.sync_id IS NOT NULL AND b.delivery = 'confirmed'";
 impl Store {
     /// Releases blocked bookmarks from the queue when the cloud organizes this library.
     pub fn release_blocked_jobs(&mut self) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "UPDATE bookmarks SET status = CASE WHEN organized_at IS NULL THEN 'new' ELSE 'organized' END
              WHERE status = 'queued' AND delivery IN ('blocked_quota', 'blocked_invalid')",
@@ -59,7 +59,7 @@ impl Store {
 
     /// Up to `limit` jobs of this Mac's queue for bookmarks the server already has.
     pub fn cloud_jobs(&mut self, limit: usize) -> Result<Vec<CloudJob>> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         drop_settled_backfills(&tx)?;
         let jobs = {
             let mut stmt = tx.prepare(&format!(
@@ -82,7 +82,7 @@ impl Store {
     /// goes back to what it was until the server's own `queued` arrives in a pull. The
     /// server retains deferred requests and queues them as allowance becomes available.
     pub fn hand_to_cloud(&mut self, bookmarks: &[String]) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         for key in bookmarks {
             tx.execute(
                 "DELETE FROM jobs WHERE bookmark_id = (SELECT id FROM bookmarks WHERE sync_id = ?1)",
@@ -193,7 +193,9 @@ mod tests {
     fn queued_bookmarks_go_to_the_cloud_only_once_the_server_has_them() {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
-        let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new("https://a.dev/"), 10)
+            .unwrap();
         assert_eq!(store.cloud_jobs(10).unwrap().len(), 0);
 
         store.settle(&applied(&store)).unwrap();
@@ -214,7 +216,9 @@ mod tests {
     fn a_thumbnail_replaced_during_its_upload_is_uploaded_in_turn() {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
-        let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new("https://a.dev/"), 10)
+            .unwrap();
         store.settle(&applied(&store)).unwrap();
         let image = |path: &str| Image {
             path: path.into(),
@@ -242,7 +246,9 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
         let url = "https://a.dev/";
-        let added = store.add_link(WORKSPACE, url, 10).unwrap();
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new(url), 10)
+            .unwrap();
         store.settle(&applied(&store)).unwrap();
         let image = Image {
             path: "/cache/new.png".into(),

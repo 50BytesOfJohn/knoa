@@ -11,7 +11,7 @@ impl Store {
         if usage.is_empty() {
             return Ok(());
         }
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         {
             let mut stmt = tx.prepare_cached(
                 "INSERT INTO ai_usage (day, provider, model, requests, input_tokens, output_tokens,

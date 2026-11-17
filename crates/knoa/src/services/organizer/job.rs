@@ -169,13 +169,20 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
     }
 }
 
-/// Fetches the bookmark's page. `Err` is how the job ends when it can't go on.
+/// Fetches the bookmark's page, or reads the snapshot the browser extension sent of it.
+/// `Err` is how the job ends when it can't go on.
 async fn fetch(job: &Job, work: &Work) -> Result<CachedPage, Outcome> {
     let fetcher = work.fetcher.clone();
     let url = job.bookmark.url.clone();
+    let snapshot = job.snapshot.clone();
     match work
         .network
-        .spawn(async move { fetcher.fetch(&url).await })
+        .spawn(async move {
+            match snapshot {
+                Some(html) => fetcher.fetch_snapshot_cached(&url, html).await,
+                None => fetcher.fetch(&url).await,
+            }
+        })
         .await
     {
         Ok(Ok(fetched)) => Ok(fetched),

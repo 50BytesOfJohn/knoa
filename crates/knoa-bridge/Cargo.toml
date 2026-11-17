@@ -1,0 +1,21 @@
+[package]
+name = "knoa-bridge"
+description = "Native messaging host that lets Knoa's browser extension save links to the library."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+jiff.workspace = true
+knoa-core.workspace = true
+knoa-paths.workspace = true
+knoa-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

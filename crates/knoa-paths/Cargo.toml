@@ -1,0 +1,16 @@
+[package]
+name = "knoa-paths"
+description = "Where Knoa keeps its library, per distribution channel; shared by the app and its browser bridge."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+dirs.workspace = true
+
+[lints]
+workspace = true

@@ -16,7 +16,7 @@ use reqwest::{Client, StatusCode, header};
 use serde::de::DeserializeOwned;
 use url::Url;
 
-use crate::Error;
+use crate::{Error, access};
 
 /// An honest User-Agent works best: Hacker News answers 419 and Cursor 403 to a browser UA.
 const KNOA_UA: &str = concat!(
@@ -104,8 +104,13 @@ impl Http {
         Ok(first)
     }
 
-    /// Fetches a preview image.
+    /// Fetches a preview image. A page names its images itself, so one could point Knoa at
+    /// this machine or the local network; those aren't fetched. Redirects there are
+    /// stopped by the client.
     pub async fn image(&self, url: &Url) -> Result<Response, Error> {
+        if access::is_private(url) {
+            return Err(Error::PrivateAddress);
+        }
         get(&self.knoa, url, Limit::Image).await
     }
 

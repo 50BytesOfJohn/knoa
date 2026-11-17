@@ -4,10 +4,9 @@
 //! production, and only when the build was given its OAuth client id.
 
 use anyhow::anyhow;
+use knoa_paths::Channel;
 use knoa_sync::Config;
 use url::Url;
-
-use crate::channel::Channel;
 
 /// Everything Cloud mode needs to know about where the account lives.
 #[derive(Debug, Clone)]

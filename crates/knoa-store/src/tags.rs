@@ -25,7 +25,7 @@ impl Store {
         if !tag_fits(&tag) {
             return Ok(());
         }
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "DELETE FROM tag_exclusions WHERE bookmark_id = ?1 AND tag = ?2",
             params![bookmark.0, tag],
@@ -42,7 +42,7 @@ impl Store {
 
     /// Removes a tag and remembers it, so the AI doesn't add it back on a re-run.
     pub fn remove_tag(&mut self, bookmark: BookmarkId, tag: &str) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "DELETE FROM bookmark_tags WHERE bookmark_id = ?1 AND tag = ?2",
             params![bookmark.0, tag],

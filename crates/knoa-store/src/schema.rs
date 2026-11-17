@@ -1,6 +1,6 @@
 //! Versioned migrations, tracked in `PRAGMA user_version`.
 
-use rusqlite::Connection;
+use rusqlite::{Connection, TransactionBehavior};
 
 use crate::{Error, Result};
 
@@ -314,6 +314,11 @@ ALTER TABLE folders ADD COLUMN parent_id INTEGER REFERENCES folders (id) ON DELE
 -- Folder counts and places look links up by folder.
 CREATE INDEX bookmark_folders_folder ON bookmark_folders (folder_id);
 ",
+    r"
+-- The page as the user saw it, from the browser extension, read instead of fetching the
+-- page. It lives and dies with the job, and never leaves this Mac.
+ALTER TABLE jobs ADD COLUMN snapshot TEXT;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
@@ -322,21 +327,45 @@ CREATE INDEX bookmark_folders_folder ON bookmark_folders (folder_id);
 /// Refuses a database from a newer Knoa: this version doesn't know its schema and could
 /// lose or corrupt what the newer one stored.
 pub fn migrate(conn: &mut Connection) -> Result<()> {
-    let current: usize = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if current > MIGRATIONS.len() {
-        return Err(Error::NewerDatabase {
-            found: current,
-            supported: MIGRATIONS.len(),
-        });
-    }
+    let current = user_version(conn)?;
+    refuse_newer(current)?;
     conn.pragma_update(None, "foreign_keys", "OFF")?;
     for (index, sql) in MIGRATIONS.iter().enumerate().skip(current) {
-        let tx = conn.transaction()?;
+        // Another process may have applied this step while this one waited for the lock:
+        // the version only counts once read under it.
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if user_version(&tx)? > index {
+            continue;
+        }
         tx.execute_batch(sql)?;
         tx.pragma_update(None, "user_version", index + 1)?;
         tx.commit()?;
     }
     conn.pragma_update(None, "foreign_keys", "ON")?;
+    Ok(())
+}
+
+/// Refuses a schema that isn't exactly this version's, without changing anything.
+pub fn ensure_current(conn: &Connection) -> Result<()> {
+    let found = user_version(conn)?;
+    refuse_newer(found)?;
+    if found < MIGRATIONS.len() {
+        return Err(Error::OlderDatabase);
+    }
+    Ok(())
+}
+
+fn user_version(conn: &Connection) -> Result<usize> {
+    Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
+}
+
+fn refuse_newer(found: usize) -> Result<()> {
+    if found > MIGRATIONS.len() {
+        return Err(Error::NewerDatabase {
+            found,
+            supported: MIGRATIONS.len(),
+        });
+    }
     Ok(())
 }
 

@@ -15,6 +15,8 @@ pub struct Job {
     pub attempts: u32,
     /// Only file the bookmark into folders again, from what it already has.
     pub folders_only: bool,
+    /// The page as the user saw it, from the browser extension: read instead of fetching.
+    pub snapshot: Option<String>,
     identity: BookmarkIdentity,
 }
 
@@ -50,7 +52,7 @@ impl Store {
         condition: &str,
         folders_only: bool,
     ) -> Result<usize> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let ids: Vec<i64> = {
             let mut stmt = tx.prepare(&format!(
                 "SELECT id FROM bookmarks WHERE workspace_id = ?1 AND deleted_at IS NULL AND {condition}"
@@ -67,7 +69,7 @@ impl Store {
 
     /// Queues one bookmark, also when it was organized before (the detail panel's Organize).
     pub fn queue(&mut self, id: BookmarkId) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         enqueue(&tx, id.0, false)?;
         tx.commit()?;
         Ok(())
@@ -75,15 +77,15 @@ impl Store {
 
     /// Takes up to `limit` due jobs and marks their bookmarks as organizing.
     pub fn take_jobs(&mut self, now: i64, limit: usize) -> Result<Vec<Job>> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         drop_settled_backfills(&tx)?;
-        let due: Vec<(i64, u32, bool)> = {
+        let due: Vec<(i64, u32, bool, Option<String>)> = {
             let mut stmt = tx.prepare(
-                "SELECT j.bookmark_id, j.attempts, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+                "SELECT j.bookmark_id, j.attempts, j.folders_only, j.snapshot FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
                  WHERE j.run_after <= ?1 AND b.status = 'queued' ORDER BY b.added_at DESC LIMIT ?2",
             )?;
             stmt.query_map(params![now, limit], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
             })?
             .collect::<rusqlite::Result<_>>()?
         };
@@ -96,7 +98,7 @@ impl Store {
         tx.commit()?;
 
         let mut jobs = Vec::with_capacity(due.len());
-        for (id, attempts, folders_only) in due {
+        for (id, attempts, folders_only, snapshot) in due {
             if let Some(bookmark) = self.bookmark(BookmarkId(id))? {
                 let Some(identity) = self.bookmark_identity(&bookmark)? else {
                     continue;
@@ -105,6 +107,7 @@ impl Store {
                     bookmark,
                     attempts,
                     folders_only,
+                    snapshot,
                     identity,
                 });
             }
@@ -170,7 +173,7 @@ impl Store {
     /// Stores what the page fetch found. Values read from the page fill in kind, fields and
     /// summary until the AI provides its own, and the title of a link added by hand.
     pub fn save_page(&mut self, id: BookmarkId, page: &Page, now: i64) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::ai(&tx)?;
         let image = page.image.as_ref();
         // A page fetched again usually reads the same; the server has that text already.
@@ -220,7 +223,7 @@ impl Store {
         enrichment: &Enrichment,
         now: i64,
     ) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::ai(&tx)?;
         let updated = recorder.on_bookmark(id.0, || {
             Ok(tx.execute(
@@ -256,7 +259,7 @@ impl Store {
     /// Adds the folders a folders-only job picked and takes the bookmark off the queue.
     /// Everything else it has stays as it was.
     pub fn finish_filed(&mut self, id: BookmarkId, folders: &[(FolderId, f32)]) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::ai(&tx)?;
         recorder.on_bookmark(id.0, || {
             tx.execute(
@@ -275,7 +278,7 @@ impl Store {
     /// own metadata is all it gets. It stays "not organized", or organized when the AI
     /// organized it before.
     pub fn finish_page_only(&mut self, id: BookmarkId) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         Recorder::ai(&tx)?.on_bookmark(id.0, || {
             tx.execute(
                 "UPDATE bookmarks SET status = CASE WHEN model IS NULL THEN 'new' ELSE 'organized' END
@@ -291,7 +294,7 @@ impl Store {
 
     /// Puts the job back to run again at `run_after`, counting the attempt.
     pub fn retry_job(&mut self, id: BookmarkId, error: &str, run_after: i64) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "UPDATE jobs SET attempts = attempts + 1, run_after = ?2 WHERE bookmark_id = ?1",
             params![id.0, run_after],
@@ -305,7 +308,7 @@ impl Store {
     /// failures that aren't the bookmark's fault, like a rejected API key: the attempt
     /// isn't counted, so the job keeps its retries for errors of its own.
     pub fn put_back_job(&mut self, id: BookmarkId, error: &str) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         requeue(&tx, id, error)?;
         tx.commit()?;
         Ok(())
@@ -318,7 +321,7 @@ impl Store {
     /// job runs, so the row can't tell.
     pub fn fail_job(&mut self, id: BookmarkId, error: &str, folders_only: bool) -> Result<()> {
         let status = if folders_only { "organized" } else { "failed" };
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         Recorder::ai(&tx)?.on_bookmark(id.0, || {
             tx.execute(
                 "UPDATE bookmarks SET error = ?2, status = ?3 WHERE id = ?1",
@@ -558,7 +561,11 @@ mod tests {
     fn the_ais_title_replaces_only_a_url_standing_in_for_one() {
         let mut store = Store::open_in_memory().unwrap();
         let added = store
-            .add_link(WORKSPACE, "https://w.example/full/a.jpg", 1)
+            .add_link(
+                WORKSPACE,
+                &crate::NewLink::new("https://w.example/full/a.jpg"),
+                1,
+            )
             .unwrap();
         let links = [bookmark("https://b.dev/", "https://b.dev/", 2)];
         store

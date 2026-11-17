@@ -98,6 +98,8 @@ Builds the approved [main screen design](design/main-screen.md).
 - [ ] Optional filter sidebar
 - [ ] User-defined kinds and fields
 - [ ] Firefox and Safari support
+- [ ] Browser extension for Chrome and Firefox: save pages, links and images
+      ([ADR 0019](adr/0019-browser-extension.md))
 - [x] Workspaces: own browsers, instructions, folders and an optional keep guideline
       ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md))
 - [x] Pick the browser profile each workspace opens links in
