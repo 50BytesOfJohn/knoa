@@ -132,10 +132,10 @@ impl Message {
                 Some(("Fix", CardAction::OpenAccountSettings)),
             ),
             Status::ChangesNotSynced => message(
-                "Some changes didn't sync",
+                "Changes didn't sync",
                 Tone::Plain,
                 Mark::CloudAlert,
-                Some(("Details", CardAction::OpenAccountSettings)),
+                Some(("View", CardAction::OpenAccountSettings)),
             ),
             Status::PlanLimit => message(
                 "Plan limit reached",

@@ -119,7 +119,7 @@ One message at a time, most urgent first:
 | AI needs attention | Mascot, worried | AI needs attention | `danger` | Fix |
 | Sync stopped | Cloud with alert, `danger` | Sync stopped | `danger` | Retry |
 | Sync paused (macOS, library linked to another account) | Cloud with alert, `danger` | Sync paused | `danger` | Fix |
-| Some changes didn't sync (the server refused them) | Cloud with alert, `danger` | Some changes didn't sync | `text` | Details |
+| Some changes didn't sync (the server refused them) | Cloud with alert, `danger` | Changes didn't sync | `text` | View |
 | Plan limit reached | Cloud with alert, `danger` | Plan limit reached | `text` | Upgrade |
 | Organizing | Mascot, organizing | Organizing 12 of 47… | `ai_text` | none, progress bar |
 | AI off | Mascot, asleep (grey) | AI is off | `text` | Turn on |
@@ -127,7 +127,7 @@ One message at a time, most urgent first:
 | Anything else | | (no card) | | |
 
 Sync states apply only when signed in. "Retry" retries sync. "Fix" on Sync paused and
-"Details" open Settings at the Account page, which says what happened. "Upgrade" opens
+"View" open Settings at the Account page, which says what happened. "Upgrade" opens
 the upgrade page. "Turn on" opens the AI settings: the AI is off only while no provider
 is set up, so setting one up is how it turns on.
 
@@ -227,8 +227,8 @@ The sidebar is the home screen. The same parts, laid out the iOS way:
 | Add link tooltip | Add link (⌘N) |
 | New folder tooltip | New folder (⇧⌘N) |
 | Settings tooltip | Settings (⌘,) |
-| Status card | AI needs attention · Sync stopped · Sync paused · Some changes didn't sync · Plan limit reached · Organizing 12 of 47… · AI is off · Offline. Changes sync later. |
-| Card actions | Fix · Retry · Details · Upgrade · Turn on |
+| Status card | AI needs attention · Sync stopped · Sync paused · Changes didn't sync · Plan limit reached · Organizing 12 of 47… · AI is off · Offline. Changes sync later. |
+| Card actions | Fix · Retry · View · Upgrade · Turn on |
 | Menu | Synced just now · Offline · 3 changes waiting · Sync stopped · Manage plan… · Upgrade to Pro · Account settings… · Open Knoa on the web · Get Knoa for Mac · Sign out |
 | Signed out | This Mac (footer) · Sign in… · Finish in browser · Cancel |
 
