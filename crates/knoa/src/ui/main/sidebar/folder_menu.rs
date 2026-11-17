@@ -4,7 +4,8 @@ use gpui::{App, Context, SharedString, WeakEntity, Window};
 use gpui_component::menu::{PopupMenu, PopupMenuItem};
 use knoa_core::{FolderId, FolderTree};
 
-use crate::ui::{components::icon_asset, main::MainView};
+use super::{SidebarEvent, SidebarView};
+use crate::ui::components::icon_asset;
 
 /// Where a folder can move, read once when its menu opens.
 struct MoveTargets {
@@ -36,7 +37,7 @@ impl MoveTargets {
 
 pub(super) fn folder_menu(
     menu: PopupMenu,
-    view: &WeakEntity<MainView>,
+    view: &WeakEntity<SidebarView>,
     id: FolderId,
     window: &mut Window,
     cx: &mut Context<'_, PopupMenu>,
@@ -50,43 +51,33 @@ pub(super) fn folder_menu(
     let can_nest = tree.check_new_child(Some(id)).is_ok();
     let targets = MoveTargets::of(&tree, id);
     let menu = if can_nest {
-        menu.item(item(
-            view,
-            "New subfolder",
-            "folder-plus",
-            move |this, w, cx| {
-                this.new_folder(Some(id), w, cx);
-            },
-        ))
+        menu.item(item(view, "New subfolder", "folder-plus", move |_, cx| {
+            cx.emit(SidebarEvent::NewFolder(Some(id)));
+        }))
     } else {
         menu
     };
-    let menu = menu.item(item(
-        view,
-        "Edit folder…",
-        "pencil",
-        move |this, w, cx| {
-            this.edit_folder(Some(id), w, cx);
-        },
-    ));
+    let menu = menu.item(item(view, "Edit folder…", "pencil", move |_, cx| {
+        cx.emit(SidebarEvent::EditFolder(id));
+    }));
     let menu = move_submenu(menu, view, id, targets, window, cx);
-    menu.item(item(view, "Delete…", "trash", move |this, w, cx| {
-        this.confirm_delete_folder(id, w, cx);
+    menu.item(item(view, "Delete…", "trash", move |_, cx| {
+        cx.emit(SidebarEvent::DeleteFolder(id));
     }))
     .separator()
-    .item(item(view, "New folder", "plus", |this, w, cx| {
-        this.new_folder(None, w, cx);
+    .item(item(view, "New folder", "plus", |_, cx| {
+        cx.emit(SidebarEvent::NewFolder(None));
     }))
 }
 
-fn read_tree(view: &WeakEntity<MainView>, cx: &App) -> Option<FolderTree> {
+fn read_tree(view: &WeakEntity<SidebarView>, cx: &App) -> Option<FolderTree> {
     let view = view.upgrade()?;
     Some(view.read(cx).library.read(cx).folder_tree().clone())
 }
 
 fn move_submenu(
     menu: PopupMenu,
-    view: &WeakEntity<MainView>,
+    view: &WeakEntity<SidebarView>,
     id: FolderId,
     targets: MoveTargets,
     window: &mut Window,
@@ -107,7 +98,7 @@ fn move_submenu(
         cx,
         move |menu, _, _| {
             let menu = if targets.top_level {
-                let top = item(&view, "Top level", "folder-up", move |this, _, cx| {
+                let top = item(&view, "Top level", "folder-up", move |this, cx| {
                     this.move_folder(id, None, cx);
                 });
                 let menu = menu.item(top);
@@ -121,7 +112,7 @@ fn move_submenu(
             };
             targets.parents.iter().fold(menu, |menu, (parent, path)| {
                 let parent = *parent;
-                menu.item(item(&view, path.clone(), "folder", move |this, _, cx| {
+                menu.item(item(&view, path.clone(), "folder", move |this, cx| {
                     this.move_folder(id, Some(parent), cx);
                 }))
             })
@@ -129,17 +120,17 @@ fn move_submenu(
     )
 }
 
-/// A row that runs `act` on the main view.
+/// A row that runs `act` on the sidebar.
 fn item(
-    view: &WeakEntity<MainView>,
+    view: &WeakEntity<SidebarView>,
     label: impl Into<SharedString>,
     icon: &str,
-    act: impl Fn(&mut MainView, &mut Window, &mut Context<'_, MainView>) + 'static,
+    act: impl Fn(&mut SidebarView, &mut Context<'_, SidebarView>) + 'static,
 ) -> PopupMenuItem {
     let view = view.clone();
     PopupMenuItem::new(label)
         .icon(icon_asset(icon))
-        .on_click(move |_, window, cx| {
-            let _ = view.update(cx, |this, cx| act(this, window, cx));
+        .on_click(move |_, _, cx| {
+            let _ = view.update(cx, |this, cx| act(this, cx));
         })
 }

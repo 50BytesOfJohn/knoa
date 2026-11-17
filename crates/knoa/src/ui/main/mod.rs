@@ -17,6 +17,7 @@ mod navigation;
 mod opening;
 mod overlay;
 mod picture;
+mod screen;
 mod search;
 mod settings;
 mod sidebar;
@@ -28,15 +29,15 @@ mod workspaces;
 use std::time::Instant;
 
 use gpui::{
-    App, AppContext as _, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
-    IntoElement, KeyDownEvent, ParentElement as _, Render, ScrollHandle, Styled as _, Subscription,
-    Task, Window, div, prelude::FluentBuilder as _,
+    App, AppContext as _, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, ScrollHandle, Styled as _, Subscription, Task, Window, div,
+    prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{BookmarkId, FolderId, Place, WorkspaceId};
+use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
-    services::{cloud::Cloud, organizer::Organizer, thumbnails::Thumbnails},
+    services::thumbnails::Thumbnails,
     state::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
@@ -52,12 +53,13 @@ use keys::{
 };
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
+pub use screen::MainScreen;
 pub use sidebar::traffic_light_position;
-use sidebar::{Outline, SidebarDrop};
+use sidebar::{SidebarEvent, SidebarView};
 
 pub struct MainView {
     library: Entity<Library>,
-    organizer: Entity<Organizer>,
+    sidebar: Entity<SidebarView>,
     search: Entity<InputState>,
     cards_focus: FocusHandle,
     /// Held by the image viewer while it is open, so its keys replace the grid's.
@@ -71,9 +73,6 @@ pub struct MainView {
     /// The bookmark whose link was just copied, until the task clears the confirmation.
     copied: Option<(BookmarkId, Task<()>)>,
     overlay: Option<Overlay>,
-    /// Which sidebar parents are collapsed, and the folder rows that leaves.
-    outline: Outline,
-    sidebar_drop: SidebarDrop,
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
     layout: LayoutCache,
@@ -91,7 +90,7 @@ impl MainView {
     ) -> MainView {
         let search =
             cx.new(|cx| InputState::new(window, cx).placeholder("Just start typing to search"));
-        let organizer = Organizer::entity(cx);
+        let sidebar = cx.new(|cx| SidebarView::new(library.clone(), cx));
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
@@ -105,16 +104,15 @@ impl MainView {
             cx.subscribe(&library, |this, _, _: &LibraryChanged, cx| {
                 this.on_library_changed(cx);
             }),
-            cx.observe(&organizer, |_, _, cx| cx.notify()),
+            cx.subscribe_in(&sidebar, window, Self::on_sidebar_event),
             cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
-            cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
         ];
         let cards_focus = cx.focus_handle();
         cards_focus.focus(window, cx);
         MainView {
             library,
-            organizer,
+            sidebar,
             search,
             cards_focus,
             viewer_focus: cx.focus_handle(),
@@ -125,8 +123,6 @@ impl MainView {
             tag_edits: None,
             copied: None,
             overlay: None,
-            outline: Outline::load(cx),
-            sidebar_drop: SidebarDrop::default(),
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
             decoded: DecodedImages::default(),
@@ -173,9 +169,8 @@ impl MainView {
     pub fn set_place(&mut self, place: Place, window: &mut Window, cx: &mut Context<'_, MainView>) {
         self.confirm_empty_trash = false;
         if let Place::Folder(id) = place {
-            let path = self.library.read(cx).folder_tree().path(id);
-            let parents: Vec<FolderId> = path.iter().rev().skip(1).map(|f| f.id).collect();
-            self.outline.reveal(&parents, cx);
+            self.sidebar
+                .update(cx, |sidebar, cx| sidebar.reveal(id, cx));
         }
         self.library
             .update(cx, |library, cx| library.set_place(place, cx));
@@ -206,57 +201,6 @@ impl MainView {
         self.close_overlay(window, cx);
     }
 
-    fn focus_search(
-        &mut self,
-        _: &FocusSearch,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        self.close_viewer_first(window, cx);
-        self.search.update(cx, |input, cx| input.focus(window, cx));
-    }
-
-    /// Cmd-I: the detail panel for the selection, from the grid or the viewer.
-    fn show_details(&mut self, _: &ShowDetails, window: &mut Window, cx: &mut Context<'_, Self>) {
-        self.close_viewer_first(window, cx);
-        if let Some(id) = self.selected {
-            self.select(id, cx);
-        }
-    }
-
-    /// Typing anywhere searches: a printable key sends focus to the search field.
-    fn type_to_search(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        let keys = &event.keystroke;
-        if keys.modifiers.platform || keys.modifiers.control || self.overlay.is_some() {
-            return;
-        }
-        let Some(text) = keys
-            .key_char
-            .as_ref()
-            .filter(|c| c.chars().all(|ch| !ch.is_control()))
-        else {
-            return;
-        };
-        let typing_tag = self
-            .tag_edits
-            .as_ref()
-            .is_some_and(|edits| edits.is_typing(window, cx));
-        if typing_tag || self.search.read(cx).focus_handle(cx).is_focused(window) {
-            return;
-        }
-        let text = text.clone();
-        self.search.update(cx, |input, cx| {
-            input.focus(window, cx);
-            input.insert(text, window, cx);
-        });
-        cx.stop_propagation();
-    }
-
     fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<'_, MainView>) {
         if self.overlay.is_some() {
             self.close_overlay(window, cx);
@@ -280,27 +224,6 @@ impl MainView {
         self.library.read(cx).bookmark(id).map(|b| b.url.clone())
     }
 
-    /// ⌘1 to ⌘9: the folder the sidebar shows that key beside.
-    fn select_folder(
-        &mut self,
-        action: &SelectFolder,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        if self.overlay.is_some() {
-            return;
-        }
-        let library = self.library.read(cx);
-        let generation = library.folders_generation();
-        let Some(id) = self
-            .outline
-            .nth(library.folder_tree(), generation, action.0)
-        else {
-            return;
-        };
-        self.set_place(Place::Folder(id), window, cx);
-    }
-
     fn toggle_up_next(&mut self, _: &ToggleUpNext, _: &mut Window, cx: &mut Context<'_, MainView>) {
         if let Some(id) = self.selected {
             self.set_up_next(id, cx);
@@ -316,20 +239,12 @@ impl Render for MainView {
         let overlay = self.render_overlay(window, cx);
         div()
             .id("main")
-            .key_context("Main")
             .size_full()
             .relative()
             .bg(theme.canvas)
             .text_color(theme.text)
-            .on_key_down(cx.listener(Self::type_to_search))
-            .on_action(cx.listener(Self::open_settings))
-            .on_action(cx.listener(Self::focus_search))
-            .on_action(cx.listener(Self::new_link))
-            .on_action(cx.listener(Self::show_details))
-            .on_action(cx.listener(Self::select_folder))
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
-            .child(self.render_sidebar(window, cx))
             .when_some(show_detail.then_some(()), |el, ()| {
                 el.child(self.render_detail(window, cx))
             })

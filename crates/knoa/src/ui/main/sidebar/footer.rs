@@ -6,7 +6,9 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
-use super::{BUTTON_ICON, BUTTON_PADDING, CONTENT_INSET, TITLEBAR_BUTTON};
+use super::{
+    BUTTON_ICON, BUTTON_PADDING, CONTENT_INSET, SidebarEvent, SidebarView, TITLEBAR_BUTTON,
+};
 use crate::{
     services::{
         cloud::{Cloud, Phase, SyncStatus},
@@ -14,18 +16,18 @@ use crate::{
     },
     ui::{
         components::{icon, tip},
-        main::{MainView, OpenSettings, settings::Page},
+        main::settings::Page,
         mascot::{Mood, mascot},
         theme::{ROW_RADIUS, Theme},
         wordmark::wordmark_letters,
     },
 };
 
-impl MainView {
+impl SidebarView {
     pub(super) fn footer(
         &self,
         organizing: usize,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) -> impl IntoElement {
         let sync_mark = self.sync_mark(cx);
         let theme = Theme::get(cx);
@@ -79,16 +81,16 @@ impl MainView {
                     .cursor_pointer()
                     .hover(|s| s.bg(theme.hover))
                     .child(icon("settings", BUTTON_ICON, theme.muted))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_settings(&OpenSettings, window, cx);
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(SidebarEvent::OpenSettings(Page::General));
                     })),
             )
     }
 }
 
-impl MainView {
+impl SidebarView {
     /// A quiet cloud while all is well, so a sync problem is noticed without a banner.
-    fn sync_mark(&self, cx: &mut Context<'_, MainView>) -> Option<gpui::AnyElement> {
+    fn sync_mark(&self, cx: &mut Context<'_, SidebarView>) -> Option<gpui::AnyElement> {
         let theme = Theme::get(cx);
         let cloud = Cloud::entity(cx);
         let cloud = cloud.read(cx);
@@ -121,8 +123,8 @@ impl MainView {
                 .hover(|s| s.bg(theme.hover))
                 .child(icon(name, BUTTON_ICON, color))
                 .tooltip(tip(tooltip, None, theme))
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.show_settings(Page::Account, window, cx);
+                .on_click(cx.listener(|_, _, _, cx| {
+                    cx.emit(SidebarEvent::OpenSettings(Page::Account));
                 }))
                 .into_any_element(),
         )

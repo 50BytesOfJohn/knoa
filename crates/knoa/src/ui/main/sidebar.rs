@@ -1,37 +1,36 @@
 //! The floating sidebar: the titlebar with the workspace and add-link buttons, places,
 //! folders and the footer with the wordmark, the AI indicator and settings.
+//!
+//! It is its own view so that its hovers, drags and animations repaint only itself. It
+//! asks the main view for anything outside it with a [`SidebarEvent`].
 
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    Pixels, Point, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px,
+    Context, Entity, EventEmitter, FontWeight, InteractiveElement as _, IntoElement,
+    ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Window, div, px,
 };
-use gpui_component::tooltip::Tooltip;
-use knoa_core::{Ink, Place};
+use knoa_core::{FolderId, Place};
 
+mod drag_preview;
 mod drop;
 mod folder_menu;
 mod folders;
 mod footer;
 mod outline;
+mod places;
+mod titlebar;
 
-pub(super) use drop::{DragPreview, DraggedBookmark, SidebarDrop};
+pub(super) use drag_preview::DragPreview;
+pub(super) use drop::DraggedBookmark;
 
-pub(super) use outline::Outline;
-
-use super::{MainView, NewLink, Overlay};
-use crate::ui::{
-    components::{icon, workspace_mark},
-    mascot::ai_mark,
-    theme::{MARGIN, PANEL_RADIUS, ROW_HEIGHT, ROW_RADIUS, SIDEBAR_WIDTH, Theme},
+use super::settings::Page;
+use crate::{
+    services::{cloud::Cloud, organizer::Organizer},
+    state::library::Library,
+    ui::theme::{MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
 };
-
-/// What leads a place's row: a Lucide icon, or the AI's dot for places about the AI.
-#[derive(Clone, Copy)]
-enum PlaceMark {
-    Icon(&'static str),
-    Ai,
-}
+use drop::SidebarDrop;
+use outline::Outline;
 
 /// The sidebar's top row, shared with the traffic lights.
 pub(super) const TITLEBAR_HEIGHT: Pixels = px(44.);
@@ -79,31 +78,97 @@ pub(super) fn workspace_menu_left() -> Pixels {
     button_left - px(16.)
 }
 
-impl MainView {
-    pub(super) fn render_sidebar(
+/// What the sidebar asks of the main view, which owns the place shown and the overlays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SidebarEvent {
+    Show(Place),
+    NewLink,
+    OpenWorkspaces,
+    NewFolder(Option<FolderId>),
+    EditFolder(FolderId),
+    DeleteFolder(FolderId),
+    OpenSettings(Page),
+}
+
+pub(super) struct SidebarView {
+    library: Entity<Library>,
+    organizer: Entity<Organizer>,
+    /// Which parents are collapsed, and the folder rows that leaves.
+    outline: Outline,
+    drop: SidebarDrop,
+    /// The workspace switcher is open, so its button stays lit.
+    workspaces_open: bool,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl EventEmitter<SidebarEvent> for SidebarView {}
+
+impl SidebarView {
+    pub(super) fn new(library: Entity<Library>, cx: &mut Context<'_, SidebarView>) -> SidebarView {
+        let organizer = Organizer::entity(cx);
+        let subscriptions = vec![
+            cx.observe(&library, |_, _, cx| cx.notify()),
+            cx.observe(&organizer, |_, _, cx| cx.notify()),
+            cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify()),
+        ];
+        SidebarView {
+            library,
+            organizer,
+            outline: Outline::load(cx),
+            drop: SidebarDrop::default(),
+            workspaces_open: false,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    pub(super) fn set_workspaces_open(&mut self, open: bool, cx: &mut Context<'_, SidebarView>) {
+        if self.workspaces_open != open {
+            self.workspaces_open = open;
+            cx.notify();
+        }
+    }
+
+    /// The `n`th visible folder, counting from 0, as ⌘1 to ⌘9 pick them.
+    pub(super) fn nth_folder(
         &mut self,
-        _window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) -> impl IntoElement {
+        n: usize,
+        cx: &mut Context<'_, SidebarView>,
+    ) -> Option<FolderId> {
+        let library = self.library.read(cx);
+        self.outline
+            .nth(library.folder_tree(), library.folders_generation(), n)
+    }
+
+    /// Opens the folder's parents, so its row is visible.
+    pub(super) fn reveal(&mut self, id: FolderId, cx: &mut Context<'_, SidebarView>) {
+        let path = self.library.read(cx).folder_tree().path(id);
+        let parents: Vec<FolderId> = path.iter().rev().skip(1).map(|f| f.id).collect();
+        if self.outline.reveal(&parents, cx) {
+            cx.notify();
+        }
+    }
+
+    /// Shows the folder's children.
+    pub(super) fn expand(&mut self, id: FolderId, cx: &mut Context<'_, SidebarView>) {
+        if self.outline.expand(id, cx) {
+            cx.notify();
+        }
+    }
+}
+
+impl Render for SidebarView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let library = self.library.read(cx);
         let counts = library.counts();
         let current = library.place();
-        let (name, color) = library
+        let workspace = library
             .workspace()
             .map(|w| (w.name.clone(), w.color))
             .unwrap_or_default();
 
-        let list = self.places(counts, current, cx);
-
-        let folder_list = self.folder_list(current, cx);
-
         div()
-            .absolute()
-            .top(MARGIN)
-            .left(MARGIN)
-            .bottom(MARGIN)
-            .w(SIDEBAR_WIDTH)
+            .size_full()
             .flex()
             .flex_col()
             .rounded(PANEL_RADIUS)
@@ -111,29 +176,19 @@ impl MainView {
             .border_1()
             .border_color(theme.hairline)
             .shadow_sm()
-            .child(
-                div()
-                    .h(TITLEBAR_HEIGHT)
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_end()
-                    .gap(TITLEBAR_GAP)
-                    .pr(BUTTON_PADDING)
-                    .child(self.workspace_button(&name, color, cx))
-                    .child(self.add_link_button(cx)),
-            )
-            .child(div().mt_2().child(list))
+            .text_color(theme.text)
+            .child(self.titlebar(workspace, cx))
+            .child(div().mt_2().child(self.places(counts, current, cx)))
             .child(
                 div()
                     .id("folders")
                     .mt_6()
                     .flex_1()
                     .overflow_y_scroll()
-                    .track_scroll(&self.sidebar_drop.scroll)
+                    .track_scroll(&self.drop.scroll)
                     .on_scroll(cx.listener(|this, _, _, cx| {
                         if cx.has_active_drag() {
-                            this.sidebar_drop.end();
+                            this.drop.end();
                             cx.notify();
                         }
                     }))
@@ -146,173 +201,8 @@ impl MainView {
                             .text_color(theme.faint)
                             .child("Folders"),
                     )
-                    .child(folder_list),
+                    .child(self.folder_list(current, cx)),
             )
             .child(self.footer(counts.organizing, cx))
     }
-
-    fn places(
-        &self,
-        counts: knoa_store::Counts,
-        current: Place,
-        cx: &mut Context<'_, MainView>,
-    ) -> gpui::Div {
-        let places = [
-            (
-                Place::Everything,
-                "Everything",
-                PlaceMark::Icon("layers"),
-                counts.everything,
-            ),
-            (
-                Place::Gallery,
-                "Gallery",
-                PlaceMark::Icon("images"),
-                counts.gallery,
-            ),
-            (
-                Place::UpNext,
-                "Up next",
-                PlaceMark::Icon("bookmark"),
-                counts.up_next,
-            ),
-            (
-                Place::Unsorted,
-                "Unsorted",
-                PlaceMark::Icon("inbox"),
-                counts.unsorted,
-            ),
-            (
-                Place::NotOrganized,
-                "Not organized",
-                PlaceMark::Ai,
-                counts.not_organized,
-            ),
-            (
-                Place::SetAside,
-                "Set aside",
-                PlaceMark::Icon("archive"),
-                counts.set_aside,
-            ),
-            (
-                Place::Trash,
-                "Trash",
-                PlaceMark::Icon("trash"),
-                counts.trash,
-            ),
-        ];
-        let mut list = div().flex().flex_col().gap_0p5().px(ROW_INSET);
-        for (place, label, mark, count) in places {
-            // The Gallery, Set aside and Trash only show while they hold something.
-            let hideable = matches!(place, Place::Gallery | Place::SetAside | Place::Trash);
-            if hideable && count == 0 && current != place {
-                continue;
-            }
-            list = list.child(self.place_row(place, current, label, mark, count, cx));
-        }
-        list
-    }
-
-    /// Only the workspace's mark: most people keep one workspace, so its name would say
-    /// little. The name shows on hover and in the switcher.
-    fn workspace_button(
-        &self,
-        name: &str,
-        color: Ink,
-        cx: &mut Context<'_, MainView>,
-    ) -> impl IntoElement {
-        let theme = Theme::get(cx);
-        let open = matches!(self.overlay, Some(Overlay::Workspaces));
-        let tooltip = SharedString::from(name.to_owned());
-        let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
-        div()
-            .id("workspace-button")
-            .w(WORKSPACE_BUTTON_WIDTH)
-            .h(TITLEBAR_BUTTON)
-            .pl_1()
-            .flex()
-            .items_center()
-            .gap(px(3.))
-            .rounded(ROW_RADIUS)
-            .cursor_pointer()
-            .when(open, |s| s.bg(theme.hover))
-            .hover(|s| s.bg(theme.hover))
-            .tooltip(move |window, cx| {
-                Tooltip::new(tooltip.clone())
-                    .bg(bg)
-                    .text_color(fg)
-                    .border_color(border)
-                    .build(window, cx)
-            })
-            .on_click(cx.listener(|this, _, _, cx| this.open_overlay(Overlay::Workspaces, cx)))
-            .child(workspace_mark(name, color, WORKSPACE_MARK, cx))
-            .child(icon("chevron-down", px(10.), theme.faint))
-    }
-
-    fn add_link_button(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
-        let theme = Theme::get(cx);
-        div()
-            .id("add-link")
-            .size(TITLEBAR_BUTTON)
-            .rounded(ROW_RADIUS)
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .hover(|s| s.bg(theme.hover))
-            .child(icon("plus", BUTTON_ICON, theme.muted))
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.new_link(&NewLink, window, cx);
-            }))
-    }
-
-    fn place_row(
-        &self,
-        place: Place,
-        current: Place,
-        label: &str,
-        mark: PlaceMark,
-        count: usize,
-        cx: &mut Context<'_, MainView>,
-    ) -> AnyElement {
-        let theme = Theme::get(cx);
-        let selected = place == current;
-        let icon_color = if selected { theme.accent } else { theme.muted };
-        let badge = match place {
-            // Not organized only shows a count while the AI has work waiting.
-            Place::NotOrganized if count == 0 => None,
-            _ => Some(count),
-        };
-        let id = SharedString::from(format!("place-{label}"));
-        row_frame(selected, theme)
-            .id(id)
-            .px(ROW_PADDING)
-            .hover(|s| s.bg(theme.hover))
-            .child(match mark {
-                PlaceMark::Icon(name) => icon(name, px(15.), icon_color).into_any_element(),
-                PlaceMark::Ai => ai_mark(px(15.), theme.ai).into_any_element(),
-            })
-            .child(div().flex_1().truncate().child(label.to_owned()))
-            .when_some(badge.filter(|n| *n > 0), |s, n| {
-                s.child(div().text_xs().text_color(theme.muted).child(n.to_string()))
-            })
-            .on_click(cx.listener(move |this, _, window, cx| this.set_place(place, window, cx)))
-            .into_any_element()
-    }
-}
-
-/// A sidebar row's shape, shared by places and folders: height, rounding, type and the
-/// selected fill.
-fn row_frame(selected: bool, theme: &Theme) -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .h(ROW_HEIGHT)
-        .rounded(ROW_RADIUS)
-        .text_sm()
-        .cursor_pointer()
-        .when(selected, |s| {
-            s.bg(theme.hover).font_weight(FontWeight::MEDIUM)
-        })
 }

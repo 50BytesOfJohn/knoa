@@ -31,7 +31,7 @@ pub(super) enum Disclosure {
 }
 
 /// The collapsed parents, kept in settings on this Mac, and the rows they leave visible.
-pub(in crate::ui::main) struct Outline {
+pub(super) struct Outline {
     collapsed: BTreeSet<FolderId>,
     /// Goes up whenever `collapsed` changes.
     generation: u64,
@@ -86,22 +86,27 @@ impl Outline {
         self.changed(cx);
     }
 
-    /// Shows the folder's children.
-    pub fn expand(&mut self, id: FolderId, cx: &mut App) {
-        if self.collapsed.remove(&id) {
+    /// Shows the folder's children. Returns whether it was collapsed.
+    pub fn expand(&mut self, id: FolderId, cx: &mut App) -> bool {
+        let collapsed = self.collapsed.remove(&id);
+        if collapsed {
             self.changed(cx);
         }
+        collapsed
     }
 
-    /// Opens each of `parents`, so whatever is under them is visible.
-    pub fn reveal(&mut self, parents: &[FolderId], cx: &mut App) {
+    /// Opens each of `parents`, so whatever is under them is visible. Returns whether any
+    /// was collapsed.
+    pub fn reveal(&mut self, parents: &[FolderId], cx: &mut App) -> bool {
         let before = self.collapsed.len();
         for id in parents {
             self.collapsed.remove(id);
         }
-        if self.collapsed.len() != before {
+        let opened = self.collapsed.len() != before;
+        if opened {
             self.changed(cx);
         }
+        opened
     }
 
     fn changed(&mut self, cx: &mut App) {

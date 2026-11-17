@@ -40,13 +40,21 @@ pub enum Overlay {
 
 impl MainView {
     pub fn open_overlay(&mut self, overlay: Overlay, cx: &mut Context<'_, MainView>) {
-        self.overlay = Some(overlay);
-        cx.notify();
+        self.set_overlay(Some(overlay), cx);
     }
 
     pub fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        self.overlay = None;
+        self.set_overlay(None, cx);
         self.cards_focus.focus(window, cx);
+    }
+
+    /// The only way to change the overlay: the sidebar lights the workspace button while
+    /// the switcher is open.
+    pub(super) fn set_overlay(&mut self, overlay: Option<Overlay>, cx: &mut Context<'_, MainView>) {
+        let switcher = matches!(overlay, Some(Overlay::Workspaces));
+        self.overlay = overlay;
+        self.sidebar
+            .update(cx, |sidebar, cx| sidebar.set_workspaces_open(switcher, cx));
         cx.notify();
     }
 

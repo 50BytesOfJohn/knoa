@@ -119,7 +119,7 @@ impl FolderEditor {
         if let Some(parent) = parent {
             let _ = self
                 .main
-                .update(cx, |main, cx| main.outline.expand(parent, cx));
+                .update(cx, |main, cx| main.expand_folder(parent, cx));
         }
         match &self.existing {
             Some(folder) => {

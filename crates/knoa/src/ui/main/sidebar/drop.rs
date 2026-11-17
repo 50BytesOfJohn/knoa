@@ -3,17 +3,12 @@
 
 use std::{rc::Rc, time::Duration};
 
-use gpui::{
-    AppContext as _, Bounds, Context, DragMoveEvent, FontWeight, IntoElement, ParentElement as _,
-    Pixels, Point, Render, ScrollHandle, SharedString, Styled as _, Task, Window, div, px,
-};
-use knoa_core::{BookmarkId, FolderIcon, FolderId, FolderTree};
+use gpui::{Bounds, Context, DragMoveEvent, Pixels, Point, ScrollHandle, SharedString, Task};
+use knoa_core::{BookmarkId, FolderId, FolderTree};
 
-use super::outline::{Disclosure, FolderRow};
-use crate::ui::{
-    components::{Finish, folder_mark, icon},
-    main::MainView,
-    theme::{ROW_HEIGHT, ROW_RADIUS, Theme},
+use super::{
+    SidebarView,
+    outline::{Disclosure, FolderRow},
 };
 
 /// How long a drag rests on a collapsed parent before it opens.
@@ -128,15 +123,15 @@ fn spot_in_row(
         .find(|&spot| fits(spot))
 }
 
-impl MainView {
+impl SidebarView {
     pub(super) fn drag_folder_over_row(
         &mut self,
         row: &FolderRow,
         event: &DragMoveEvent<DraggedFolder>,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) {
         let bounds = event.bounds;
-        let spot = if self.sidebar_drop.contains(bounds, event.event.position) {
+        let spot = if self.drop.contains(bounds, event.event.position) {
             let dragged = event.drag(cx).0.id;
             let tree = self.library.read(cx).folder_tree();
             spot_in_row(
@@ -157,12 +152,9 @@ impl MainView {
         &mut self,
         row: &FolderRow,
         event: &DragMoveEvent<DraggedBookmark>,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) {
-        let spot = if self
-            .sidebar_drop
-            .contains(event.bounds, event.event.position)
-        {
+        let spot = if self.drop.contains(event.bounds, event.event.position) {
             Some(DropSpot::Into(row.id))
         } else {
             self.spot_leaving(row.id)
@@ -173,7 +165,7 @@ impl MainView {
     /// The spot after the pointer left a row: cleared if it was that row's, kept if
     /// another row has already taken it.
     fn spot_leaving(&self, row: FolderId) -> Option<DropSpot> {
-        match self.sidebar_drop.spot {
+        match self.drop.spot {
             Some(DropSpot::Into(id) | DropSpot::Before(id) | DropSpot::After(id)) if id == row => {
                 None
             }
@@ -184,21 +176,18 @@ impl MainView {
     pub(super) fn drag_folder_over_end(
         &mut self,
         event: &DragMoveEvent<DraggedFolder>,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) {
-        let spot = if self
-            .sidebar_drop
-            .contains(event.bounds, event.event.position)
-        {
+        let spot = if self.drop.contains(event.bounds, event.event.position) {
             Some(DropSpot::End)
-        } else if self.sidebar_drop.spot == Some(DropSpot::End) {
+        } else if self.drop.spot == Some(DropSpot::End) {
             None
         } else {
             return;
         };
-        if self.sidebar_drop.spot != spot {
-            self.sidebar_drop.expanding = None;
-            self.sidebar_drop.spot = spot;
+        if self.drop.spot != spot {
+            self.drop.expanding = None;
+            self.drop.spot = spot;
             cx.notify();
         }
     }
@@ -207,13 +196,13 @@ impl MainView {
         &mut self,
         spot: Option<DropSpot>,
         row: &FolderRow,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) {
-        if self.sidebar_drop.spot == spot {
+        if self.drop.spot == spot {
             return;
         }
-        self.sidebar_drop.expanding = None;
-        self.sidebar_drop.spot = spot;
+        self.drop.expanding = None;
+        self.drop.spot = spot;
         if spot == Some(DropSpot::Into(row.id)) && row.disclosure == Disclosure::Collapsed {
             self.expand_after_hover(row.id, cx);
         }
@@ -221,9 +210,9 @@ impl MainView {
     }
 
     /// Opens a collapsed parent the drag has rested on, like Finder's spring-loading.
-    fn expand_after_hover(&mut self, id: FolderId, cx: &mut Context<'_, MainView>) {
+    fn expand_after_hover(&mut self, id: FolderId, cx: &mut Context<'_, SidebarView>) {
         if self
-            .sidebar_drop
+            .drop
             .expanding
             .as_ref()
             .is_some_and(|(at, _)| *at == id)
@@ -233,18 +222,17 @@ impl MainView {
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(HOVER_TO_EXPAND).await;
             let _ = this.update(cx, |this, cx| {
-                this.sidebar_drop.expanding = None;
-                if cx.has_active_drag() && this.sidebar_drop.spot == Some(DropSpot::Into(id)) {
-                    this.outline.expand(id, cx);
-                    cx.notify();
+                this.drop.expanding = None;
+                if cx.has_active_drag() && this.drop.spot == Some(DropSpot::Into(id)) {
+                    this.expand(id, cx);
                 }
             });
         });
-        self.sidebar_drop.expanding = Some((id, task));
+        self.drop.expanding = Some((id, task));
     }
 
-    pub(super) fn drop_folder(&mut self, folder: FolderId, cx: &mut Context<'_, MainView>) {
-        let Some(spot) = self.sidebar_drop.spot.take() else {
+    pub(super) fn drop_folder(&mut self, folder: FolderId, cx: &mut Context<'_, SidebarView>) {
+        let Some(spot) = self.drop.spot.take() else {
             return;
         };
         let tree = self.library.read(cx).folder_tree();
@@ -252,82 +240,22 @@ impl MainView {
             return;
         };
         if let Some(parent) = parent {
-            self.outline.expand(parent, cx);
+            self.expand(parent, cx);
         }
         self.library.update(cx, |library, cx| {
             library.change(cx, move |store| store.place_folder(folder, parent, before));
         });
     }
 
-    pub(super) fn drop_bookmark(&mut self, bookmark: BookmarkId, cx: &mut Context<'_, MainView>) {
-        if let Some(DropSpot::Into(folder)) = self.sidebar_drop.spot.take() {
-            self.set_in_folder(bookmark, folder, true, cx);
+    pub(super) fn drop_bookmark(
+        &mut self,
+        bookmark: BookmarkId,
+        cx: &mut Context<'_, SidebarView>,
+    ) {
+        if let Some(DropSpot::Into(folder)) = self.drop.spot.take() {
+            self.library.update(cx, |library, cx| {
+                library.change(cx, move |store| store.add_to_folder(bookmark, folder));
+            });
         }
-    }
-}
-
-/// What follows the pointer during a drag: the folder's mark and name, or the bookmark's
-/// title, on a small chip.
-pub(in crate::ui::main) struct DragPreview {
-    label: SharedString,
-    mark: PreviewMark,
-}
-
-enum PreviewMark {
-    Folder(Option<FolderIcon>, knoa_core::FolderColor),
-    Bookmark,
-}
-
-impl DragPreview {
-    pub(super) fn folder(row: &FolderRow) -> DragPreview {
-        DragPreview {
-            label: row.name.clone(),
-            mark: PreviewMark::Folder(row.icon.clone(), row.color),
-        }
-    }
-
-    pub fn bookmark(dragged: &DraggedBookmark) -> DragPreview {
-        DragPreview {
-            label: dragged.title.clone(),
-            mark: PreviewMark::Bookmark,
-        }
-    }
-
-    /// The preview as an entity, which is what GPUI's `on_drag` asks for.
-    pub fn build(self, cx: &mut gpui::App) -> gpui::Entity<DragPreview> {
-        cx.new(|_| self)
-    }
-}
-
-impl Render for DragPreview {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        let theme = Theme::get(cx);
-        let mark = match &self.mark {
-            PreviewMark::Folder(glyph, color) => folder_mark(
-                glyph.as_ref(),
-                theme.folder_color(*color),
-                px(15.),
-                Finish::Line,
-            )
-            .into_any_element(),
-            PreviewMark::Bookmark => icon("link", px(14.), theme.muted).into_any_element(),
-        };
-        div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .h(ROW_HEIGHT)
-            .max_w(px(240.))
-            .px_2p5()
-            .rounded(ROW_RADIUS)
-            .bg(theme.panel)
-            .border_1()
-            .border_color(theme.hairline)
-            .shadow_md()
-            .text_sm()
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(theme.text)
-            .child(mark)
-            .child(div().truncate().child(self.label.clone()))
     }
 }

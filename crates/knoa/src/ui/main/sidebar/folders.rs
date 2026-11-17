@@ -11,15 +11,15 @@ use gpui_component::menu::ContextMenuExt as _;
 use knoa_core::{FolderId, Place};
 
 use super::{
-    ROW_INSET, ROW_PADDING,
-    drop::{DragPreview, DraggedBookmark, DraggedFolder, DropSpot},
+    ROW_INSET, ROW_PADDING, SidebarEvent, SidebarView,
+    drag_preview::DragPreview,
+    drop::{DraggedBookmark, DraggedFolder, DropSpot},
     folder_menu::folder_menu,
     outline::{Disclosure, FolderRow},
-    row_frame,
+    places::row_frame,
 };
 use crate::ui::{
     components::{Finish, folder_mark, icon},
-    main::MainView,
     theme::{ROW_HEIGHT, ROW_RADIUS, Theme},
 };
 
@@ -36,22 +36,22 @@ const DROP_LINE: Pixels = px(2.);
 const END_DROP_ROOM: Pixels = px(28.);
 const SHORTCUTS: [&str; 9] = ["⌘1", "⌘2", "⌘3", "⌘4", "⌘5", "⌘6", "⌘7", "⌘8", "⌘9"];
 
-impl MainView {
+impl SidebarView {
     pub(super) fn folder_list(
         &mut self,
         current: Place,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) -> gpui::Div {
         let dragging = cx.has_active_drag();
         if !dragging {
-            self.sidebar_drop.end();
+            self.drop.end();
         }
         let library = self.library.read(cx);
         let rows = self
             .outline
             .rows(library.folder_tree(), library.folders_generation());
         let nested = self.outline.is_nested();
-        let spot = self.sidebar_drop.spot();
+        let spot = self.drop.spot();
         let mut list = div().flex().flex_col().px(ROW_INSET);
         for (index, row) in rows.iter().enumerate() {
             let selected = current == Place::Folder(row.id);
@@ -68,7 +68,7 @@ impl MainView {
         shortcut: Option<&'static str>,
         nested: bool,
         spot: Option<DropSpot>,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) -> impl IntoElement {
         let accent = Theme::get(cx).accent;
         let id = row.id;
@@ -88,8 +88,8 @@ impl MainView {
             .when_some(target, |s, spot| {
                 s.child(drop_line(spot, ROW_PADDING + indent, accent))
             })
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.set_place(Place::Folder(id), window, cx);
+            .on_click(cx.listener(move |_, _, _, cx| {
+                cx.emit(SidebarEvent::Show(Place::Folder(id)));
             }))
             .on_drag(DraggedFolder(Rc::clone(row)), |dragged, _, _, cx| {
                 DragPreview::folder(&dragged.0).build(cx)
@@ -125,7 +125,7 @@ impl MainView {
         nested: bool,
         target: Option<DropSpot>,
         indent: Pixels,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
         let color = theme.folder_color(row.color);
@@ -168,7 +168,7 @@ impl MainView {
 
     /// The chevron that opens and closes a parent, or the empty space that keeps a
     /// leaf's count in line with its parent's.
-    fn disclosure(&self, row: &FolderRow, cx: &mut Context<'_, MainView>) -> impl IntoElement {
+    fn disclosure(&self, row: &FolderRow, cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let id = row.id;
         let chevron = match row.disclosure {
@@ -196,7 +196,11 @@ impl MainView {
 
     /// "New folder", with room under it that drops a dragged folder at the end of the
     /// top level.
-    fn new_folder_row(&self, receiving: bool, cx: &mut Context<'_, MainView>) -> impl IntoElement {
+    fn new_folder_row(
+        &self,
+        receiving: bool,
+        cx: &mut Context<'_, SidebarView>,
+    ) -> impl IntoElement {
         let theme = Theme::get(cx);
         div()
             .id("folders-end")
@@ -228,30 +232,26 @@ impl MainView {
                     .hover(|s| s.bg(theme.hover))
                     .child(icon("plus", px(15.), theme.muted))
                     .child("New folder")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.new_folder(None, window, cx);
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(SidebarEvent::NewFolder(None));
                     })),
             )
     }
 
-    pub(in crate::ui::main) fn toggle_folder(
-        &mut self,
-        id: FolderId,
-        cx: &mut Context<'_, MainView>,
-    ) {
+    fn toggle_folder(&mut self, id: FolderId, cx: &mut Context<'_, SidebarView>) {
         self.outline.toggle(id, cx);
         cx.notify();
     }
 
     /// Moves a folder last under `parent`, which opens to show it.
-    pub(in crate::ui::main) fn move_folder(
+    pub(super) fn move_folder(
         &mut self,
         id: FolderId,
         parent: Option<FolderId>,
-        cx: &mut Context<'_, MainView>,
+        cx: &mut Context<'_, SidebarView>,
     ) {
         if let Some(parent) = parent {
-            self.outline.expand(parent, cx);
+            self.expand(parent, cx);
         }
         self.library.update(cx, |library, cx| {
             library.change(cx, move |store| store.move_folder(id, parent));
