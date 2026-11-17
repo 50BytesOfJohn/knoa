@@ -1,87 +1,117 @@
-//! The sidebar's top row: room for the traffic lights, then the workspace and add-link
-//! buttons.
+//! The sidebar's top row: room for the traffic lights, the workspace button and the
+//! add-link button.
 
 use gpui::{
-    Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
+    SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
+    px,
 };
-use gpui_component::tooltip::Tooltip;
 use knoa_core::Ink;
 
 use super::{
-    BUTTON_ICON, BUTTON_PADDING, SidebarEvent, SidebarView, TITLEBAR_BUTTON, TITLEBAR_GAP,
-    TITLEBAR_HEIGHT, WORKSPACE_BUTTON_WIDTH, WORKSPACE_MARK,
+    LIGHTS_GAP, LIGHTS_INSET, LIGHTS_WIDTH, SidebarEvent, SidebarView, TITLEBAR_HEIGHT,
+    WORKSPACE_PADDING,
 };
-use crate::ui::{
-    components::{icon, workspace_mark},
-    theme::{ROW_RADIUS, Theme},
+use crate::{
+    assets::line_icon,
+    ui::{
+        components::{svg_icon, tip, workspace_mark},
+        main::NewLink,
+        theme::{ROW_RADIUS, Theme},
+    },
 };
 
+/// The workspace button and the titlebar's icon buttons.
+pub(super) const BUTTON: Pixels = px(28.);
+const BUTTON_ICON: Pixels = px(16.);
+const WORKSPACE_MARK: Pixels = px(18.);
+
 impl SidebarView {
-    pub(super) fn titlebar(
-        &self,
-        (name, color): (String, Ink),
-        cx: &mut Context<'_, SidebarView>,
-    ) -> impl IntoElement {
+    pub(super) fn titlebar(&self, cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
+        let (name, color) = self
+            .library
+            .read(cx)
+            .workspace()
+            .map(|w| (SharedString::from(w.name.clone()), w.color))
+            .unwrap_or_default();
         div()
             .h(TITLEBAR_HEIGHT)
             .flex_none()
             .flex()
             .items_center()
-            .justify_end()
-            .gap(TITLEBAR_GAP)
-            .pr(BUTTON_PADDING)
-            .child(self.workspace_button(&name, color, cx))
+            .gap(px(2.))
+            .pl(LIGHTS_INSET + LIGHTS_WIDTH + LIGHTS_GAP)
+            .pr(px(8.))
+            .child(self.workspace_button(name, color, cx))
+            .child(div().flex_1())
             .child(add_link_button(cx))
     }
 
-    /// Only the workspace's mark: most people keep one workspace, so its name would say
-    /// little. The name shows on hover and in the switcher.
     fn workspace_button(
         &self,
-        name: &str,
+        name: SharedString,
         color: Ink,
         cx: &mut Context<'_, SidebarView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
-        let tooltip = SharedString::from(name.to_owned());
-        let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
+        let mark = workspace_mark(&name, color, WORKSPACE_MARK, cx);
         div()
             .id("workspace-button")
-            .w(WORKSPACE_BUTTON_WIDTH)
-            .h(TITLEBAR_BUTTON)
-            .pl_1()
+            .min_w_0()
+            .h(BUTTON)
+            .pl(WORKSPACE_PADDING)
+            .pr(px(6.))
             .flex()
             .items_center()
-            .gap(px(3.))
+            .gap(px(8.))
             .rounded(ROW_RADIUS)
             .cursor_pointer()
-            .when(self.workspaces_open, |s| s.bg(theme.hover))
+            .when(self.workspaces_open, |s| s.bg(theme.selected_row()))
             .hover(|s| s.bg(theme.hover))
-            .tooltip(move |window, cx| {
-                Tooltip::new(tooltip.clone())
-                    .bg(bg)
-                    .text_color(fg)
-                    .border_color(border)
-                    .build(window, cx)
-            })
             .on_click(cx.listener(|_, _, _, cx| cx.emit(SidebarEvent::OpenWorkspaces)))
-            .child(workspace_mark(name, color, WORKSPACE_MARK, cx))
-            .child(icon("chevron-down", px(10.), theme.faint))
+            .child(mark.rounded(px(5.)).text_size(px(10.5)))
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(name),
+            )
+            .child(svg_icon(
+                line_icon!("chevrons-up-down"),
+                px(12.),
+                theme.muted,
+            ))
     }
 }
 
 fn add_link_button(cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
     let theme = Theme::get(cx);
+    icon_button("add-link", line_icon!("plus"), BUTTON, BUTTON_ICON, theme)
+        .tooltip(tip("Add link", Some(&NewLink), theme))
+        .on_click(cx.listener(|_, _, _, cx| cx.emit(SidebarEvent::NewLink)))
+}
+
+/// A square icon button: `muted` at rest, `text` and the hover fill under the pointer.
+pub(super) fn icon_button(
+    id: &'static str,
+    path: SharedString,
+    size: Pixels,
+    icon: Pixels,
+    theme: &Theme,
+) -> gpui::Stateful<gpui::Div> {
+    let (hover, text) = (theme.hover, theme.text);
     div()
-        .id("add-link")
-        .size(TITLEBAR_BUTTON)
+        .id(id)
+        .group(id)
+        .flex_none()
+        .size(size)
         .rounded(ROW_RADIUS)
         .flex()
         .items_center()
         .justify_center()
         .cursor_pointer()
-        .hover(|s| s.bg(theme.hover))
-        .child(icon("plus", BUTTON_ICON, theme.muted))
-        .on_click(cx.listener(|_, _, _, cx| cx.emit(SidebarEvent::NewLink)))
+        .hover(move |s| s.bg(hover))
+        .child(svg_icon(path, icon, theme.muted).group_hover(id, move |s| s.text_color(text)))
 }

@@ -117,6 +117,11 @@ impl Theme {
         self.folders[ink.index()]
     }
 
+    /// The selected row's fill: a step past `hover`, so a hovered row never looks chosen.
+    pub fn selected_row(&self) -> Hsla {
+        mix(self.hover, self.text, 0.045)
+    }
+
     pub fn folder_color(&self, color: FolderColor) -> Hsla {
         match color {
             FolderColor::Ink(ink) => self.ink(ink),

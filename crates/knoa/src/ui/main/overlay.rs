@@ -4,9 +4,9 @@
 //! and the workspace switcher drops down from its button. Clicking outside closes them.
 
 use gpui::{
-    AnyElement, AppContext as _, Context, Entity, FontWeight, InteractiveElement as _, IntoElement,
-    MouseButton, ParentElement as _, Pixels, Size, Styled as _, Window, deferred, div,
-    prelude::FluentBuilder as _, px, size,
+    Animation, AnimationExt as _, AnyElement, AppContext as _, Context, Entity, FontWeight,
+    InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Pixels, Size,
+    Styled as _, Window, deferred, div, prelude::FluentBuilder as _, px, size,
 };
 use gpui_component::switch::Switch;
 use knoa_core::{Folder, FolderId, WorkspaceId};
@@ -21,7 +21,10 @@ use super::{
 };
 use crate::{
     state::settings::SettingsFile,
-    ui::theme::{MARGIN, PANEL_RADIUS, Theme},
+    ui::{
+        motion,
+        theme::{MARGIN, PANEL_RADIUS, Theme},
+    },
 };
 
 /// What floats over the main screen, if anything.
@@ -156,6 +159,24 @@ impl MainView {
     }
 }
 
+/// From the switcher's outer edge to its workspace marks: its border, padding and a row's
+/// padding.
+const SWITCHER_MARK_INSET: Pixels = px(21.);
+
+/// A drop-down fading in and sliding down from its button as it opens.
+fn drop_down(panel: gpui::Stateful<gpui::Div>) -> impl IntoElement {
+    let top = below_titlebar();
+    panel.with_animation(
+        "drop-down-open",
+        Animation::new(motion::MENU_OPEN),
+        move |panel, delta| {
+            panel
+                .opacity(delta)
+                .top(top - px(motion::MENU_SLIDE * (1. - delta)))
+        },
+    )
+}
+
 /// Settings leaves a band of the main screen showing on every side, so it reads as a sheet
 /// over the library rather than a new screen.
 const SHEET_INSET: Pixels = px(36.);
@@ -224,12 +245,11 @@ impl MainView {
                 cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
             );
         let scrim = if anchored {
-            scrim.child(
+            scrim.child(drop_down(
                 panel
                     .absolute()
-                    .top(below_titlebar())
-                    .left(workspace_menu_left()),
-            )
+                    .left(workspace_menu_left(SWITCHER_MARK_INSET)),
+            ))
         } else if sheet.is_some() {
             scrim.child(panel.absolute().top(below_titlebar()).left(SHEET_INSET))
         } else {

@@ -73,6 +73,13 @@ impl Store {
     pub fn next_push_at_most(&self, limit: usize) -> Result<Vec<Mutation>> {
         outbox::pending(&self.conn, limit.min(MAX_PUSH), MAX_PUSH_BYTES)
     }
+
+    /// How many local changes wait to be pushed.
+    pub fn unpushed_changes(&self) -> Result<usize> {
+        Ok(self
+            .conn
+            .query_row("SELECT count(*) FROM outbox", [], |row| row.get(0))?)
+    }
 }
 
 pub(crate) fn linked(conn: &Connection) -> Result<bool> {

@@ -48,8 +48,8 @@ use content::{DecodedImages, LayoutCache};
 use detail::TagEdits;
 use keys::{
     CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
-    MoveRight, MoveUp, NewLink, NextImage, OpenSelected, OpenSelectedInBackground, PreviousImage,
-    QuickLook, SaveImage, SelectFolder, ShowDetails, ToggleUpNext,
+    MoveRight, MoveUp, NewFolder, NewLink, NextImage, OpenSelected, OpenSelectedInBackground,
+    PreviousImage, QuickLook, SaveImage, SelectFolder, ShowDetails, ToggleUpNext,
 };
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;

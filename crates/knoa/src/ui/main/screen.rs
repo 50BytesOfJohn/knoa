@@ -11,8 +11,8 @@ use gpui::{
 use knoa_core::{FolderId, Place};
 
 use super::{
-    FocusSearch, MainView, NewLink, SelectFolder, ShowDetails, SidebarEvent, SidebarView,
-    overlay::Overlay,
+    FocusSearch, MainView, NewFolder, NewLink, SelectFolder, ShowDetails, SidebarEvent,
+    SidebarView, overlay::Overlay,
 };
 use crate::{
     state::library::Library,
@@ -52,6 +52,7 @@ impl MainScreen {
             .on_action(window.listener_for(main, MainView::open_settings))
             .on_action(window.listener_for(main, MainView::focus_search))
             .on_action(window.listener_for(main, MainView::new_link))
+            .on_action(window.listener_for(main, MainView::new_top_folder))
             .on_action(window.listener_for(main, MainView::show_details))
             .on_action(window.listener_for(main, MainView::select_folder))
             .child(main.clone().cached(StyleRefinement::default().size_full()))
@@ -86,7 +87,19 @@ impl MainView {
             SidebarEvent::EditFolder(id) => self.edit_folder(Some(id), window, cx),
             SidebarEvent::DeleteFolder(id) => self.confirm_delete_folder(id, window, cx),
             SidebarEvent::OpenSettings(page) => self.show_settings(page, window, cx),
+            SidebarEvent::ReturnFocus => self.cards_focus.focus(window, cx),
         }
+    }
+
+    /// ⇧⌘N: a new folder at the top level.
+    fn new_top_folder(
+        &mut self,
+        _: &NewFolder,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        self.close_viewer_first(window, cx);
+        self.new_folder(None, window, cx);
     }
 
     /// Shows the folder's children in the sidebar.

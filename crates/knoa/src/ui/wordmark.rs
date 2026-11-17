@@ -13,12 +13,6 @@ use lyon_tessellation::{LineCap, LineJoin};
 
 use crate::ui::theme::BRAND_RED;
 
-/// "Knoa" without its full stop, for places where the mascot stands in for the dot.
-pub fn wordmark_letters(height: Pixels, ink: Hsla) -> Div {
-    let shape = Shape::new(height).without_dot();
-    frame(height, &shape).child(drawing(shape, ink, None))
-}
-
 /// The wordmark writing itself once, when it first appears.
 pub fn written_wordmark(id: impl Into<ElementId>, height: Pixels, ink: Hsla) -> impl IntoElement {
     let shape = Shape::new(height);
@@ -98,16 +92,6 @@ impl Shape {
             origin,
             size: [right - origin[0], bottom - origin[1]],
             dot: Some(dot),
-        }
-    }
-
-    /// Ends at the last letter's tail, with no room kept for the dot.
-    fn without_dot(self) -> Shape {
-        let right = TAIL_END_X + self.weight / 2.;
-        Shape {
-            size: [right - self.origin[0], self.size[1]],
-            dot: None,
-            ..self
         }
     }
 

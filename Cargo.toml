@@ -57,14 +57,18 @@ notify = "8"
 # Objective-C messaging for the AppKit and Sparkle calls GPUI doesn't wrap. Same majors
 # as GPUI's own, so no second copy is built.
 objc2 = "0.6"
+# Already in the tree through objc2-foundation; blocks for AppKit notification observers.
+block2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
+  "NSAccessibility",
   "NSAlert",
   "NSApplication",
   "NSButton",
   "NSControl",
   "NSResponder",
   "NSView",
+  "NSWorkspace",
 ] }
 objc2-foundation = "0.3"
 # Already in the tree through `url`; decodes a link's file name for saving.

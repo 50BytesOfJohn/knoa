@@ -29,6 +29,11 @@ pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
         .text_color(color)
 }
 
+/// An icon by asset path, such as one from [`line_icon!`](crate::assets::line_icon).
+pub fn svg_icon(path: SharedString, size: Pixels, color: Hsla) -> Svg {
+    svg().path(path).size(size).flex_none().text_color(color)
+}
+
 /// The same icon as [`icon`], for gpui-component pieces that take an `Icon`.
 pub fn icon_asset(name: &str) -> gpui_component::Icon {
     gpui_component::Icon::empty().path(format!("icons/{name}.svg"))

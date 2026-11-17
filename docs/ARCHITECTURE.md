@@ -248,10 +248,14 @@ Keychain in release-channel builds and in a plain file in dev builds
 ## UI
 
 - Main screen: a floating sidebar (workspace and add-link buttons beside the traffic
-  lights, places, folders), a floating search pill with kind chips, masonry cards grouped
+  lights, places, folders, a status card for the AI and sync, and the account menu and
+  settings in its footer), a floating search pill with kind chips, masonry cards grouped
   by date with a date rail, and a floating detail panel. The approved layout is in the
-  [main screen design](design/main-screen.md); the research behind it is in
-  [research](research/main-screen.md).
+  [main screen design](design/main-screen.md) and the [sidebar design](design/sidebar.md);
+  the research behind it is in [research](research/main-screen.md).
+- The sidebar and the main view are sibling views, each drawn from its own cache, so the
+  sidebar's hovers and animations never rebuild the cards. Animations follow macOS's
+  Reduce Motion, which the app hands to GPUI at launch and whenever it changes.
 - Places: Everything, Gallery, Up next, Unsorted, Not organized, Set aside and Trash.
   The Gallery shows bookmarks of a media kind (today only images) while the workspace has
   one. It is a device-side `Place`, not part of the sync protocol. Its results are laid

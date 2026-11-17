@@ -1,25 +1,33 @@
 //! The floating sidebar: the titlebar with the workspace and add-link buttons, places,
-//! folders and the footer with the wordmark, the AI indicator and settings.
+//! folders, a status card when the AI or sync has something to say, and the footer with
+//! the account menu and settings.
 //!
 //! It is its own view so that its hovers, drags and animations repaint only itself. It
 //! asks the main view for anything outside it with a [`SidebarEvent`].
 
 use gpui::{
-    Context, Entity, EventEmitter, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, px,
+    Context, Entity, EventEmitter, InteractiveElement as _, IntoElement, ParentElement as _,
+    Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _, Subscription, Window, div,
+    px,
 };
 use knoa_core::{FolderId, Place};
 
+mod account;
+mod account_menu;
 mod drag_preview;
 mod drop;
 mod folder_menu;
+mod folder_row;
 mod folders;
 mod footer;
 mod outline;
 mod places;
+mod row;
+mod status;
+mod status_card;
 mod titlebar;
 
+pub(super) use account_menu::bind_account_menu_keys;
 pub(super) use drag_preview::DragPreview;
 pub(super) use drop::DraggedBookmark;
 
@@ -27,55 +35,48 @@ use super::settings::Page;
 use crate::{
     services::{cloud::Cloud, organizer::Organizer},
     state::library::Library,
-    ui::theme::{MARGIN, PANEL_RADIUS, SIDEBAR_WIDTH, Theme},
+    ui::theme::{MARGIN, PANEL_RADIUS, Theme},
 };
+use account::Identity;
+use account_menu::AccountMenu;
 use drop::SidebarDrop;
 use outline::Outline;
+use places::PlaceRows;
+use status_card::StatusCard;
 
 /// The sidebar's top row, shared with the traffic lights.
 pub(super) const TITLEBAR_HEIGHT: Pixels = px(44.);
-const TITLEBAR_GAP: Pixels = px(4.);
-const BUTTON_PT: f32 = 26.;
-const TITLEBAR_BUTTON: Pixels = px(BUTTON_PT);
-/// The glyph inside a titlebar or footer button.
-const BUTTON_ICON_PT: f32 = 16.;
-const BUTTON_ICON: Pixels = px(BUTTON_ICON_PT);
-const WORKSPACE_BUTTON_WIDTH: Pixels = px(40.);
-const WORKSPACE_MARK: Pixels = px(20.);
 const BORDER: Pixels = px(1.);
-/// From the panel's inner edge to a row's highlight.
-const ROW_INSET_PT: f32 = 8.;
-const ROW_INSET: Pixels = px(ROW_INSET_PT);
-const ROW_PADDING_PT: f32 = 8.;
-const ROW_PADDING: Pixels = px(ROW_PADDING_PT);
-/// From the panel's inner edge to the content: traffic lights, icons and labels on the
-/// left, buttons and counts on the right. One column keeps the sidebar's edges straight.
-const CONTENT_INSET_PT: f32 = ROW_INSET_PT + ROW_PADDING_PT;
-const CONTENT_INSET: Pixels = px(CONTENT_INSET_PT);
-/// The padding that puts a titlebar or footer button's glyph on the content column.
-const BUTTON_PADDING: Pixels = px(CONTENT_INSET_PT - (BUTTON_PT - BUTTON_ICON_PT) / 2.);
-/// The traffic lights' diameter, which `AppKit` sets.
-const TRAFFIC_LIGHT: Pixels = px(14.);
+/// From the panel's inner edge to a row's highlight, and to the titlebar's and footer's
+/// controls.
+const INSET: Pixels = px(8.);
+/// The traffic lights' left edge from the panel's inner edge.
+const LIGHTS_INSET: Pixels = px(16.);
+/// Three 12 px lights, 8 px apart, as `AppKit` spaces them.
+const LIGHTS_WIDTH: Pixels = px(52.);
+/// From the last light to the workspace button.
+const LIGHTS_GAP: Pixels = px(10.);
+/// The size of `AppKit`'s button frame around each 12 px light.
+const TRAFFIC_LIGHT_FRAME: Pixels = px(14.);
+/// The workspace button's padding before its mark.
+const WORKSPACE_PADDING: Pixels = px(7.);
+/// Group name for the whole sidebar, whose hover shows the new folder button.
+const SIDEBAR_GROUP: &str = "sidebar";
 
-/// Where `AppKit` should put the close button: centred in the titlebar row and on the
-/// content column, so the lights sit as far in from the panel's edge as its icons.
+/// Where `AppKit` should put the close button: on the titlebar row's centre line, its light
+/// 16 px in from the panel's edge.
 pub fn traffic_light_position() -> Point<Pixels> {
-    let left = MARGIN + BORDER + CONTENT_INSET;
-    let top = MARGIN + BORDER + (TITLEBAR_HEIGHT - TRAFFIC_LIGHT) / 2.;
+    let frame_inset = (TRAFFIC_LIGHT_FRAME - px(12.)) / 2.;
+    let left = MARGIN + BORDER + LIGHTS_INSET - frame_inset;
+    let top = MARGIN + BORDER + (TITLEBAR_HEIGHT - TRAFFIC_LIGHT_FRAME) / 2.;
     gpui::point(left, top)
 }
 
-/// The workspace switcher's left edge in the window. It sits under the workspace button,
-/// shifted left by the menu's and its rows' padding so the marks in the list line up under
-/// the button's.
-pub(super) fn workspace_menu_left() -> Pixels {
-    let button_left = MARGIN + SIDEBAR_WIDTH
-        - BORDER
-        - BUTTON_PADDING
-        - TITLEBAR_BUTTON
-        - TITLEBAR_GAP
-        - WORKSPACE_BUTTON_WIDTH;
-    button_left - px(16.)
+/// The workspace switcher's left edge in the window. The marks in its list line up under
+/// the workspace button's.
+pub(super) fn workspace_menu_left(mark_inset: Pixels) -> Pixels {
+    let button_left = MARGIN + BORDER + LIGHTS_INSET + LIGHTS_WIDTH + LIGHTS_GAP;
+    button_left + WORKSPACE_PADDING - mark_inset
 }
 
 /// What the sidebar asks of the main view, which owns the place shown and the overlays.
@@ -88,14 +89,23 @@ pub(super) enum SidebarEvent {
     EditFolder(FolderId),
     DeleteFolder(FolderId),
     OpenSettings(Page),
+    /// A menu the sidebar opened has closed, so focus can go back to the cards.
+    ReturnFocus,
 }
 
 pub(super) struct SidebarView {
     library: Entity<Library>,
     organizer: Entity<Organizer>,
+    cloud: Entity<Cloud>,
+    places: PlaceRows,
     /// Which parents are collapsed, and the folder rows that leaves.
     outline: Outline,
     drop: SidebarDrop,
+    /// The folder whose menu is open from its ⋯ button, which stays shown meanwhile.
+    folder_menu: Option<FolderId>,
+    status: StatusCard,
+    identity: Identity,
+    account_menu: AccountMenu,
     /// The workspace switcher is open, so its button stays lit.
     workspaces_open: bool,
     _subscriptions: Vec<Subscription>,
@@ -106,16 +116,25 @@ impl EventEmitter<SidebarEvent> for SidebarView {}
 impl SidebarView {
     pub(super) fn new(library: Entity<Library>, cx: &mut Context<'_, SidebarView>) -> SidebarView {
         let organizer = Organizer::entity(cx);
+        let cloud = Cloud::entity(cx);
+        // The batch and its progress come with the library, and the sync time and the
+        // changes waiting with the cloud.
         let subscriptions = vec![
             cx.observe(&library, |_, _, cx| cx.notify()),
             cx.observe(&organizer, |_, _, cx| cx.notify()),
-            cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify()),
+            cx.observe(&cloud, |_, _, cx| cx.notify()),
         ];
         SidebarView {
             library,
             organizer,
+            cloud,
+            places: PlaceRows::default(),
             outline: Outline::load(cx),
             drop: SidebarDrop::default(),
+            folder_menu: None,
+            status: StatusCard::default(),
+            identity: Identity::default(),
+            account_menu: AccountMenu::default(),
             workspaces_open: false,
             _subscriptions: subscriptions,
         }
@@ -159,15 +178,11 @@ impl SidebarView {
 impl Render for SidebarView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let library = self.library.read(cx);
-        let counts = library.counts();
-        let current = library.place();
-        let workspace = library
-            .workspace()
-            .map(|w| (w.name.clone(), w.color))
-            .unwrap_or_default();
-
+        let current = self.library.read(cx).place();
         div()
+            .id("sidebar")
+            .group(SIDEBAR_GROUP)
+            .relative()
             .size_full()
             .flex()
             .flex_col()
@@ -177,13 +192,12 @@ impl Render for SidebarView {
             .border_color(theme.hairline)
             .shadow_sm()
             .text_color(theme.text)
-            .child(self.titlebar(workspace, cx))
-            .child(div().mt_2().child(self.places(counts, current, cx)))
+            .child(self.titlebar(cx))
             .child(
                 div()
-                    .id("folders")
-                    .mt_6()
+                    .id("sidebar-list")
                     .flex_1()
+                    .min_h_0()
                     .overflow_y_scroll()
                     .track_scroll(&self.drop.scroll)
                     .on_scroll(cx.listener(|this, _, _, cx| {
@@ -192,17 +206,14 @@ impl Render for SidebarView {
                             cx.notify();
                         }
                     }))
-                    .child(
-                        div()
-                            .px(CONTENT_INSET)
-                            .pb_1p5()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme.faint)
-                            .child("Folders"),
-                    )
+                    .pt(px(2.))
+                    .px(INSET)
+                    .child(self.place_list(current, cx))
+                    .child(self.folder_header(cx))
                     .child(self.folder_list(current, cx)),
             )
-            .child(self.footer(counts.organizing, cx))
+            .children(self.status_card(cx))
+            .child(self.footer(cx))
+            .children(self.account_menu(cx))
     }
 }

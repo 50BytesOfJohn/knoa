@@ -1,6 +1,6 @@
 # Sidebar (v2)
 
-- Status: Approved, not built yet
+- Status: Built
 - Date: 2026-11-16
 - Prototype: the "Knoa sidebar explorations" design canvas, board "FINAL · Sidebar
   reference (T1 + B4 + M1)". It shows macOS, web and iPhone, the footer in every state

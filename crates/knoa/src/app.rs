@@ -33,6 +33,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     cx.set_global(SettingsFile::load(paths.settings()));
     skip_onboarding_in_dev(cx);
     Theme::apply(&SettingsFile::get(cx).theme.clone(), cx);
+    crate::ui::motion::follow_system_setting(cx);
     Credentials::init(paths.dev_credentials(), cx);
     Network::init(cx)?;
 

@@ -3439,6 +3439,7 @@ name = "knoa"
 version = "0.4.1"
 dependencies = [
  "anyhow",
+ "block2 0.6.2",
  "dirs 6.0.0",
  "futures",
  "gpui-component",

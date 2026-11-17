@@ -38,7 +38,6 @@ pub(super) struct Outline {
     /// The library's folder generation and ours the rows were made for.
     made_for: Option<(u64, u64)>,
     rows: Rc<[Rc<FolderRow>]>,
-    nested: bool,
 }
 
 impl Outline {
@@ -53,7 +52,6 @@ impl Outline {
             generation: 0,
             made_for: None,
             rows: Rc::from([]),
-            nested: false,
         }
     }
 
@@ -63,15 +61,9 @@ impl Outline {
         let key = (tree_generation, self.generation);
         if self.made_for != Some(key) {
             self.rows = visible_rows(tree, &self.collapsed).into();
-            self.nested = tree.is_nested();
             self.made_for = Some(key);
         }
         self.rows.clone()
-    }
-
-    /// Whether any folder has a parent, as of the last [`Outline::rows`].
-    pub(super) fn is_nested(&self) -> bool {
-        self.nested
     }
 
     /// The `n`th visible folder, counting from 0, as ⌘1 to ⌘9 pick them.

@@ -12,6 +12,7 @@ mod link;
 mod mcp;
 mod replacement;
 mod thumbnails;
+mod waiting;
 
 use std::sync::Arc;
 
@@ -49,6 +50,7 @@ pub struct Cloud {
     problem: Option<String>,
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
     session_events: Option<Task<()>>,
+    waiting: waiting::Waiting,
     _library_changes: Subscription,
 }
 
@@ -146,8 +148,9 @@ impl Cloud {
             tracing::info!("cloud mode isn't available in this build");
         }
         let cloud = cx.new(|cx| {
-            let changes = cx.subscribe(&library, |this: &mut Cloud, _, _: &LibraryChanged, _| {
+            let changes = cx.subscribe(&library, |this: &mut Cloud, _, _: &LibraryChanged, cx| {
                 this.wake(Wake::Push);
+                this.count_waiting(cx);
             });
             Cloud {
                 backend,
@@ -161,6 +164,7 @@ impl Cloud {
                 push_notice: None,
                 problem: None,
                 session_events: None,
+                waiting: waiting::Waiting::default(),
                 _library_changes: changes,
             }
         });
@@ -255,6 +259,7 @@ impl Cloud {
         }
         if self.sync != sync || sync == SyncStatus::UpToDate {
             self.sync = sync;
+            self.count_waiting(cx);
             cx.notify();
         }
     }

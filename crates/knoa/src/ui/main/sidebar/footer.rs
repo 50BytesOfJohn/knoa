@@ -1,132 +1,82 @@
-//! The sidebar's footer: the wordmark with the mascot as its full stop, a word on what the
-//! AI is doing, how cloud sync is doing when signed in, and the settings button.
+//! The sidebar's footer: the account button, which opens the account menu, and settings.
 
 use gpui::{
-    Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use super::{
-    BUTTON_ICON, BUTTON_PADDING, CONTENT_INSET, SidebarEvent, SidebarView, TITLEBAR_BUTTON,
+    INSET, SidebarEvent, SidebarView,
+    account::{FOOTER_AVATAR, avatar},
+    titlebar::{BUTTON, icon_button},
 };
 use crate::{
-    services::{
-        cloud::{Cloud, Phase, SyncStatus},
-        organizer::AiStatus,
-    },
+    assets::line_icon,
     ui::{
-        components::{icon, tip},
-        main::settings::Page,
-        mascot::{Mood, mascot},
-        theme::{ROW_RADIUS, Theme},
-        wordmark::wordmark_letters,
+        components::{svg_icon, tip},
+        main::{OpenSettings, settings::Page},
+        theme::Theme,
     },
 };
 
-impl SidebarView {
-    pub(super) fn footer(
-        &self,
-        organizing: usize,
-        cx: &mut Context<'_, SidebarView>,
-    ) -> impl IntoElement {
-        let sync_mark = self.sync_mark(cx);
-        let theme = Theme::get(cx);
-        let status = self.organizer.read(cx).status().clone();
-        let mood = Mood::of(&status, organizing);
-        // Idle and ready needs no words: the mascot's face says it.
-        let label = match &status {
-            AiStatus::Off => Some(("AI off".to_owned(), theme.faint)),
-            AiStatus::Ready | AiStatus::Cloud if organizing > 0 => {
-                Some((organizing.to_string(), theme.ai_text))
-            }
-            AiStatus::Ready | AiStatus::Cloud => None,
-            AiStatus::NeedsAttention(_) => Some(("Needs attention".to_owned(), theme.danger)),
-        };
-        // The mascot stands on the wordmark's baseline, where the logo's dot would be.
-        let signature = div()
-            .flex()
-            .items_end()
-            .gap(px(2.))
-            .child(wordmark_letters(px(20.), theme.text))
-            .child(
-                div()
-                    .mb(px(-2.))
-                    // A new id per mood replays that mood's motion from its start.
-                    .child(mascot(("footer-mascot", mood as usize), px(24.), mood, theme.ai, theme.panel)),
-            );
-        div()
-            .flex_none()
-            .h(px(56.))
-            .pl(CONTENT_INSET)
-            .pr(BUTTON_PADDING)
-            .flex()
-            .items_center()
-            .gap_2()
-            .border_t_1()
-            .border_color(theme.hairline)
-            .child(signature)
-            .when_some(label, |s, (label, color)| {
-                s.child(div().text_xs().text_color(color).child(label))
-            })
-            .child(div().flex_1())
-            .children(sync_mark)
-            .child(
-                div()
-                    .id("settings")
-                    .size(TITLEBAR_BUTTON)
-                    .rounded(ROW_RADIUS)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover))
-                    .child(icon("settings", BUTTON_ICON, theme.muted))
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        cx.emit(SidebarEvent::OpenSettings(Page::General));
-                    })),
-            )
-    }
-}
+pub(super) const FOOTER_HEIGHT: Pixels = px(46.);
+const ACCOUNT_BUTTON: Pixels = px(32.);
 
 impl SidebarView {
-    /// A quiet cloud while all is well, so a sync problem is noticed without a banner.
-    fn sync_mark(&self, cx: &mut Context<'_, SidebarView>) -> Option<gpui::AnyElement> {
+    pub(super) fn footer(&mut self, cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
         let theme = Theme::get(cx);
-        let cloud = Cloud::entity(cx);
-        let cloud = cloud.read(cx);
-        if !matches!(cloud.phase(), Phase::SignedIn(_) | Phase::OtherAccount(_)) {
-            return None;
-        }
-        let (name, color, tooltip) = if matches!(cloud.phase(), Phase::OtherAccount(_)) {
-            ("cloud-alert", theme.danger, "Sync is waiting for you")
-        } else if cloud.notice().is_some() {
-            ("cloud-alert", theme.danger, "Your plan's limit is reached")
-        } else {
-            match cloud.sync() {
-                SyncStatus::Starting | SyncStatus::Syncing(_) => {
-                    ("refresh-cw", theme.faint, "Syncing")
-                }
-                SyncStatus::UpToDate => ("cloud-check", theme.faint, "Synced"),
-                SyncStatus::Offline => ("cloud-off", theme.faint, "Offline"),
-                SyncStatus::Error(_) => ("cloud-alert", theme.danger, "Sync stopped"),
-            }
-        };
-        Some(
-            div()
-                .id("sync-status")
-                .size(TITLEBAR_BUTTON)
-                .rounded(ROW_RADIUS)
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(|s| s.bg(theme.hover))
-                .child(icon(name, BUTTON_ICON, color))
-                .tooltip(tip(tooltip, None, theme))
-                .on_click(cx.listener(|_, _, _, cx| {
-                    cx.emit(SidebarEvent::OpenSettings(Page::Account));
-                }))
-                .into_any_element(),
-        )
+        let settings = icon_button("settings", line_icon!("settings"), BUTTON, px(16.), theme)
+            .tooltip(tip("Settings", Some(&OpenSettings), theme))
+            .on_click(cx.listener(|_, _, _, cx| {
+                cx.emit(SidebarEvent::OpenSettings(Page::General));
+            }));
+        div()
+            .flex_none()
+            .h(FOOTER_HEIGHT)
+            .px(INSET)
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .border_t_1()
+            .border_color(theme.hairline)
+            .child(self.account_button(cx))
+            .child(settings)
+    }
+
+    fn account_button(&mut self, cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
+        let who = self.identity.who(cx);
+        let open = self.account_menu.is_open();
+        let theme = Theme::get(cx);
+        div()
+            .id("account-button")
+            .flex_1()
+            .min_w_0()
+            .h(ACCOUNT_BUTTON)
+            .pl(px(5.))
+            .pr(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .rounded(px(10.))
+            .cursor_pointer()
+            .when(open, |s| s.bg(theme.selected_row()))
+            .when(!open, |s| s.hover(|s| s.bg(theme.hover)))
+            .capture_any_mouse_down(cx.listener(|this, _, _, _| this.press_account_button()))
+            .on_click(cx.listener(|this, _, window, cx| this.toggle_account_menu(window, cx)))
+            .child(avatar(&who, FOOTER_AVATAR, theme))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(who.name()),
+            )
+            .child(svg_icon(
+                line_icon!("chevrons-up-down"),
+                px(12.),
+                theme.muted,
+            ))
     }
 }

@@ -1,136 +1,170 @@
 //! The places at the top of the sidebar: Everything, Gallery, Up next and the rest.
 
+use std::rc::Rc;
+
 use gpui::{
-    AnyElement, Context, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
-    px,
+    Animation, AnimationExt as _, AnyElement, Context, InteractiveElement as _, IntoElement,
+    ParentElement as _, Radians, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Transformation, div,
 };
 use knoa_core::Place;
+use knoa_store::Counts;
 
-use super::{ROW_INSET, ROW_PADDING, SidebarEvent, SidebarView};
-use crate::ui::{
-    components::icon,
-    mascot::ai_mark,
-    theme::{ROW_HEIGHT, ROW_RADIUS, Theme},
+use super::{
+    SidebarEvent, SidebarView,
+    row::{ICON, ROW_GAP, count, label, row_frame},
+};
+use crate::{
+    assets::line_icon,
+    services::organizer::AiStatus,
+    ui::{components::svg_icon, motion, theme::Theme},
 };
 
-/// What leads a place's row: a Lucide icon, or the AI's dot for places about the AI.
-#[derive(Clone, Copy)]
-enum PlaceMark {
-    Icon(&'static str),
-    Ai,
+/// One place as the sidebar draws it, made when the counts change rather than per frame.
+struct PlaceRow {
+    place: Place,
+    label: SharedString,
+    icon: SharedString,
+    count: SharedString,
+}
+
+/// The places shown for the current counts, kept until the counts or the place change.
+#[derive(Default)]
+pub(super) struct PlaceRows {
+    made_for: Option<(Counts, Place)>,
+    rows: Rc<[PlaceRow]>,
+}
+
+impl PlaceRows {
+    fn rows(&mut self, counts: Counts, current: Place) -> Rc<[PlaceRow]> {
+        if self.made_for != Some((counts, current)) {
+            self.rows = visible_places(counts, current).into();
+            self.made_for = Some((counts, current));
+        }
+        self.rows.clone()
+    }
+}
+
+fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
+    let places = [
+        (
+            Place::Everything,
+            "Everything",
+            line_icon!("layers"),
+            counts.everything,
+        ),
+        (
+            Place::Gallery,
+            "Gallery",
+            line_icon!("image"),
+            counts.gallery,
+        ),
+        (
+            Place::UpNext,
+            "Up next",
+            line_icon!("bookmark"),
+            counts.up_next,
+        ),
+        (
+            Place::Unsorted,
+            "Unsorted",
+            line_icon!("inbox"),
+            counts.unsorted,
+        ),
+        (
+            Place::NotOrganized,
+            "Not organized",
+            line_icon!("circle-dashed"),
+            counts.not_organized,
+        ),
+        (
+            Place::SetAside,
+            "Set aside",
+            line_icon!("archive"),
+            counts.set_aside,
+        ),
+        (Place::Trash, "Trash", line_icon!("trash"), counts.trash),
+    ];
+    places
+        .into_iter()
+        // These show only while they hold something, or while they are open.
+        .filter(|&(place, _, _, n)| {
+            let hideable = matches!(
+                place,
+                Place::Gallery | Place::NotOrganized | Place::SetAside | Place::Trash
+            );
+            !hideable || n > 0 || place == current
+        })
+        .map(|(place, label, icon, n)| PlaceRow {
+            place,
+            label: SharedString::new_static(label),
+            icon,
+            count: match n {
+                0 => SharedString::default(),
+                n => SharedString::from(n.to_string()),
+            },
+        })
+        .collect()
 }
 
 impl SidebarView {
-    pub(super) fn places(
-        &self,
-        counts: knoa_store::Counts,
+    pub(super) fn place_list(
+        &mut self,
         current: Place,
         cx: &mut Context<'_, SidebarView>,
     ) -> gpui::Div {
-        let places = [
-            (
-                Place::Everything,
-                "Everything",
-                PlaceMark::Icon("layers"),
-                counts.everything,
-            ),
-            (
-                Place::Gallery,
-                "Gallery",
-                PlaceMark::Icon("images"),
-                counts.gallery,
-            ),
-            (
-                Place::UpNext,
-                "Up next",
-                PlaceMark::Icon("bookmark"),
-                counts.up_next,
-            ),
-            (
-                Place::Unsorted,
-                "Unsorted",
-                PlaceMark::Icon("inbox"),
-                counts.unsorted,
-            ),
-            (
-                Place::NotOrganized,
-                "Not organized",
-                PlaceMark::Ai,
-                counts.not_organized,
-            ),
-            (
-                Place::SetAside,
-                "Set aside",
-                PlaceMark::Icon("archive"),
-                counts.set_aside,
-            ),
-            (
-                Place::Trash,
-                "Trash",
-                PlaceMark::Icon("trash"),
-                counts.trash,
-            ),
-        ];
-        let mut list = div().flex().flex_col().gap_0p5().px(ROW_INSET);
-        for (place, label, mark, count) in places {
-            // The Gallery, Set aside and Trash only show while they hold something.
-            let hideable = matches!(place, Place::Gallery | Place::SetAside | Place::Trash);
-            if hideable && count == 0 && current != place {
-                continue;
-            }
-            list = list.child(self.place_row(place, current, label, mark, count, cx));
+        let library = self.library.read(cx);
+        let (counts, organizing) = (library.counts(), library.batch().progress().is_some());
+        let organizing = organizing
+            && matches!(
+                self.organizer.read(cx).status(),
+                AiStatus::Ready | AiStatus::Cloud
+            );
+        let rows = self.places.rows(counts, current);
+        let mut list = div().flex().flex_col().gap(ROW_GAP);
+        for (index, row) in rows.iter().enumerate() {
+            let selected = row.place == current;
+            list = list.child(place_row(row, index, selected, organizing, cx));
         }
         list
     }
-
-    fn place_row(
-        &self,
-        place: Place,
-        current: Place,
-        label: &str,
-        mark: PlaceMark,
-        count: usize,
-        cx: &mut Context<'_, SidebarView>,
-    ) -> AnyElement {
-        let theme = Theme::get(cx);
-        let selected = place == current;
-        let icon_color = if selected { theme.accent } else { theme.muted };
-        let badge = match place {
-            // Not organized only shows a count while the AI has work waiting.
-            Place::NotOrganized if count == 0 => None,
-            _ => Some(count),
-        };
-        let id = SharedString::from(format!("place-{label}"));
-        row_frame(selected, theme)
-            .id(id)
-            .px(ROW_PADDING)
-            .hover(|s| s.bg(theme.hover))
-            .child(match mark {
-                PlaceMark::Icon(name) => icon(name, px(15.), icon_color).into_any_element(),
-                PlaceMark::Ai => ai_mark(px(15.), theme.ai).into_any_element(),
-            })
-            .child(div().flex_1().truncate().child(label.to_owned()))
-            .when_some(badge.filter(|n| *n > 0), |s, n| {
-                s.child(div().text_xs().text_color(theme.muted).child(n.to_string()))
-            })
-            .on_click(cx.listener(move |_, _, _, cx| cx.emit(SidebarEvent::Show(place))))
-            .into_any_element()
-    }
 }
 
-/// A sidebar row's shape, shared by places and folders: height, rounding, type and the
-/// selected fill.
-pub(super) fn row_frame(selected: bool, theme: &Theme) -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .h(ROW_HEIGHT)
-        .rounded(ROW_RADIUS)
-        .text_sm()
-        .cursor_pointer()
-        .when(selected, |s| {
-            s.bg(theme.hover).font_weight(FontWeight::MEDIUM)
-        })
+fn place_row(
+    row: &PlaceRow,
+    index: usize,
+    selected: bool,
+    organizing: bool,
+    cx: &mut Context<'_, SidebarView>,
+) -> AnyElement {
+    let theme = Theme::get(cx);
+    let place = row.place;
+    let color = if selected { theme.accent } else { theme.muted };
+    let icon = svg_icon(row.icon.clone(), ICON, color);
+    let icon = if place == Place::NotOrganized && organizing {
+        turning(icon)
+    } else {
+        icon.into_any_element()
+    };
+    row_frame(selected, theme)
+        .id(("place", index))
+        .child(icon)
+        .child(label(row.label.clone()))
+        .child(count(row.count.clone(), theme))
+        .on_click(cx.listener(move |_, _, _, cx| cx.emit(SidebarEvent::Show(place))))
+        .into_any_element()
+}
+
+/// The dashed circle turning slowly while the AI works. Still with Reduce Motion, which
+/// GPUI's animations follow.
+fn turning(icon: gpui::Svg) -> AnyElement {
+    let turn = Animation::new(motion::SLOW_TURN)
+        .repeat()
+        .with_max_fps(motion::LOOP_FPS);
+    icon.with_animation("not-organized-turning", turn, |icon, delta| {
+        icon.with_transformation(Transformation::rotate(Radians(
+            delta * std::f32::consts::TAU,
+        )))
+    })
+    .into_any_element()
 }
