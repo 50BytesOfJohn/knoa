@@ -24,3 +24,4 @@ old one.
 | [0016](0016-images-seen-from-derived-copies.md) | Images are stored and shown to the AI as derived copies | Accepted |
 | [0017](0017-nested-folders-and-emoji-icons.md) | Folders nest three levels deep, and an icon can be an emoji | Accepted |
 | [0018](0018-native-phone-apps.md) | Native phone apps, each with its own sync client | Accepted |
+| [0019](0019-browser-extension.md) | A browser extension with a local and a cloud mode | Accepted |

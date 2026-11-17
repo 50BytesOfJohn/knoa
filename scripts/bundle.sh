@@ -109,7 +109,9 @@ sign() {
         codesign "${flags[@]}" "$framework/Versions/B/Updater.app"
         codesign "${flags[@]}" "$framework"
     fi
-    codesign "${flags[@]}" "$APP/Contents/MacOS/knoa-bridge"
+    local bundle_id
+    bundle_id=$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")
+    codesign "${flags[@]}" --identifier "$bundle_id.bridge" "$APP/Contents/MacOS/knoa-bridge"
     codesign "${flags[@]}" "$APP"
 }
 
