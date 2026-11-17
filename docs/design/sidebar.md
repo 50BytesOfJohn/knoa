@@ -118,13 +118,26 @@ One message at a time, most urgent first:
 | --- | --- | --- | --- | --- |
 | AI needs attention | Mascot, worried | AI needs attention | `danger` | Fix |
 | Sync stopped | Cloud with alert, `danger` | Sync stopped | `danger` | Retry |
+| Sync paused (macOS, library linked to another account) | Cloud with alert, `danger` | Sync paused | `danger` | Fix |
+| Some changes didn't sync (the server refused them) | Cloud with alert, `danger` | Some changes didn't sync | `text` | Details |
+| Plan limit reached | Cloud with alert, `danger` | Plan limit reached | `text` | Upgrade |
 | Organizing | Mascot, organizing | Organizing 12 of 47… | `ai_text` | none, progress bar |
 | AI off | Mascot, asleep (grey) | AI is off | `text` | Turn on |
 | Offline | Cloud off, `muted` | Offline. Changes sync later. | `text` | none |
 | Anything else | | (no card) | | |
 
-Sync states apply only when signed in. "Fix" opens the AI settings, "Retry" retries sync,
-and "Turn on" turns the AI back on.
+Sync states apply only when signed in. "Retry" retries sync. "Fix" on Sync paused and
+"Details" open Settings at the Account page, which says what happened. "Upgrade" opens
+the upgrade page. "Turn on" opens the AI settings: the AI is off only while no provider
+is set up, so setting one up is how it turns on.
+
+AI needs attention covers two causes. When the AI itself fails, "Fix" opens the AI
+settings. When the cloud organizes and this month's organizing allowance is used up,
+"Fix" opens Settings at the Account page.
+
+"Organizing N of M…" counts the current batch, not the library: the batch starts when
+bookmarks begin waiting, grows as more arrive, and ends when none wait; N is the one being
+worked on and the bar shows the share done.
 
 ## Footer (B4)
 
@@ -149,7 +162,8 @@ A popover that opens upward from the account button.
 - Items: 30 px high, 7 px radius, padding 0 8 px, 9 px gap, a 15 px `muted` icon and 13 px
   text. Hover: `hover` fill. Separators: 1 px `hairline`, 4 px above and below, inset
   6 px.
-- Closes on Esc, on a click outside, and after choosing an item.
+- Closes on Esc, on a click outside, when focus moves elsewhere, and after choosing an
+  item.
 
 Signed in (macOS and web):
 
@@ -157,12 +171,13 @@ Signed in (macOS and web):
    the email (11.5 px `muted`). Not clickable.
 2. Separator.
 3. **Sync line**: not a button. A 15 px icon and 12.5 px text, 30 px high:
-   - "Synced just now" with a cloud-check icon, `muted`
+   - "Synced just now" with a cloud-check icon, `muted`; then "1 min ago", "1 hr ago",
+     kept current while the menu is open
    - "Offline · 3 changes waiting" with cloud-off, `muted`
    - "Sync stopped" with cloud-alert, `danger`, and a Retry action at the right
 4. Separator.
-5. **Manage plan…** (credit card icon) on Pro, or **Upgrade to Pro** (zap icon, `accent`,
-   semibold) on Free.
+5. **Manage plan…** (credit card icon) on Pro, or **Upgrade to Pro** (zap icon) on Free.
+   Both are ordinary items: Free gets no busier menu than Pro.
 6. **Account settings…** (person icon): opens Settings at the Account page.
 7. **Open Knoa on the web** (external link icon) on macOS, or **Get Knoa for Mac**
    (laptop icon) on the web.
@@ -170,14 +185,10 @@ Signed in (macOS and web):
 9. **Sign out** (log-out icon). The web keeps its existing confirm when changes are
    unsent.
 
-Signed out (macOS only):
-
-1. Header: a 28 px rounded square with a laptop icon, "This Mac", and "Not signed in".
-2. "Sign in to sync your library across your devices and open it on the web." (12 px,
-   `muted`, 1.45 line height, padding 2 8 8 px).
-3. **Sign in…**: a full-width button, 32 px high, 8 px radius, `accent` fill, `on_accent`
-   13 px semibold text. While waiting for the browser, it becomes a `soft` row with a
-   turning dashed circle, "Finish in browser" and a Cancel action.
+Signed out (macOS only): one ordinary item, **Sign in…** (log-in icon). No header, no
+explanation and no separator; the footer button already reads "This Mac". While waiting
+for the browser, that same item shows a turning dashed circle, "Finish in browser" and a
+small Cancel action at its right end.
 
 The menu has no workspaces (the titlebar owns them), no AI switch (the status card's
 "Turn on" covers it, and the rest is in Settings) and no Settings item (the gear is
@@ -216,10 +227,15 @@ The sidebar is the home screen. The same parts, laid out the iOS way:
 | Add link tooltip | Add link (⌘N) |
 | New folder tooltip | New folder (⇧⌘N) |
 | Settings tooltip | Settings (⌘,) |
-| Status card | AI needs attention · Sync stopped · Organizing 12 of 47… · AI is off · Offline. Changes sync later. |
-| Card actions | Fix · Retry · Turn on |
+| Status card | AI needs attention · Sync stopped · Sync paused · Some changes didn't sync · Plan limit reached · Organizing 12 of 47… · AI is off · Offline. Changes sync later. |
+| Card actions | Fix · Retry · Details · Upgrade · Turn on |
 | Menu | Synced just now · Offline · 3 changes waiting · Sync stopped · Manage plan… · Upgrade to Pro · Account settings… · Open Knoa on the web · Get Knoa for Mac · Sign out |
-| Signed out | This Mac · Not signed in · Sign in to sync your library across your devices and open it on the web. · Sign in… · Finish in browser · Cancel |
+| Signed out | This Mac (footer) · Sign in… · Finish in browser · Cancel |
+
+## Web differences
+
+- No "AI is off" state: the server organizes, and the web has no AI switch.
+- No ⌘ shortcuts: the browser keeps ⌘N, ⌘, and ⌘1–9, so web tooltips name no shortcut.
 
 ## Rejected during exploration
 

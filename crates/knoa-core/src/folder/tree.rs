@@ -95,11 +95,6 @@ impl FolderTree {
         self.folders.is_empty()
     }
 
-    /// Whether any folder has a parent. A flat tree shows no hierarchy chrome.
-    pub fn is_nested(&self) -> bool {
-        self.nodes.iter().any(|node| node.depth > 0)
-    }
-
     pub fn get(&self, id: FolderId) -> Option<&Folder> {
         self.index.get(&id).map(|&at| &self.folders[at])
     }

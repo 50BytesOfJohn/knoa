@@ -113,6 +113,12 @@ impl Message {
                 Mark::Mascot(Mood::Worried),
                 Some(("Fix", CardAction::OpenAiSettings)),
             ),
+            Status::AllowanceUsedUp => message(
+                "AI needs attention",
+                Tone::Danger,
+                Mark::Mascot(Mood::Worried),
+                Some(("Fix", CardAction::OpenAccountSettings)),
+            ),
             Status::SyncStopped => message(
                 "Sync stopped",
                 Tone::Danger,
@@ -124,6 +130,12 @@ impl Message {
                 Tone::Danger,
                 Mark::CloudAlert,
                 Some(("Fix", CardAction::OpenAccountSettings)),
+            ),
+            Status::ChangesNotSynced => message(
+                "Some changes didn't sync",
+                Tone::Plain,
+                Mark::CloudAlert,
+                Some(("Details", CardAction::OpenAccountSettings)),
             ),
             Status::PlanLimit => message(
                 "Plan limit reached",
@@ -141,6 +153,7 @@ impl Message {
                 "AI is off",
                 Tone::Plain,
                 Mark::Mascot(Mood::Asleep),
+                // AI is off only while no provider is set up, so setting one up turns it on.
                 Some(("Turn on", CardAction::OpenAiSettings)),
             ),
             Status::Offline => message(
@@ -214,10 +227,11 @@ impl SidebarView {
 
     fn current_status(&self, cx: &App) -> Option<Status> {
         let cloud = self.cloud.read(cx);
+        let notices = cloud.notices();
         let cloud_state = match cloud.phase() {
             Phase::SignedIn(_) => CloudState::SignedIn {
                 sync: cloud.sync(),
-                plan_limit: cloud.notice().is_some(),
+                notices: &notices,
             },
             Phase::OtherAccount(_) => CloudState::OtherAccount,
             Phase::SignedOut | Phase::SigningIn(_) => CloudState::Local,

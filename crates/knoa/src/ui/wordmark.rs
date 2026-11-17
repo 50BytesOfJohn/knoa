@@ -75,7 +75,7 @@ struct Shape {
     weight: f32,
     origin: [f32; 2],
     size: [f32; 2],
-    dot: Option<[f32; 2]>,
+    dot: [f32; 2],
 }
 
 impl Shape {
@@ -91,7 +91,7 @@ impl Shape {
             weight,
             origin,
             size: [right - origin[0], bottom - origin[1]],
-            dot: Some(dot),
+            dot,
         }
     }
 
@@ -145,11 +145,9 @@ fn paint(
 
     let (opacity, lift) =
         elapsed.map_or((1., 0.), |t| dot_drop((t - timeline.dot_start) / DOT_DROP));
-    if let Some(dot) = shape.dot
-        && opacity > 0.
-    {
+    if opacity > 0. {
         let radius = px(shape.weight * scale);
-        let center = at([dot[0], dot[1] + lift]);
+        let center = at([shape.dot[0], shape.dot[1] + lift]);
         let bounds = Bounds::new(
             point(center.x - radius, center.y - radius),
             size(radius * 2., radius * 2.),

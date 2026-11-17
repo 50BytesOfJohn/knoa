@@ -10,6 +10,7 @@ mod connection;
 mod engine;
 mod link;
 mod mcp;
+mod notice;
 mod replacement;
 mod thumbnails;
 mod waiting;
@@ -24,6 +25,7 @@ use knoa_sync::Api;
 
 pub use self::config::CloudConfig;
 pub use self::mcp::McpState;
+pub use self::notice::{Notice, Rejection};
 use crate::{
     services::{generation::Generation, organizer::Organizer},
     state::{
@@ -44,8 +46,8 @@ pub struct Cloud {
     sync: SyncStatus,
     last_synced: Option<jiff::Timestamp>,
     /// What the last push kept off the server: bookmarks past the plan's limit, or
-    /// changes too large to send.
-    push_notice: Option<String>,
+    /// changes it refused.
+    push_notices: Vec<Notice>,
     /// Why the last sign-in didn't work, until the next one starts.
     problem: Option<String>,
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
@@ -121,8 +123,6 @@ pub enum SyncStatus {
     Error(String),
 }
 
-const ALLOWANCE_USED_UP: &str = "This month's organizing allowance is used up. Knoa keeps your organizing requests and resumes them automatically when allowance becomes available.";
-
 struct CloudGlobal(Entity<Cloud>);
 
 impl Global for CloudGlobal {}
@@ -161,7 +161,7 @@ impl Cloud {
                 generation: Generation::default(),
                 sync: SyncStatus::Starting,
                 last_synced: None,
-                push_notice: None,
+                push_notices: Vec::new(),
                 problem: None,
                 session_events: None,
                 waiting: waiting::Waiting::default(),
@@ -208,12 +208,11 @@ impl Cloud {
         self.last_synced
     }
 
-    /// Something the user should know that isn't an error of the sync itself: the plan's
-    /// limits holding back changes or organizing, or changes too large to send.
-    pub fn notice(&self) -> Option<&str> {
-        self.push_notice
-            .as_deref()
-            .or_else(|| self.allowance_used_up().then_some(ALLOWANCE_USED_UP))
+    /// What the user should know that isn't an error of the sync itself: the plan's
+    /// limits holding back changes or organizing, or changes the server refused.
+    pub fn notices(&self) -> Vec<Notice> {
+        let allowance = self.allowance_used_up().then_some(Notice::AllowanceUsedUp);
+        self.push_notices.iter().copied().chain(allowance).collect()
     }
 
     /// Read from the account rather than remembered, so it goes away by itself with the
@@ -264,9 +263,9 @@ impl Cloud {
         }
     }
 
-    fn set_push_notice(&mut self, notice: Option<String>, cx: &mut Context<'_, Cloud>) {
-        if self.push_notice != notice {
-            self.push_notice = notice;
+    fn set_push_notices(&mut self, notices: Vec<Notice>, cx: &mut Context<'_, Cloud>) {
+        if self.push_notices != notices {
+            self.push_notices = notices;
             cx.notify();
         }
     }

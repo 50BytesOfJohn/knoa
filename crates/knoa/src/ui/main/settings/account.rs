@@ -12,7 +12,7 @@ use jiff::Zoned;
 
 use super::{form, updates::when};
 use crate::{
-    services::cloud::{Cloud, Phase, SyncStatus},
+    services::cloud::{Cloud, Notice, Phase, SyncStatus},
     state::library::Library,
     ui::{
         components::{Tone, button},
@@ -170,8 +170,10 @@ impl AccountPage {
             None => "Not synced yet".to_owned(),
         };
         let mut rows = vec![form::row(&status, Some(&last), gpui::Empty, theme)];
-        if let Some(notice) = cloud.notice() {
-            rows.push(form::problem_note(notice.to_owned(), theme));
+        let notices = cloud.notices();
+        if !notices.is_empty() {
+            let text: Vec<String> = notices.iter().map(Notice::to_string).collect();
+            rows.push(form::problem_note(text.join(" "), theme));
         }
         form::group("Sync", rows, theme)
     }
