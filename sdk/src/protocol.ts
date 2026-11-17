@@ -444,7 +444,7 @@ export interface WorkspacesResponse {
 export interface SaveRequest {
 	workspace_id: WorkspaceId;
 	url: string;
-	/** The tab's title, shown until the organizer finds a better one. */
+	/** The tab's title, used as the bookmark's title instead of the URL. */
 	title?: string;
 	/**
 	 * The page as the user saw it, cut down by the extension: read instead of fetching the
