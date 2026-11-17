@@ -3484,6 +3484,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "knoa-bridge"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "jiff",
+ "knoa-core",
+ "knoa-paths",
+ "knoa-store",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "knoa-browser"
 version = "0.5.0"
 dependencies = [

@@ -56,6 +56,11 @@ impl Paths {
         self.support.join("dev-credentials.json")
     }
 
+    /// Where `knoa-bridge` pokes the app after it changed the library.
+    pub fn bridge_socket(&self) -> PathBuf {
+        self.support.join("bridge.sock")
+    }
+
     pub fn thumbnails(&self) -> PathBuf {
         self.cache.join("thumbnails")
     }

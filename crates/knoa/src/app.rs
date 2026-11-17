@@ -11,7 +11,7 @@ use knoa_paths::{Channel, Paths};
 use crate::{
     paths::AppPaths,
     services::{
-        ai, cloud::Cloud, credentials::Credentials, housekeeping, network::Network,
+        ai, bridge, cloud::Cloud, credentials::Credentials, housekeeping, network::Network,
         organizer::Organizer, sync, thumbnails::Thumbnails, updates::Updates,
     },
     state::{
@@ -51,6 +51,8 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     Cloud::init(library.clone(), fetcher.clone(), cx);
     Thumbnails::init(library.clone(), fetcher, cx);
     ai::connect(cx);
+    bridge::register(cx);
+    bridge::listen(&paths.bridge_socket(), library.clone(), cx);
     cx.set_global(AppPaths(paths));
 
     Updates::init(cx);

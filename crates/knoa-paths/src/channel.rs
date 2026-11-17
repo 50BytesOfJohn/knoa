@@ -22,6 +22,14 @@ impl Channel {
         }
     }
 
+    /// The native messaging host the browser extension talks to.
+    pub fn bridge_host(self) -> &'static str {
+        match self {
+            Self::Dev => "dev.knoa.bridge_dev",
+            Self::Release => "dev.knoa.bridge",
+        }
+    }
+
     pub fn app_id(self) -> &'static str {
         match self {
             Self::Dev => "dev.knoa.Knoa-Dev",
