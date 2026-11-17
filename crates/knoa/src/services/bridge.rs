@@ -40,7 +40,15 @@ pub fn listen(socket: &Path, library: Entity<Library>, cx: &mut App) {
     // A blocking receive would tie up one of GPUI's executor threads for good.
     std::thread::spawn(move || {
         let mut buf = [0; 64];
-        while listener.recv(&mut buf).is_ok() {
+        loop {
+            match listener.recv(&mut buf) {
+                Ok(_) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(err) => {
+                    tracing::warn!("stopped listening for the browser extension: {err}");
+                    break;
+                }
+            }
             if tx.unbounded_send(()).is_err() {
                 break;
             }
