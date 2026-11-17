@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use knoa_paths::Channel;
+use knoa_paths::{Channel, Paths};
 use serde_json::json;
 
 /// The extension's id in the Chrome Web Store, fixed by the `key` in its manifest.
@@ -34,6 +34,12 @@ pub fn register() -> anyhow::Result<()> {
         tracing::debug!("not running from Knoa.app, so the browser extension isn't registered");
         return Ok(());
     };
+    if Paths::relocated() {
+        tracing::info!(
+            "KNOA_DATA_DIR is set, so the browser extension isn't registered: its bridge would write to the usual library"
+        );
+        return Ok(());
+    }
     let support = dirs::data_dir().context("no Application Support directory")?;
     let host = Channel::current().bridge_host();
     let path = bridge.to_str().context("the bridge's path is not UTF-8")?;

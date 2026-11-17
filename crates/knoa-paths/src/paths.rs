@@ -6,6 +6,8 @@ use anyhow::Context as _;
 
 use crate::Channel;
 
+const DATA_DIR_VAR: &str = "KNOA_DATA_DIR";
+
 #[derive(Debug, Clone)]
 pub struct Paths {
     /// `~/Library/Application Support/Knoa`, or `Knoa Dev` for dev builds: the database,
@@ -23,12 +25,18 @@ impl Paths {
             Channel::current(),
             &dirs::data_dir().context("no Application Support directory")?,
             &dirs::cache_dir().context("no Caches directory")?,
-            std::env::var_os("KNOA_DATA_DIR").as_deref().map(Path::new),
+            std::env::var_os(DATA_DIR_VAR).as_deref().map(Path::new),
         );
         for dir in [&paths.support, &paths.cache] {
             std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
         }
         Ok(paths)
+    }
+
+    /// Whether `KNOA_DATA_DIR` moved this dev build's files. Only this process sees the
+    /// variable: one launched by something else, like the browser, uses the usual paths.
+    pub fn relocated() -> bool {
+        Channel::current() == Channel::Dev && std::env::var_os(DATA_DIR_VAR).is_some()
     }
 
     fn select(channel: Channel, support: &Path, cache: &Path, data_dir: Option<&Path>) -> Self {
