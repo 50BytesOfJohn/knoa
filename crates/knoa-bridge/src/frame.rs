@@ -1,4 +1,4 @@
-//! Native messaging framing: a 32-bit length in native byte order, then UTF-8 JSON.
+//! Native messaging framing: a 32-bit length in native byte order, then the message.
 
 use std::io::{self, Read, Write};
 
@@ -8,8 +8,8 @@ use anyhow::{Context as _, bail};
 /// most `MAX_SNAPSHOT_BYTES` (1 MiB), which JSON escaping can grow a few times over.
 const MAX_MESSAGE: u32 = 8 * 1024 * 1024;
 
-/// The next message, or `None` when the browser closed the pipe.
-pub fn read(input: &mut impl Read) -> anyhow::Result<Option<serde_json::Value>> {
+/// The next message's bytes, or `None` when the browser closed the pipe.
+pub fn read(input: &mut impl Read) -> anyhow::Result<Option<Vec<u8>>> {
     let mut len = [0; 4];
     match input.read_exact(&mut len) {
         Ok(()) => {}
@@ -22,7 +22,7 @@ pub fn read(input: &mut impl Read) -> anyhow::Result<Option<serde_json::Value>> 
     }
     let mut body = vec![0; len as usize];
     input.read_exact(&mut body).context("reading the message")?;
-    Ok(Some(serde_json::from_slice(&body)?))
+    Ok(Some(body))
 }
 
 pub fn write(output: &mut impl Write, message: &serde_json::Value) -> anyhow::Result<()> {
@@ -44,7 +44,11 @@ mod tests {
         let mut framed = Vec::new();
         write(&mut framed, &message).unwrap();
         let mut input = framed.as_slice();
-        assert_eq!(read(&mut input).unwrap(), Some(message));
+        let body = read(&mut input).unwrap().expect("a message");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap(),
+            message
+        );
         assert_eq!(read(&mut input).unwrap(), None);
     }
 }

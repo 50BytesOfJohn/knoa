@@ -6,7 +6,7 @@ use rusqlite::{OptionalExtension as _, params};
 use crate::{Result, Store, search, sync::Recorder, trash};
 
 /// A link to add by hand, with what the browser extension knows about its page.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NewLink<'a> {
     pub url: &'a str,
     /// The tab's title, used instead of the URL. Blank titles are ignored.
@@ -20,7 +20,8 @@ impl<'a> NewLink<'a> {
     pub fn new(url: &'a str) -> NewLink<'a> {
         NewLink {
             url,
-            ..NewLink::default()
+            title: None,
+            snapshot: None,
         }
     }
 }

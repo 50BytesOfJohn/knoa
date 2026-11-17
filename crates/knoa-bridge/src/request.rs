@@ -26,15 +26,15 @@ enum Request {
 
 /// Answers one request. Failures become `{ "ok": false, "error": ... }` so the extension
 /// can tell the user instead of seeing the host exit.
-pub fn handle(message: Value) -> Value {
+pub fn handle(message: &[u8]) -> Value {
     match answer(message) {
         Ok(reply) => reply,
         Err(err) => json!({ "ok": false, "error": format!("{err:#}") }),
     }
 }
 
-fn answer(message: Value) -> anyhow::Result<Value> {
-    let request: Request = serde_json::from_value(message).context("unknown request")?;
+fn answer(message: &[u8]) -> anyhow::Result<Value> {
+    let request: Request = serde_json::from_slice(message).context("unknown request")?;
     let paths = Paths::new()?;
     let mut store = Store::open(&paths.database()).context("opening the library")?;
     match request {

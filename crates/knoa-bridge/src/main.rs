@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     // callers to Knoa's extension, so it isn't needed.
     let (mut input, mut output) = (io::stdin().lock(), io::stdout().lock());
     while let Some(message) = frame::read(&mut input)? {
-        frame::write(&mut output, &request::handle(message))?;
+        frame::write(&mut output, &request::handle(&message))?;
     }
     Ok(())
 }
