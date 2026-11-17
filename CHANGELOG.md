@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.5.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.5.0) - 2026-11-17
+
+### Changed
+
+- Build sidebar v2 on macOS ([#45](https://github.com/50BytesOfJohn/knoa/pull/45))
 ## [0.4.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.4.1) - 2026-11-16
 
 ### Changed
