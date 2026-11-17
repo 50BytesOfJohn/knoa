@@ -39,8 +39,9 @@ impl SidebarView {
             theme,
         )
         .rounded(px(6.))
-        .hidden()
-        .group_hover(SIDEBAR_GROUP, gpui::Styled::flex)
+        // Visibility, not display, as `row_button` says.
+        .invisible()
+        .group_hover(SIDEBAR_GROUP, gpui::Styled::visible)
         .tooltip(tip("New folder", Some(&NewFolder), theme))
         .on_click(cx.listener(|_, _, _, cx| cx.emit(SidebarEvent::NewFolder(None))));
         div()

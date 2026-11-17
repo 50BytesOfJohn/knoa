@@ -165,6 +165,8 @@ impl SidebarView {
                 },
             );
         row_button(("disclosure", id.0 as usize), theme)
+            .absolute()
+            .top(ROW_BUTTON_TOP)
             .left(PADDING_LEFT + indent - (ROW_BUTTON - ICON) / 2.)
             .child(chevron)
             .on_click(cx.listener(move |this, _, _, cx| {
@@ -183,8 +185,7 @@ impl SidebarView {
     ) -> impl IntoElement {
         let theme = Theme::get(cx);
         let base = row_button(("folder-more", id.0 as usize), theme)
-            .right(MENU_BUTTON_RIGHT)
-            .when(open, gpui::Styled::flex)
+            .when(open, gpui::Styled::visible)
             .child(svg_icon(
                 line_icon!("ellipsis"),
                 ROW_BUTTON_ICON,
@@ -192,28 +193,39 @@ impl SidebarView {
             ));
         let view = cx.entity().downgrade();
         let tracked = view.clone();
-        MenuTrigger::new(base, theme.hover)
+        let trigger = MenuTrigger::new(base, theme.hover)
             .dropdown_menu(move |menu, window, cx| folder_menu(menu, &view, id, window, cx))
             .on_open_change(move |open, _, cx| {
                 let _ = tracked.update(cx, |this, cx| {
                     this.folder_menu = open.then_some(id);
                     cx.notify();
                 });
-            })
+            });
+        // The dropdown wraps its trigger in an element of its own, so the place over the
+        // count is given to a slot rather than to the button inside it.
+        div()
+            .absolute()
+            .top(ROW_BUTTON_TOP)
+            .right(MENU_BUTTON_RIGHT)
+            .size(ROW_BUTTON)
+            .child(trigger)
     }
 }
 
-/// A small button over the row, shown while the pointer is on it.
+/// A small button over the row, shown while the pointer is on it. Its caller places it.
 fn row_button(id: (&'static str, usize), theme: &Theme) -> gpui::Stateful<gpui::Div> {
     let (hover, text) = (theme.hover, theme.text);
     div()
         .id(id)
-        .absolute()
-        .top(ROW_BUTTON_TOP)
         .size(ROW_BUTTON)
         .rounded(px(6.))
-        .hidden()
-        .group_hover(ROW_GROUP, gpui::Styled::flex)
+        // Hidden by visibility, not display. GPUI decides `display: none` at prepaint from
+        // the hover of the last mouse move, but at paint from where the pointer is now.
+        // They differ when the window comes back to the front with the pointer over the
+        // row, and a child shown only at paint was never prepainted: GPUI panics.
+        .invisible()
+        .group_hover(ROW_GROUP, gpui::Styled::visible)
+        .flex()
         .items_center()
         .justify_center()
         .text_color(theme.muted)
