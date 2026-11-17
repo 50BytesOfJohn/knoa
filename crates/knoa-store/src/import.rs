@@ -35,7 +35,7 @@ impl Store {
         bookmarks: &[NewBookmark],
         new: NewBookmarks,
     ) -> Result<ImportReport> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         let mut report = ImportReport::default();
         let mut seen = HashSet::new();

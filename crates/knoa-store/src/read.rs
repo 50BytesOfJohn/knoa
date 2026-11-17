@@ -139,7 +139,7 @@ impl Store {
         identity: &BookmarkIdentity,
         image: &Image,
     ) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         if identity.is_current(&tx)? {
             set_image(&tx, identity.id(), image)?;
         }
@@ -174,7 +174,7 @@ impl Store {
         sql: &str,
         params: impl rusqlite::Params,
     ) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         Recorder::user(&tx)?.on_bookmark(id.0, || {
             tx.execute(sql, params)?;
             Ok(())

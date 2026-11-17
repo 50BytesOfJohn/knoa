@@ -80,7 +80,7 @@ impl Store {
     /// Linking again to the same account changes nothing; the caller pulls as usual.
     /// Another account is refused until [`Store::unlink`].
     pub fn link(&mut self, user_id: &str, account: AccountRows) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let linked: Option<String> = tx
             .query_row("SELECT user_id FROM sync_state", [], |row| row.get(0))
             .optional()?;
@@ -107,7 +107,7 @@ impl Store {
     /// Makes the library local again: forgets the account, sync ids, unpushed changes and
     /// server thumbnails. The library itself stays as it is.
     pub fn unlink(&mut self) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute_batch(
             "DELETE FROM sync_state;
              DELETE FROM outbox;

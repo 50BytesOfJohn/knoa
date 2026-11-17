@@ -15,7 +15,7 @@ impl Store {
     /// [`crate::Error::FolderPlacement`] when the parent is in another workspace, inside the
     /// folder, or the subtree would be too deep.
     pub fn move_folder(&mut self, id: FolderId, parent: Option<FolderId>) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         let before = recorder.folder_before(id.0)?;
         place(&tx, id, parent)?;
@@ -38,7 +38,7 @@ impl Store {
         parent: Option<FolderId>,
         before: Option<FolderId>,
     ) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let Some(tree) = tree::load_around(&tx, id)? else {
             return Ok(());
         };

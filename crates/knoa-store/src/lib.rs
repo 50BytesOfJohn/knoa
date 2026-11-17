@@ -21,7 +21,7 @@ mod workspaces;
 
 use std::{path::Path, time::Duration};
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, Transaction, TransactionBehavior};
 
 pub use add_link::{AddOutcome, AddedLink, NewLink};
 pub use identity::BookmarkIdentity;
@@ -42,6 +42,8 @@ pub enum Error {
         "the library was saved by a newer version of Knoa (schema {found}, this version knows up to {supported}); update Knoa to open it"
     )]
     NewerDatabase { found: usize, supported: usize },
+    #[error("Open Knoa once to update its library, then try again.")]
+    OlderDatabase,
     #[error("the library is linked to another account ({linked}); unlink it first")]
     OtherAccount { linked: String },
     #[error("the library isn't linked to an account")]
@@ -86,6 +88,21 @@ impl Store {
         Store::init(Connection::open(path)?)
     }
 
+    /// Opens the library the app keeps up to date, for a process that runs beside it, like
+    /// the browser extension's bridge. It never migrates: the app does, at launch, where a
+    /// failure can be reported. A schema older or newer than this version's is refused.
+    pub fn open_current(path: &Path) -> Result<Store> {
+        let conn = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        schema::ensure_current(&conn)?;
+        Ok(Store { conn })
+    }
+
     /// Opens an existing database for reading only; every write through it fails. It
     /// doesn't migrate, so open it after `Store::open` has brought the schema up to date.
     pub fn open_read_only(path: &Path) -> Result<Store> {
@@ -108,6 +125,15 @@ impl Store {
         // commit would.
         let _snapshot = self.conn.unchecked_transaction()?;
         read(self)
+    }
+
+    /// Starts a write. It takes the write lock up front: a transaction that read first and
+    /// wrote second would fail at once with `SQLITE_BUSY_SNAPSHOT` if another process (the
+    /// bridge, or the app) wrote in between, without waiting out the busy timeout.
+    fn write(&mut self) -> Result<Transaction<'_>> {
+        Ok(self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?)
     }
 
     fn init(conn: Connection) -> Result<Store> {
@@ -251,5 +277,25 @@ mod tests {
 
         assert!(reader.create_workspace("Sneaky", Ink::Ochre).is_err());
         assert_eq!(writer.workspaces().unwrap().len(), seen.len());
+    }
+
+    #[test]
+    fn open_current_refuses_an_older_schema_without_migrating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("knoa.db");
+        drop(Store::open(&path).unwrap());
+        let version = |conn: &Connection| -> usize {
+            conn.pragma_query_value(None, "user_version", |row| row.get(0))
+                .unwrap()
+        };
+        let conn = Connection::open(&path).unwrap();
+        let older = version(&conn) - 1;
+        conn.pragma_update(None, "user_version", older).unwrap();
+
+        assert!(matches!(
+            Store::open_current(&path),
+            Err(Error::OlderDatabase)
+        ));
+        assert_eq!(version(&conn), older);
     }
 }

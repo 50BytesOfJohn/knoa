@@ -60,7 +60,7 @@ impl Store {
 
     /// Creates a workspace that syncs nothing until the user picks browsers for it.
     pub fn create_workspace(&mut self, name: &str, color: Ink) -> Result<WorkspaceId> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         tx.execute(
             "INSERT INTO workspaces (name, color, position)
              VALUES (?1, ?2, (SELECT coalesce(max(position), 0) + 1 FROM workspaces))",
@@ -74,7 +74,7 @@ impl Store {
     }
 
     pub fn update_workspace(&mut self, workspace: &Workspace) -> Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         let before = recorder.workspace_before(workspace.id.0)?;
         tx.execute(
@@ -103,7 +103,7 @@ impl Store {
         if edits.is_empty() {
             return Ok(());
         }
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         let before = recorder.workspace_before(id.0)?;
         tx.execute(
@@ -137,7 +137,7 @@ impl Store {
 
     /// Deletes a workspace with its bookmarks and folders. The last one can't be deleted.
     pub fn delete_workspace(&mut self, id: WorkspaceId) -> Result<bool> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let count: usize = tx.query_row("SELECT count(*) FROM workspaces", [], |row| row.get(0))?;
         if count <= 1 {
             return Ok(false);

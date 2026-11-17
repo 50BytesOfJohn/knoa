@@ -13,7 +13,7 @@ impl Store {
             return Ok(());
         }
         let color = edits.color.map(color_columns);
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let recorder = Recorder::user(&tx)?;
         let before = recorder.folder_before(id.0)?;
         tx.execute(

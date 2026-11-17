@@ -12,7 +12,10 @@ pub struct NewLink<'a> {
     /// The tab's title, used instead of the URL. Blank titles are ignored.
     pub title: Option<&'a str>,
     /// The page as the user saw it. The organizer reads it instead of fetching the page,
-    /// so pages behind a login get organized too. It stays on this Mac, with the job.
+    /// so pages behind a login get organized too. It stays on this Mac, in the job row,
+    /// and goes with the job: when the server organizes for the account, the handover
+    /// drops it and the server fetches the page itself. What organizing extracts from it
+    /// (title, summary, tags, search text, thumbnail) syncs like any organized page's.
     pub snapshot: Option<&'a str>,
 }
 
@@ -56,7 +59,7 @@ impl Store {
         now: i64,
     ) -> Result<AddedLink> {
         let url = link.url;
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let existing: Option<(i64, bool)> = tx
             .query_row(
                 "SELECT id, deleted_at IS NOT NULL FROM bookmarks WHERE workspace_id = ?1 AND url = ?2",

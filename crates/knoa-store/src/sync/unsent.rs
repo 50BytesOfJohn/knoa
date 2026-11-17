@@ -24,7 +24,7 @@ impl Store {
     /// Settles answered mutations, retaining refused creations until room becomes
     /// available or their synced content changes locally.
     pub fn settle(&mut self, results: &[MutationResult]) -> Result<Settled> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let rows = results
             .iter()
             .map(|result| Ok((result, outbox::row_of(&tx, &result.mid)?)))
@@ -76,7 +76,7 @@ impl Store {
 
     /// Queues every bookmark the plan's limit refused again, whole. Returns how many.
     pub fn resend_unsent(&mut self) -> Result<usize> {
-        let tx = self.conn.transaction()?;
+        let tx = self.write()?;
         let ids = {
             let mut stmt =
                 tx.prepare("SELECT id FROM bookmarks WHERE delivery = 'blocked_quota'")?;

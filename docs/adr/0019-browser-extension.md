@@ -24,7 +24,11 @@ app at all. An extension has to work for both.
     refresh and organize. The app registers the host with every installed browser at
     each launch: `dev.knoa.bridge`, or `dev.knoa.bridge_dev` for Knoa Dev, so the two
     never share a library. The bridge finds the library through `knoa-paths`, the same
-    code as the app.
+    code as the app. It never migrates the library: a schema older than its own gets
+    "Open Knoa once to update its library". A Knoa Dev run with `KNOA_DATA_DIR` skips
+    registering, since the browser-launched bridge can't see that variable. `hello` also
+    says whether the library is linked to an account, so the extension can suggest
+    signing in.
   - **Cloud mode (signed in):** HTTPS to the Knoa API, `GET /v1/workspaces` and
     `POST /v1/bookmarks` (`sdk/src/protocol.ts`). A Mac linked to the account gets the
     bookmark through sync.
@@ -42,7 +46,11 @@ app at all. An extension has to work for both.
   - On the Mac it lives in the bookmark's job row, never in the outbox, and goes when the
     job ends or the bookmark is deleted. A link the library already has drops it. When
     the server organizes for the account, the Mac hands over its queue and the snapshot
-    goes with the job.
+    is dropped with the job: the server fetches the page itself. Saving in Cloud mode is
+    how a Pro account gets a snapshot organized.
+  - What the organizer extracts from it (title, summary, tags, search text and
+    thumbnail) is the bookmark's, like any organized page's, and syncs when the library
+    is linked to an account. The snapshot itself never leaves the Mac.
   - In the cloud it is kept only when the server organizes for the account, in R2 under
     `snapshots/`, deleted after organizing and expired after a day.
 
@@ -55,3 +63,6 @@ app at all. An extension has to work for both.
   bookmarks are unique per workspace and URL.
 - In Cloud mode a snapshot reaches the server only for accounts it organizes for; free
   accounts organize on a Mac, which never sees the snapshot.
+- In Local mode the bridge and the app write to one database from two processes. Every
+  write takes the lock up front, and each migration step re-checks the schema version
+  under it.

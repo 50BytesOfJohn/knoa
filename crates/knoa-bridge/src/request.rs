@@ -36,7 +36,7 @@ pub fn handle(message: &[u8]) -> Value {
 fn answer(message: &[u8]) -> anyhow::Result<Value> {
     let request: Request = serde_json::from_slice(message).context("unknown request")?;
     let paths = Paths::new()?;
-    let mut store = Store::open(&paths.database()).context("opening the library")?;
+    let mut store = Store::open_current(&paths.database()).context("opening the library")?;
     match request {
         Request::Hello => {
             let workspaces: Vec<Value> = store
@@ -48,6 +48,7 @@ fn answer(message: &[u8]) -> anyhow::Result<Value> {
                 "ok": true,
                 "version": env!("CARGO_PKG_VERSION"),
                 "workspaces": workspaces,
+                "linked": store.is_linked()?,
             }))
         }
         Request::Save {
