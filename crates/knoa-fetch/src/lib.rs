@@ -32,6 +32,8 @@ pub enum Error {
     Http(#[from] reqwest::Error),
     #[error("not a valid web address")]
     BadUrl,
+    #[error("a private network address, not fetched")]
+    PrivateAddress,
 }
 
 impl Error {
