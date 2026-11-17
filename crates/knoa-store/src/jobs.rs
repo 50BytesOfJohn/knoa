@@ -15,6 +15,8 @@ pub struct Job {
     pub attempts: u32,
     /// Only file the bookmark into folders again, from what it already has.
     pub folders_only: bool,
+    /// The page as the user saw it, from the browser extension: read instead of fetching.
+    pub snapshot: Option<String>,
     identity: BookmarkIdentity,
 }
 
@@ -77,13 +79,13 @@ impl Store {
     pub fn take_jobs(&mut self, now: i64, limit: usize) -> Result<Vec<Job>> {
         let tx = self.conn.transaction()?;
         drop_settled_backfills(&tx)?;
-        let due: Vec<(i64, u32, bool)> = {
+        let due: Vec<(i64, u32, bool, Option<String>)> = {
             let mut stmt = tx.prepare(
-                "SELECT j.bookmark_id, j.attempts, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+                "SELECT j.bookmark_id, j.attempts, j.folders_only, j.snapshot FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
                  WHERE j.run_after <= ?1 AND b.status = 'queued' ORDER BY b.added_at DESC LIMIT ?2",
             )?;
             stmt.query_map(params![now, limit], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
             })?
             .collect::<rusqlite::Result<_>>()?
         };
@@ -96,7 +98,7 @@ impl Store {
         tx.commit()?;
 
         let mut jobs = Vec::with_capacity(due.len());
-        for (id, attempts, folders_only) in due {
+        for (id, attempts, folders_only, snapshot) in due {
             if let Some(bookmark) = self.bookmark(BookmarkId(id))? {
                 let Some(identity) = self.bookmark_identity(&bookmark)? else {
                     continue;
@@ -105,6 +107,7 @@ impl Store {
                     bookmark,
                     attempts,
                     folders_only,
+                    snapshot,
                     identity,
                 });
             }
@@ -558,7 +561,11 @@ mod tests {
     fn the_ais_title_replaces_only_a_url_standing_in_for_one() {
         let mut store = Store::open_in_memory().unwrap();
         let added = store
-            .add_link(WORKSPACE, "https://w.example/full/a.jpg", 1)
+            .add_link(
+                WORKSPACE,
+                &crate::NewLink::new("https://w.example/full/a.jpg"),
+                1,
+            )
             .unwrap();
         let links = [bookmark("https://b.dev/", "https://b.dev/", 2)];
         store

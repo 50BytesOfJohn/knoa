@@ -23,7 +23,7 @@ use std::{path::Path, time::Duration};
 
 use rusqlite::{Connection, OpenFlags};
 
-pub use add_link::AddedLink;
+pub use add_link::{AddOutcome, AddedLink, NewLink};
 pub use identity::BookmarkIdentity;
 pub use import::{ImportReport, NewBookmarks};
 pub use jobs::Job;

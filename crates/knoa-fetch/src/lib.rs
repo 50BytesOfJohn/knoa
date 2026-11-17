@@ -141,6 +141,19 @@ impl Fetcher {
         Ok(self.page_from_html(&url, &response.url, meta, site).await)
     }
 
+    /// Builds what [`Fetcher::fetch_with_preview`] would from `html`, the page as the user
+    /// saw it in the browser, instead of fetching it: pages behind a login or rendered in
+    /// the browser read as they looked. Site extractors and the preview image still use
+    /// the network, and a sign-in wall is still recognized as one.
+    pub async fn fetch_snapshot(&self, url: &str, html: String) -> Result<Fetched, Error> {
+        let url = Url::parse(url).map_err(|_| Error::BadUrl)?;
+        let site = sites::extract(&self.http, &url).await.unwrap_or_default();
+        let meta = off_thread(move || html::parse(&html))
+            .await
+            .unwrap_or_default();
+        Ok(self.page_from_html(&url, &url, meta, site).await)
+    }
+
     async fn page_from_html(
         &self,
         url: &Url,
@@ -304,5 +317,36 @@ fn title_only(url: &Url, note: &str) -> Page {
             ..bare(url, Quality::TitleOnly, &fields)
         }),
         ..Page::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_snapshot_is_read_instead_of_the_page() {
+        let cache = tempfile::tempdir().expect("a temporary directory");
+        let fetcher = Fetcher::new(cache.path().to_owned()).expect("a fetcher");
+        let html = r#"<html><head><title>The Third Man</title>
+            <script type="application/ld+json">{"@type": "Movie", "name": "The Third Man",
+            "datePublished": "1949-09-02", "duration": "PT1H44M"}</script></head>
+            <body><p>Only signed-in members see this review.</p></body></html>"#;
+
+        // `.invalid` never resolves, so a page fetch would fail.
+        let fetched = fetcher
+            .fetch_snapshot("https://members.invalid/review/1", html.to_owned())
+            .await
+            .expect("read without fetching");
+
+        let page = fetched.page;
+        assert_eq!(page.title.as_deref(), Some("The Third Man"));
+        assert!(
+            page.text.contains("Only signed-in members"),
+            "{}",
+            page.text
+        );
+        assert_eq!(page.kind, Some(Kind::Movie));
+        assert_eq!(page.fields.get("runtime"), Some(&Value::from(104)));
     }
 }

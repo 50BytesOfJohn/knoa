@@ -193,7 +193,9 @@ mod tests {
     fn queued_bookmarks_go_to_the_cloud_only_once_the_server_has_them() {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
-        let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new("https://a.dev/"), 10)
+            .unwrap();
         assert_eq!(store.cloud_jobs(10).unwrap().len(), 0);
 
         store.settle(&applied(&store)).unwrap();
@@ -214,7 +216,9 @@ mod tests {
     fn a_thumbnail_replaced_during_its_upload_is_uploaded_in_turn() {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
-        let added = store.add_link(WORKSPACE, "https://a.dev/", 10).unwrap();
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new("https://a.dev/"), 10)
+            .unwrap();
         store.settle(&applied(&store)).unwrap();
         let image = |path: &str| Image {
             path: path.into(),
@@ -242,7 +246,9 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
         let url = "https://a.dev/";
-        let added = store.add_link(WORKSPACE, url, 10).unwrap();
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new(url), 10)
+            .unwrap();
         store.settle(&applied(&store)).unwrap();
         let image = Image {
             path: "/cache/new.png".into(),

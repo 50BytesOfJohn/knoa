@@ -80,13 +80,13 @@ fn releasing_blocked_cloud_jobs_restores_status_and_preserves_pending_jobs() {
     let put = pushed(&store).remove(0);
     store.settle(&[answer(&put, "quota")]).unwrap();
     let invalid = store
-        .add_link(WORKSPACE, "https://invalid.dev/", 10)
+        .add_link(WORKSPACE, &crate::NewLink::new("https://invalid.dev/"), 10)
         .unwrap()
         .id;
     let put = pushed(&store).remove(0);
     store.settle(&[answer(&put, "invalid")]).unwrap();
     let pending = store
-        .add_link(WORKSPACE, "https://pending.dev/", 10)
+        .add_link(WORKSPACE, &crate::NewLink::new("https://pending.dev/"), 10)
         .unwrap()
         .id;
     let outbox = pushed(&store);

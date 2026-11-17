@@ -314,6 +314,11 @@ ALTER TABLE folders ADD COLUMN parent_id INTEGER REFERENCES folders (id) ON DELE
 -- Folder counts and places look links up by folder.
 CREATE INDEX bookmark_folders_folder ON bookmark_folders (folder_id);
 ",
+    r"
+-- The page as the user saw it, from the browser extension, read instead of fetching the
+-- page. It lives and dies with the job, and never leaves this Mac.
+ALTER TABLE jobs ADD COLUMN snapshot TEXT;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise
