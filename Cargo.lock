@@ -3451,6 +3451,7 @@ dependencies = [
  "knoa-browser",
  "knoa-core",
  "knoa-fetch",
+ "knoa-paths",
  "knoa-store",
  "knoa-sync",
  "lyon_tessellation",
@@ -3526,6 +3527,14 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "knoa-paths"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "dirs 6.0.0",
 ]
 
 [[package]]

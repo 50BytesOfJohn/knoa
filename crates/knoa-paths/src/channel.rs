@@ -7,6 +7,7 @@ pub enum Channel {
 }
 
 impl Channel {
+    /// Set at build time by `KNOA_CHANNEL=release`; every other build is Knoa Dev.
     pub fn current() -> Self {
         match option_env!("KNOA_CHANNEL") {
             Some("release") => Self::Release,

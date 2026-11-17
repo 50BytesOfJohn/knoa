@@ -6,13 +6,11 @@ use std::sync::Arc;
 use futures::{StreamExt as _, channel::mpsc};
 use gpui::{AsyncApp, Context, TaskExt as _, WeakEntity};
 use knoa_core::protocol::Organizer as Who;
+use knoa_paths::Channel;
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
 use super::{Backend, Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
-use crate::{
-    channel::Channel,
-    services::{credentials::Credentials, generation::Ticket, network::Network},
-};
+use crate::services::{credentials::Credentials, generation::Ticket, network::Network};
 
 impl Cloud {
     /// At launch: signed in if a refresh token is stored. A remembered account that the

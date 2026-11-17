@@ -9,14 +9,13 @@
 
 use gpui::{App, Global};
 use jiff::Timestamp;
+use knoa_paths::Channel;
 use objc2::{
     msg_send,
     rc::{Allocated, Retained},
     runtime::{AnyClass, AnyObject},
 };
 use objc2_foundation::{NSBundle, NSDate, NSString};
-
-use crate::channel::Channel;
 
 pub struct Updates {
     /// The `SPUStandardUpdaterController`, which shows Sparkle's standard windows. It owns

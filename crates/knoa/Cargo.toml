@@ -27,6 +27,7 @@ knoa-ai.workspace = true
 knoa-browser.workspace = true
 knoa-core.workspace = true
 knoa-fetch.workspace = true
+knoa-paths.workspace = true
 knoa-store.workspace = true
 knoa-sync.workspace = true
 serde.workspace = true

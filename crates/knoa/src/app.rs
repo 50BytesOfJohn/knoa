@@ -6,10 +6,10 @@ use anyhow::Context as _;
 use gpui::{
     App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowOptions, point, px, size,
 };
+use knoa_paths::{Channel, Paths};
 
 use crate::{
-    channel::Channel,
-    paths::Paths,
+    paths::AppPaths,
     services::{
         ai, cloud::Cloud, credentials::Credentials, housekeeping, network::Network,
         organizer::Organizer, sync, thumbnails::Thumbnails, updates::Updates,
@@ -51,7 +51,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
     Cloud::init(library.clone(), fetcher.clone(), cx);
     Thumbnails::init(library.clone(), fetcher, cx);
     ai::connect(cx);
-    cx.set_global(paths);
+    cx.set_global(AppPaths(paths));
 
     Updates::init(cx);
     crate::menus::init(cx);

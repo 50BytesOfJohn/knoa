@@ -6,9 +6,9 @@ mod queue;
 use std::path::PathBuf;
 
 use gpui::{App, AppContext as _, Global, Task};
+use knoa_paths::Channel;
 
 use self::queue::{Operation, Queue};
-use crate::channel::Channel;
 
 pub struct Credentials {
     queue: Queue,

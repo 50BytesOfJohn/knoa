@@ -4,7 +4,7 @@ use gpui::{Context, Div, ParentElement as _, StatefulInteractiveElement as _, St
 
 use super::{SettingsView, form, updates};
 use crate::{
-    paths::Paths,
+    paths::AppPaths,
     state::settings::SettingsFile,
     ui::{
         components::{Tone, button},
@@ -14,8 +14,8 @@ use crate::{
 
 pub(super) fn page(cx: &mut Context<'_, SettingsView>) -> Div {
     let theme = Theme::get(cx).clone();
-    let support = cx.global::<Paths>().support.clone();
-    let database = cx.global::<Paths>().database();
+    let paths = &cx.global::<AppPaths>().0;
+    let (support, database) = (paths.support.clone(), paths.database());
 
     let location = form::row(
         "Library location",
