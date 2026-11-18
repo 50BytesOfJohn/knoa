@@ -1,5 +1,7 @@
 //! schema.org JSON-LD: compacted for the prompt, and read directly for exact fields.
 
+mod event;
+
 use knoa_core::{Fields, Kind};
 use serde_json::{Map, Value};
 
@@ -86,13 +88,22 @@ fn strip(value: &Value) -> Value {
 
 /// A kind and exact fields from the most specific item on the page. Pages embed generic
 /// items (a recipe page carries a `VideoObject` for its how-to clip), so a recipe, movie or
-/// product wins over a video.
+/// product wins over a video, and an event over anything: its ticket page lists the venue
+/// as a place and the tickets as products.
 pub fn structured(items: &[Value]) -> Option<(Kind, Fields)> {
     let (kind, item) = items
         .iter()
         .filter_map(|item| Some((kind_of(&type_of(item)?)?, item)))
-        .min_by_key(|(kind, _)| usize::from(*kind == Kind::Video))?;
-    Some((kind, fields_for(kind, item)))
+        .min_by_key(|(kind, _)| match kind {
+            Kind::Event => 0,
+            Kind::Video => 2,
+            _ => 1,
+        })?;
+    let fields = match kind {
+        Kind::Event => event::fields(item),
+        _ => fields_for(kind, item),
+    };
+    Some((kind, fields))
 }
 
 fn kind_of(schema_type: &str) -> Option<Kind> {
@@ -107,6 +118,7 @@ fn kind_of(schema_type: &str) -> Option<Kind> {
         "Restaurant" | "LocalBusiness" | "Place" | "Hotel" | "Museum" | "TouristAttraction" => {
             Kind::Place
         }
+        t if event::TYPES.contains(&t) => Kind::Event,
         _ => return None,
     })
 }
@@ -203,6 +215,37 @@ mod tests {
         assert_eq!(
             Value::Object(fields),
             json!({"year": 1949, "runtime": 104, "director": ["Carol Reed"]})
+        );
+    }
+
+    #[test]
+    fn a_ticket_page_is_its_event_not_its_venue_or_tickets() {
+        let items = [
+            json!({"@context": "https://schema.org", "@type": "Place", "name": "Paradiso",
+                "address": {"@type": "PostalAddress", "addressLocality": "Amsterdam"}}),
+            json!({"@context": "https://schema.org", "@type": "Product", "name": "General admission",
+                "offers": {"@type": "Offer", "price": "35.00", "priceCurrency": "EUR"}}),
+            json!({"@context": "https://schema.org", "@type": "MusicEvent",
+                "name": "Low Tide: Live at Paradiso",
+                "startDate": "2026-12-05T19:30:00+01:00", "endDate": "2026-12-05T23:00:00+01:00",
+                "eventAttendanceMode": "https://schema.org/MixedEventAttendanceMode",
+                "location": [
+                    {"@type": "VirtualLocation", "url": "https://stream.example/low-tide"},
+                    {"@type": "Place", "name": "Paradiso", "address": {"@type": "PostalAddress",
+                        "streetAddress": "Weteringschans 6", "addressLocality": "Amsterdam",
+                        "addressCountry": {"@type": "Country", "name": "Netherlands"}}}
+                ],
+                "organizer": [{"@type": "Organization", "name": "Mojo"},
+                    {"@type": "Organization", "name": "Paradiso"}],
+                "offers": [{"@type": "Offer", "price": "35.00"}]}),
+        ];
+        let (kind, fields) = structured(&compact(&items)).unwrap();
+        assert_eq!(kind, Kind::Event);
+        assert_eq!(
+            Value::Object(fields),
+            json!({"starts": "2026-12-05T19:30+01:00", "ends": "2026-12-05T23:00+01:00",
+                "venue": "Paradiso", "city": "Amsterdam", "country": "Netherlands",
+                "organizer": "Mojo, Paradiso", "attendance": "hybrid"})
         );
     }
 }

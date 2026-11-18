@@ -33,6 +33,7 @@ impl MainView {
         let scope = match library.place() {
             Place::Everything => None,
             Place::Gallery => Some("Gallery".to_owned()),
+            Place::Events => Some("Events".to_owned()),
             Place::UpNext => Some("Up next".to_owned()),
             Place::Unsorted => Some("Unsorted".to_owned()),
             Place::NotOrganized => Some("Not organized".to_owned()),

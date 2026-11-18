@@ -56,7 +56,11 @@ See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md) and, for folders,
   profile their links open in, and an optional keep guideline ([ADR 0011](adr/0011-workspaces-fed-by-browsers.md)). URLs are
   unique per workspace.
 - Kind definitions (kinds and their typed fields) are data in an embedded file in
-  `knoa-core`.
+  `knoa-core`, copied to `sdk/src/kinds.json` for the web.
+- An event's `starts` and `ends` are `datetime` fields: `YYYY-MM-DD` (all day),
+  `YYYY-MM-DDTHH:MM` (floating wall time) or that with a UTC offset (an instant).
+  `knoa-core`'s `event` module and the SDK's `events.ts` read them without a time-zone
+  database; each app places them in the viewer's local time.
 - A bookmark stores its kind, `fields` and `extras`. Fields and extras are JSON columns;
   field filters use SQLite's `json_extract`.
 - Tags and folders are many-to-many with bookmarks.
@@ -175,7 +179,9 @@ resumes on its own once that one gets through, or when the user sets a new key.
    image is refused, never stored).
 2. **Extract** metadata, in this order:
    - site-specific extractors for popular sites (YouTube, Vimeo, IMDb, GitHub, ...);
-   - structured data on the page: schema.org JSON-LD, Open Graph, oEmbed;
+   - structured data on the page: schema.org JSON-LD, Open Graph, oEmbed. The most
+     specific item decides the kind: an event over the venue and ticket products on its
+     page, a recipe or movie over a video;
    - LLM extraction from the page text when the above is not enough.
 
    A link straight to an image file is the bookmark itself. It is downloaded once and
@@ -201,7 +207,9 @@ resumes on its own once that one gets through, or when the user sets a new key.
    tags, and whether it fits when the workspace has a guideline. Input: the workspace's
    instructions, guideline and tag list, the extracted evidence and about 4k characters
    of page text. A bookmark that doesn't fit is stored as set aside, with the reason, and
-   gets no folders. Values read from the page override the model's. When the workspace
+   gets no folders. For an event the prompt also carries the organizer's date (the
+   Mac's local date, the cloud's UTC date), so a date without a year resolves to the
+   next one. Values read from the page override the model's. When the workspace
    holds the AI to its tag list, tags not on it are dropped. A bookmark whose title is
    still its URL also gets a short title, which replaces the URL under the same rule as
    the page's own title. Some endpoints answer that title empty whatever the schema says;
@@ -251,8 +259,10 @@ Keychain in release-channel builds and in a plain file in dev builds
 - SQLite FTS5 over titles, URLs, summaries, tags, field values, extras and page text, with
   prefix matching and BM25 ranking.
 - A `Query` in `knoa-core` combines text with filters (kind, site, folder, tag, field
-  comparisons such as `runtime > 2h`). `knoa-store` turns it into SQL. The search bar edits
-  this `Query`.
+  comparisons such as `runtime > 2h`; dates and date-times compare by their date prefix,
+  `starts>2026-12-01`). `knoa-store` turns it into SQL. The search bar edits this `Query`.
+- `Place::Events`, like the Gallery, is device-side and not part of the sync protocol: the
+  workspace's bookmarks of kind event, soonest `starts` first and undated ones last.
 
 ## UI
 

@@ -17,6 +17,7 @@ use crate::{
 pub struct Counts {
     pub everything: usize,
     pub gallery: usize,
+    pub events: usize,
     pub up_next: usize,
     pub unsorted: usize,
     pub not_organized: usize,
@@ -112,6 +113,7 @@ impl Store {
         Ok(Counts {
             everything: place(Place::Everything)?,
             gallery: place(Place::Gallery)?,
+            events: place(Place::Events)?,
             up_next: place(Place::UpNext)?,
             unsorted: place(Place::Unsorted)?,
             not_organized: place(Place::NotOrganized)?,

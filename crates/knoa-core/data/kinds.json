@@ -127,13 +127,28 @@
   "place": {
     "label": "Place",
     "plural": "Places",
-    "description": "A physical place: restaurant, shop, venue, hotel, sight, a map link.",
+    "description": "A physical place: restaurant, shop, venue, hotel, sight, a map link. A venue's own page is a place; a dated happening at it is an event.",
     "key_facts": ["city", "category"],
     "fields": [
       { "name": "category", "type": "text", "description": "restaurant, cafe, hotel, museum, ..." },
       { "name": "address", "type": "text", "description": "Street address" },
       { "name": "city", "type": "text", "description": "City" },
       { "name": "country", "type": "text", "description": "Country" }
+    ]
+  },
+  "event": {
+    "label": "Event",
+    "plural": "Events",
+    "description": "Something that happens at a set time that you can attend or watch: a concert, conference, meetup, festival, exhibition, match, workshop, webinar or livestream. The page announces it, or sells tickets for it. Not a venue's general page.",
+    "key_facts": ["starts", "city"],
+    "fields": [
+      { "name": "starts", "type": "datetime", "description": "Start, YYYY-MM-DDTHH:MM with the UTC offset (+01:00) when known, or YYYY-MM-DD when the time is unknown" },
+      { "name": "ends", "type": "datetime", "description": "End, same format as starts; omit if unknown" },
+      { "name": "venue", "type": "text", "description": "Venue name, or Online" },
+      { "name": "city", "type": "text", "description": "City" },
+      { "name": "country", "type": "text", "description": "Country" },
+      { "name": "organizer", "type": "text", "description": "Organizer or host" },
+      { "name": "attendance", "type": "text", "description": "in person, online or hybrid" }
     ]
   },
   "other": {

@@ -8,6 +8,7 @@
     "./protocol": "./src/protocol.ts",
     "./indexeddb": "./src/indexeddb.ts",
     "./kinds": "./src/kinds.ts",
+    "./events": "./src/events.ts",
     "./tag": "./src/tag.ts",
     "./link": "./src/link.ts",
     "./folder-icon": "./src/folder-icon.ts"

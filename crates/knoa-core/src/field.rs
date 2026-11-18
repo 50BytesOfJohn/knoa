@@ -3,6 +3,8 @@
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+use crate::EventTime;
+
 /// A bookmark's field values, keyed by field name. Stored as one JSON object so that
 /// filters can use `json_extract`.
 pub type Fields = Map<String, Value>;
@@ -23,6 +25,8 @@ pub enum FieldType {
     Number,
     /// `YYYY-MM-DD`, or a shorter prefix (`YYYY-MM`, `YYYY`) when that's all that is known.
     Date,
+    /// `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM`, or that with a UTC offset: see [`EventTime`].
+    DateTime,
     /// Whole minutes.
     Duration,
     List,
@@ -58,6 +62,9 @@ impl FieldDef {
                 None => as_number(value, None).map(|n| Value::from(n.round() as i64)),
             },
             FieldType::Date => text.and_then(parse_date).map(Value::from),
+            FieldType::DateTime => text
+                .and_then(EventTime::parse)
+                .map(|time| Value::from(time.to_string())),
             FieldType::List => as_list(value),
         }
     }
@@ -67,6 +74,9 @@ impl FieldDef {
         match (self.ty, value) {
             (FieldType::Duration, Value::Number(n)) => {
                 n.as_i64().map_or_else(String::new, format_duration)
+            }
+            (FieldType::DateTime, Value::String(s)) => {
+                EventTime::parse(s).map_or_else(|| s.clone(), |time| time.display())
             }
             (_, Value::Array(items)) => items
                 .iter()
