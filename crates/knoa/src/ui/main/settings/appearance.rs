@@ -10,7 +10,10 @@ use gpui::{
 use gpui_component::{switch::Switch, tooltip::Tooltip};
 
 use super::{SettingsView, form};
-use crate::{state::settings::SettingsFile, ui::theme::Theme};
+use crate::{
+    state::settings::SettingsFile,
+    ui::{main::events::view_switch, theme::Theme},
+};
 
 const TILE_WIDTH: gpui::Pixels = px(132.);
 const PREVIEW_HEIGHT: gpui::Pixels = px(84.);
@@ -193,5 +196,11 @@ fn library_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
             })),
         theme,
     );
-    form::group("Library", vec![summaries, up_next], theme)
+    let events = form::row(
+        "Show events as",
+        Some("A month calendar with what's coming up, or one list. On this Mac only."),
+        view_switch("settings-events-view", settings.events_view, theme),
+        theme,
+    );
+    form::group("Library", vec![summaries, up_next, events], theme)
 }

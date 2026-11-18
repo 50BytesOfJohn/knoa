@@ -20,6 +20,7 @@ pub enum Kind {
     App,
     Podcast,
     Place,
+    Event,
     Other,
 }
 
@@ -40,7 +41,7 @@ static DEFINITIONS: LazyLock<HashMap<String, KindDef>> = LazyLock::new(|| {
 });
 
 impl Kind {
-    pub const ALL: [Kind; 12] = [
+    pub const ALL: [Kind; 13] = [
         Kind::Article,
         Kind::Video,
         Kind::Movie,
@@ -52,6 +53,7 @@ impl Kind {
         Kind::App,
         Kind::Podcast,
         Kind::Place,
+        Kind::Event,
         Kind::Other,
     ];
 
@@ -72,6 +74,7 @@ impl Kind {
             Kind::App => "app",
             Kind::Podcast => "podcast",
             Kind::Place => "place",
+            Kind::Event => "event",
             Kind::Other => "other",
         }
     }

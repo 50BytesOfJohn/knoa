@@ -4,7 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use knoa_ai::{BookmarkInput, FilingInput, OrganizeInput};
-use knoa_core::{BookmarkId, Enrichment, FolderId, Page};
+use knoa_core::{BookmarkId, Date, Enrichment, FolderId, Page};
 use knoa_fetch::CachedPage;
 use knoa_store::{Job, Store};
 
@@ -158,6 +158,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
                 guideline: context.guideline.as_deref(),
                 folders: &context.folders,
                 tag_list: &context.tag_list,
+                today: today(),
             };
             knoa_ai::organize(&*provider, provider.classifier(), &input).await
         })
@@ -167,6 +168,16 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         Ok(Err(err)) => ai_failure(&err, job.attempts),
         Err(err) => Outcome::Failed(format!("organize task failed: {err}")),
     }
+}
+
+/// This Mac's date, which event pages without a year are read against.
+fn today() -> Date {
+    let date = jiff::Zoned::now().date();
+    let (year, month, day) = (date.year(), date.month(), date.day());
+    u16::try_from(year)
+        .ok()
+        .and_then(|year| Date::new(year, month.unsigned_abs(), day.unsigned_abs()))
+        .expect("the clock reads a date in years 1 to 9999")
 }
 
 /// Fetches the bookmark's page, or reads the snapshot the browser extension sent of it.

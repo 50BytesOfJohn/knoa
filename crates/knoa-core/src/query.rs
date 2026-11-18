@@ -12,6 +12,9 @@ pub enum Place {
     /// Bookmarks of a media kind, shown as pictures. Only on this Mac: it isn't part of
     /// the sync protocol.
     Gallery,
+    /// Bookmarks of kind event, shown on a calendar or a list. Device-side like the
+    /// Gallery: it isn't part of the sync protocol.
+    Events,
     UpNext,
     /// Bookmarks in no folder.
     Unsorted,
@@ -134,7 +137,7 @@ fn filter_value(ty: FieldType, text: &str) -> Option<Value> {
     match ty {
         FieldType::Duration => parse_minutes(text).map(Value::from),
         FieldType::Integer | FieldType::Number => text.parse::<f64>().ok().map(Value::from),
-        FieldType::Text | FieldType::List | FieldType::Date => {
+        FieldType::Text | FieldType::List | FieldType::Date | FieldType::DateTime => {
             Some(Value::from(text.replace('_', " ")))
         }
     }

@@ -72,7 +72,7 @@ impl MainView {
             ))
     }
 
-    pub(super) fn click_card(
+    pub(in crate::ui::main) fn click_card(
         &mut self,
         id: BookmarkId,
         event: &ClickEvent,

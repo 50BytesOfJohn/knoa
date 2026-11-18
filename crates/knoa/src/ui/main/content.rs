@@ -16,7 +16,7 @@ use knoa_core::Place;
 
 use super::{MainView, search::SEARCH_AREA_HEIGHT, trash::TRASH_BAR_HEIGHT};
 use crate::ui::theme::{DETAIL_WIDTH, GUTTER, MARGIN, SIDEBAR_WIDTH, Theme};
-pub(super) use decoded::DecodedImages;
+pub(super) use decoded::{DecodedImages, KEEP_BEYOND};
 pub(super) use layout::{Arrangement, LayoutCache};
 use up_next::UP_NEXT_HEIGHT;
 
@@ -58,7 +58,10 @@ impl MainView {
         show_detail: bool,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
-    ) -> impl IntoElement {
+    ) -> AnyElement {
+        if self.library.read(cx).place() == Place::Events {
+            return self.render_events(show_detail, window, cx);
+        }
         let theme = Theme::get(cx).clone();
         let (left, right) = content_span(window, show_detail);
         let rail_width = 36.;
@@ -145,6 +148,7 @@ impl MainView {
                     .child(div().pt(px(cards_top())).pb(GUTTER).child(body)),
             )
             .child(self.date_rail(viewport_height, cx))
+            .into_any_element()
     }
 
     fn shows_trash_bar(&self, cx: &Context<'_, MainView>) -> bool {

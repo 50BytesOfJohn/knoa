@@ -111,6 +111,7 @@ pub fn kind_icon(kind: Option<Kind>) -> &'static str {
         Some(Kind::App) => "app-window",
         Some(Kind::Podcast) => "mic",
         Some(Kind::Place) => "map-pin",
+        Some(Kind::Event) => "calendar",
         Some(Kind::Other) | None => "link",
     }
 }

@@ -5,6 +5,7 @@
 
 mod bookmark;
 mod enrichment;
+mod event;
 mod field;
 mod folder;
 mod kind;
@@ -19,6 +20,7 @@ pub use bookmark::{
     parse_link, site_of,
 };
 pub use enrichment::{AnalysisImage, Enrichment, Page};
+pub use event::{Date, EventTime, Schedule, TimeOfDay};
 pub use field::{FieldDef, FieldType, Fields, format_duration};
 pub use folder::{
     Emoji, Folder, FolderColor, FolderEdits, FolderGlyph, FolderIcon, FolderId, FolderLink,

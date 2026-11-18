@@ -1,6 +1,6 @@
 //! Moving the selection through the masonry grid with the arrow keys.
 
-use gpui::{Context, Window, point, px};
+use gpui::{App, Context, Window, point, px};
 use knoa_core::BookmarkId;
 
 use super::{MainView, MoveDown, MoveLeft, MoveRight, MoveUp, content::cards_top, masonry::Placed};
@@ -51,7 +51,11 @@ impl MainView {
     }
 
     pub(super) fn select_first(&mut self, cx: &mut Context<'_, MainView>) {
-        if let Some(first) = self.layout.results.first().map(|b| b.id) {
+        let first = match self.events_order(cx) {
+            Some(order) => order.first().copied(),
+            None => self.layout.results.first().map(|b| b.id),
+        };
+        if let Some(first) = first {
             self.set_selected(Some(first), cx);
             cx.notify();
         }
@@ -78,7 +82,14 @@ impl MainView {
     }
 
     /// The card after `id` in reading order, or the one before it at the end.
-    pub(super) fn neighbour_of(&self, id: BookmarkId) -> Option<BookmarkId> {
+    pub(super) fn neighbour_of(&self, id: BookmarkId, cx: &App) -> Option<BookmarkId> {
+        if let Some(order) = self.events_order(cx) {
+            let at = order.iter().position(|e| *e == id)?;
+            return order
+                .get(at + 1)
+                .or(at.checked_sub(1).and_then(|i| order.get(i)))
+                .copied();
+        }
         let cards = &self.layout.layout.cards;
         let results = &self.layout.results;
         let at = cards

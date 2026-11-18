@@ -1,5 +1,7 @@
 //! schema.org JSON-LD: compacted for the prompt, and read directly for exact fields.
 
+mod event;
+
 use knoa_core::{Fields, Kind};
 use serde_json::{Map, Value};
 
@@ -39,7 +41,7 @@ pub fn video_thumbnail(items: &[Value]) -> Option<String> {
     items
         .iter()
         .flat_map(flatten)
-        .filter(|item| type_of(item).as_deref() == Some("VideoObject"))
+        .filter(|item| has_type(item, "VideoObject"))
         .find_map(|video| {
             ["thumbnailUrl", "image"]
                 .iter()
@@ -84,15 +86,45 @@ fn strip(value: &Value) -> Value {
     }
 }
 
-/// A kind and exact fields from the most specific item on the page. Pages embed generic
-/// items (a recipe page carries a `VideoObject` for its how-to clip), so a recipe, movie or
-/// product wins over a video.
+/// A kind and exact fields from the most specific item on the page, or the page's
+/// `mainEntity`. Pages embed generic items (a recipe page carries a `VideoObject` for its
+/// how-to clip), so a recipe, movie or product wins over a video, and an event over
+/// anything: its ticket page lists the venue as a place and the tickets as products.
 pub fn structured(items: &[Value]) -> Option<(Kind, Fields)> {
     let (kind, item) = items
         .iter()
-        .filter_map(|item| Some((kind_of(&type_of(item)?)?, item)))
-        .min_by_key(|(kind, _)| usize::from(*kind == Kind::Video))?;
-    Some((kind, fields_for(kind, item)))
+        .flat_map(|item| std::iter::once(item).chain(main_entities(item)))
+        .filter_map(|item| Some((kind_of_item(item)?, item)))
+        .min_by_key(|(kind, _)| specificity(*kind))?;
+    let fields = match kind {
+        Kind::Event => event::fields(item),
+        _ => fields_for(kind, item),
+    };
+    Some((kind, fields))
+}
+
+/// Lower is more specific.
+fn specificity(kind: Kind) -> u8 {
+    match kind {
+        Kind::Event => 0,
+        Kind::Video => 2,
+        _ => 1,
+    }
+}
+
+fn main_entities(item: &Value) -> &[Value] {
+    match item.get("mainEntity") {
+        Some(Value::Array(entities)) => entities,
+        Some(entity) => std::slice::from_ref(entity),
+        None => &[],
+    }
+}
+
+/// The most specific kind among the item's types, which JSON-LD leaves unordered.
+fn kind_of_item(item: &Value) -> Option<Kind> {
+    types(item)
+        .filter_map(kind_of)
+        .min_by_key(|kind| specificity(*kind))
 }
 
 fn kind_of(schema_type: &str) -> Option<Kind> {
@@ -107,16 +139,22 @@ fn kind_of(schema_type: &str) -> Option<Kind> {
         "Restaurant" | "LocalBusiness" | "Place" | "Hotel" | "Museum" | "TouristAttraction" => {
             Kind::Place
         }
+        t if event::TYPES.contains(&t) => Kind::Event,
         _ => return None,
     })
 }
 
-fn type_of(item: &Value) -> Option<String> {
-    match item.get("@type")? {
-        Value::String(s) => Some(s.clone()),
-        Value::Array(types) => types.iter().find_map(Value::as_str).map(str::to_owned),
-        _ => None,
-    }
+fn types(item: &Value) -> impl Iterator<Item = &str> {
+    let types = match item.get("@type") {
+        Some(Value::Array(types)) => types.as_slice(),
+        Some(single) => std::slice::from_ref(single),
+        None => &[],
+    };
+    types.iter().filter_map(Value::as_str)
+}
+
+fn has_type(item: &Value, schema_type: &str) -> bool {
+    types(item).any(|t| t == schema_type)
 }
 
 fn fields_for(kind: Kind, item: &Value) -> Fields {
@@ -203,6 +241,62 @@ mod tests {
         assert_eq!(
             Value::Object(fields),
             json!({"year": 1949, "runtime": 104, "director": ["Carol Reed"]})
+        );
+    }
+
+    #[test]
+    fn a_ticket_page_is_its_event_not_its_venue_or_tickets() {
+        let items = [
+            json!({"@context": "https://schema.org", "@type": "Place", "name": "Paradiso",
+                "address": {"@type": "PostalAddress", "addressLocality": "Amsterdam"}}),
+            json!({"@context": "https://schema.org", "@type": "Product", "name": "General admission",
+                "offers": {"@type": "Offer", "price": "35.00", "priceCurrency": "EUR"}}),
+            json!({"@context": "https://schema.org", "@type": "MusicEvent",
+                "name": "Low Tide: Live at Paradiso",
+                "startDate": "2026-12-05T19:30:00+01:00", "endDate": "2026-12-05T23:00:00+01:00",
+                "eventAttendanceMode": "https://schema.org/MixedEventAttendanceMode",
+                "location": [
+                    {"@type": "VirtualLocation", "url": "https://stream.example/low-tide"},
+                    {"@type": "Place", "name": "Paradiso", "address": {"@type": "PostalAddress",
+                        "streetAddress": "Weteringschans 6", "addressLocality": "Amsterdam",
+                        "addressCountry": {"@type": "Country", "name": "Netherlands"}}}
+                ],
+                "organizer": [{"@type": "Organization", "name": "Mojo"},
+                    {"@type": "Organization", "name": "Paradiso"}],
+                "offers": [{"@type": "Offer", "price": "35.00"}]}),
+        ];
+        let (kind, fields) = structured(&compact(&items)).unwrap();
+        assert_eq!(kind, Kind::Event);
+        assert_eq!(
+            Value::Object(fields),
+            json!({"starts": "2026-12-05T19:30+01:00", "ends": "2026-12-05T23:00+01:00",
+                "venue": "Paradiso", "city": "Amsterdam", "country": "Netherlands",
+                "organizer": "Mojo, Paradiso", "attendance": "hybrid"})
+        );
+    }
+
+    #[test]
+    fn the_main_entity_is_the_event_whatever_order_its_types_come_in() {
+        let items = [
+            json!({"@type": "WebPage", "mainEntity":
+                {"@type": ["Thing", "MusicEvent"], "startDate": "2026-12-05"}}),
+            json!({"@type": "Product", "name": "Admission ticket"}),
+        ];
+        let (kind, fields) = structured(&compact(&items)).unwrap();
+        assert_eq!(kind, Kind::Event);
+        assert_eq!(Value::Object(fields), json!({"starts": "2026-12-05"}));
+    }
+
+    #[test]
+    fn event_dates_and_venues_given_as_lists_are_read() {
+        let items = [
+            json!({"@type": "Event", "startDate": ["2026-12-05T19:00+01:00"],
+            "location": ["", {"@type": ["Thing", "VirtualLocation"]}, "Paradiso"]}),
+        ];
+        let (_, fields) = structured(&compact(&items)).unwrap();
+        assert_eq!(
+            Value::Object(fields),
+            json!({"starts": "2026-12-05T19:00+01:00", "venue": "Paradiso", "attendance": "online"})
         );
     }
 }

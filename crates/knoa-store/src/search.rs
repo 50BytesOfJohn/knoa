@@ -1,6 +1,6 @@
 //! Turns a `Query` into SQL, and keeps the full-text index in step with the tables.
 
-use knoa_core::{Comparison, FolderId, Kind, Place, Query};
+use knoa_core::{Comparison, FieldFilter, FolderId, Kind, Place, Query};
 use rusqlite::{Connection, params, types::Value};
 
 /// Column weights for BM25, in `bookmarks_fts` column order: a title match counts most.
@@ -11,6 +11,8 @@ pub(crate) struct Filter {
     pub sql: String,
     pub params: Vec<Value>,
     pub ranked: bool,
+    /// Soonest first, for the Events place.
+    pub by_start: bool,
 }
 
 impl Filter {
@@ -20,6 +22,7 @@ impl Filter {
             sql: String::from("FROM bookmarks b"),
             params: Vec::new(),
             ranked: false,
+            by_start: query.place == Place::Events,
         };
         let mut conditions: Vec<String> = Vec::new();
 
@@ -59,6 +62,10 @@ impl Filter {
                         .map(|kind| Value::Text(kind.slug().into())),
                 );
             }
+            Place::Events => {
+                conditions.push("b.kind = ?".into());
+                filter.params.push(Value::Text(Kind::Event.slug().into()));
+            }
             Place::Folder(_) => {
                 conditions.push(
                     "EXISTS (SELECT 1 FROM bookmark_folders bf WHERE bf.bookmark_id = b.id
@@ -85,30 +92,7 @@ impl Filter {
             filter.params.push(Value::Text(site.clone()));
         }
         for field in &query.fields {
-            let path = "json_extract(b.fields, '$.' || ?)";
-            filter.params.push(Value::Text(field.name.clone()));
-            let condition = match (field.op, &field.value) {
-                (Comparison::Matches, serde_json::Value::Number(n)) => {
-                    filter
-                        .params
-                        .push(Value::Real(n.as_f64().unwrap_or_default()));
-                    format!("{path} = ?")
-                }
-                (Comparison::Matches, value) => {
-                    filter.params.push(Value::Text(
-                        value.as_str().unwrap_or_default().to_lowercase(),
-                    ));
-                    format!("lower({path}) LIKE '%' || ? || '%'")
-                }
-                (op, value) => {
-                    filter
-                        .params
-                        .push(Value::Real(value.as_f64().unwrap_or_default()));
-                    let sign = if op == Comparison::Greater { ">" } else { "<" };
-                    format!("{path} {sign} ?")
-                }
-            };
-            conditions.push(condition);
+            conditions.push(field_condition(field, &mut filter.params));
         }
         if !conditions.is_empty() {
             filter.sql.push_str(" WHERE ");
@@ -118,12 +102,47 @@ impl Filter {
     }
 
     pub fn order_by(&self) -> String {
-        if self.ranked {
+        if self.by_start {
+            "ORDER BY json_extract(b.fields, '$.starts') IS NULL, json_extract(b.fields, '$.starts'), b.id".into()
+        } else if self.ranked {
             format!("ORDER BY bm25(bookmarks_fts, {BM25_WEIGHTS}), b.added_at DESC")
         } else {
             "ORDER BY b.added_at DESC, b.id DESC".into()
         }
     }
+}
+
+/// One `name>value` filter's SQL condition, pushing its parameters.
+fn field_condition(field: &FieldFilter, params: &mut Vec<Value>) -> String {
+    let path = "json_extract(b.fields, '$.' || ?)";
+    params.push(Value::Text(field.name.clone()));
+    match (field.op, &field.value) {
+        (Comparison::Matches, serde_json::Value::Number(n)) => {
+            params.push(Value::Real(n.as_f64().unwrap_or_default()));
+            format!("{path} = ?")
+        }
+        (Comparison::Matches, value) => {
+            params.push(Value::Text(
+                value.as_str().unwrap_or_default().to_lowercase(),
+            ));
+            format!("lower({path}) LIKE '%' || ? || '%'")
+        }
+        (op, serde_json::Value::String(text)) => {
+            // Dates and date-times compare by their prefix, so `starts>2026-12-01`
+            // reads as "after that day" whatever time the value carries.
+            params.push(Value::Integer(text.chars().count() as i64));
+            params.push(Value::Text(text.clone()));
+            format!("substr({path}, 1, ?) {} ?", sign(op))
+        }
+        (op, value) => {
+            params.push(Value::Real(value.as_f64().unwrap_or_default()));
+            format!("{path} {} ?", sign(op))
+        }
+    }
+}
+
+fn sign(op: Comparison) -> &'static str {
+    if op == Comparison::Greater { ">" } else { "<" }
 }
 
 /// Every word must match, each as a prefix, so results narrow as the user types.
@@ -153,4 +172,83 @@ pub(crate) fn reindex(conn: &Connection, id: i64) -> rusqlite::Result<()> {
 
 pub(crate) fn kind_from_column(value: Option<&str>) -> Option<Kind> {
     value.and_then(Kind::parse)
+}
+
+#[cfg(test)]
+mod tests {
+    use knoa_core::{Enrichment, Fields};
+    use serde_json::json;
+
+    use crate::{
+        NewBookmarks, Store,
+        test_support::{WORKSPACE, bookmark},
+    };
+
+    use super::*;
+
+    fn organize(store: &mut Store, kind: Kind, fields: serde_json::Value) {
+        let job = store.take_jobs(0, 1).unwrap().remove(0);
+        let fields: Fields = serde_json::from_value(fields).unwrap();
+        let enrichment = Enrichment {
+            kind,
+            title: None,
+            summary: None,
+            fields,
+            extras: Vec::new(),
+            tags: Vec::new(),
+            folders: Vec::new(),
+            set_aside: None,
+            model: "test".into(),
+        };
+        store
+            .finish_organized(job.bookmark.id, &enrichment, 3)
+            .unwrap();
+    }
+
+    #[test]
+    fn events_holds_only_events_soonest_first() {
+        let mut store = Store::open_in_memory().unwrap();
+        let organized = [
+            (
+                "https://lu.ma/late",
+                "Late gig",
+                Kind::Event,
+                json!({"starts": "2026-12-20T21:00"}),
+            ),
+            (
+                "https://lu.ma/tbd",
+                "Undated meetup",
+                Kind::Event,
+                json!({}),
+            ),
+            (
+                "https://venue.example",
+                "The venue",
+                Kind::Place,
+                json!({"city": "Berlin"}),
+            ),
+            (
+                "https://lu.ma/soon",
+                "Soon talk",
+                Kind::Event,
+                json!({"starts": "2026-12-02"}),
+            ),
+        ];
+        for (n, (url, title, kind, fields)) in organized.into_iter().enumerate() {
+            let link = [bookmark(url, title, n as i64)];
+            store
+                .import(WORKSPACE, "test", &link, NewBookmarks::Organize)
+                .unwrap();
+            organize(&mut store, kind, fields);
+        }
+
+        let events = |input: &str| -> Vec<String> {
+            let query = Query::parse(input, Some(WORKSPACE), Place::Events);
+            let found = store.search(&query, 10).unwrap();
+            found.into_iter().map(|b| b.title).collect()
+        };
+        assert_eq!(events(""), ["Soon talk", "Late gig", "Undated meetup"]);
+        assert_eq!(events("starts>2026-12-02"), ["Late gig"]);
+        assert_eq!(store.counts(WORKSPACE).unwrap().events, 3);
+    }
 }

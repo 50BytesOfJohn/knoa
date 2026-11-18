@@ -9,6 +9,7 @@ use gpui::{
 use gpui_component::tooltip::Tooltip;
 use knoa_core::{Bookmark, Kind, Status};
 
+use super::field_display;
 use crate::ui::{
     components::{chip, icon, kind_icon, site_mark},
     mascot::ai_mark,
@@ -139,8 +140,7 @@ fn meta(bookmark: &Bookmark, theme: &Theme, cx: &App) -> Div {
         .child(site_mark(&bookmark.site, px(14.), cx))
         // The site keeps its width; facts take what's left and get cut first.
         .child(div().flex_none().max_w(gpui::relative(0.6)).truncate().child(bookmark.site.clone()));
-    let facts = bookmark
-        .key_facts()
+    let facts = field_display::key_facts(bookmark)
         .into_iter()
         .take(2)
         .collect::<Vec<_>>()
@@ -198,7 +198,7 @@ fn code(bookmark: &Bookmark, width: f32, show_summary: bool, theme: &Theme) -> D
         ),
         _ => bookmark.title.clone(),
     };
-    let facts = bookmark.key_facts().join(" · ");
+    let facts = field_display::key_facts(bookmark).join(" · ");
     let mut card = div()
         .size_full()
         .rounded(CARD_RADIUS)

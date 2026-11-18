@@ -23,6 +23,8 @@ pub struct Settings {
     pub theme: String,
     pub show_up_next: bool,
     pub show_summaries: bool,
+    /// How the Events place shows events on this Mac.
+    pub events_view: EventsView,
     /// Sidebar folders shown collapsed, by local id. Kept on this Mac only.
     pub collapsed_folders: BTreeSet<i64>,
     pub window: Option<WindowFrame>,
@@ -54,6 +56,17 @@ impl Legacy {
     }
 }
 
+/// How the Events place lays out its events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EventsView {
+    /// A month grid, with the upcoming events beside it.
+    #[default]
+    Calendar,
+    /// One list: happening now, upcoming by day, undated, then past.
+    List,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct WindowFrame {
     pub x: f32,
@@ -71,6 +84,7 @@ impl Default for Settings {
             theme: crate::ui::theme::DEFAULT_THEME.into(),
             show_up_next: true,
             show_summaries: true,
+            events_view: EventsView::default(),
             collapsed_folders: BTreeSet::new(),
             window: None,
             account: None,

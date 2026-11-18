@@ -24,7 +24,8 @@ Rules:
 would keep it. Write it in English. If the page could not be read, describe what the URL, title and \
 folder tell you, and say nothing you can't support.
 - fields: values for the kind's fields that the evidence supports. Use null rather than guess. \
-Durations are whole minutes, dates YYYY-MM-DD, lists comma-separated.
+Durations are whole minutes, dates YYYY-MM-DD, date-times YYYY-MM-DDTHH:MM with the UTC offset \
+(+01:00) when the page gives one, lists comma-separated.
 - extras: other short useful facts as name/value pairs (awards, price range, platform). Few and \
 concrete; no URLs or IDs.
 - tags: describe what the bookmark is about, using the simplest, most common English words, singular \
@@ -79,11 +80,7 @@ pub fn messages(
     if !context.is_empty() {
         messages.push(Message::system(context));
     }
-    messages.push(Message::system(format!(
-        "The bookmark's kind is \"{}\": {}",
-        kind.slug(),
-        kind.definition().description
-    )));
+    messages.push(Message::system(kind_text(kind, input)));
     let bookmark = bookmark_message(input);
     match image {
         Some(image) => {
@@ -93,6 +90,24 @@ pub fn messages(
         None => messages.push(Message::user(bookmark)),
     }
     messages
+}
+
+fn kind_text(kind: Kind, input: &OrganizeInput<'_>) -> String {
+    let mut text = format!(
+        "The bookmark's kind is \"{}\": {}",
+        kind.slug(),
+        kind.definition().description
+    );
+    // Event pages often leave out the year: "Sat, Dec 5 · 7 PM".
+    if kind == Kind::Event {
+        let _ = write!(
+            text,
+            "\nToday is {}. For a date without a year, pick the next one on or after today \
+             unless the page says otherwise.",
+            input.today
+        );
+    }
+    text
 }
 
 /// The user's organizing instructions on their own, for the kind prompt.

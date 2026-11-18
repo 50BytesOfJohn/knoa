@@ -12,7 +12,7 @@ use crate::{state::rewritten_images::RewrittenImages, ui::main::MainView};
 
 /// Pictures this far beyond the viewport stay decoded, so scrolling back a little doesn't
 /// decode them again. About a screen: much more holds most of a few hundred small tiles.
-const KEEP_BEYOND: f32 = 900.;
+pub(in crate::ui::main) const KEEP_BEYOND: f32 = 900.;
 
 /// The pictures the cards have shown and GPUI may still hold.
 #[derive(Default)]
@@ -20,8 +20,7 @@ pub struct DecodedImages(HashSet<PathBuf>);
 
 impl MainView {
     /// Records the pictures of the cards built this frame, and drops those now far from
-    /// the band from `top` to `bottom`. The selected bookmark's picture stays: the detail
-    /// panel or the viewer may be showing it.
+    /// the band from `top` to `bottom`.
     pub(super) fn release_far_images(
         &mut self,
         top: f32,
@@ -32,27 +31,54 @@ impl MainView {
         let results = &self.layout.results;
         let path_at = |index: usize| results.get(index)?.image.as_ref().map(|i| i.path.clone());
         let cards = &self.layout.layout;
-        self.decoded.0.extend(
-            cards
-                .visible(top - OVERSCAN, bottom + OVERSCAN)
-                .filter_map(|card| path_at(card.index)),
-        );
-        let mut keep: HashSet<PathBuf> = cards
+        let built: Vec<PathBuf> = cards
+            .visible(top - OVERSCAN, bottom + OVERSCAN)
+            .filter_map(|card| path_at(card.index))
+            .collect();
+        let near: HashSet<PathBuf> = cards
             .visible(top - KEEP_BEYOND, bottom + KEEP_BEYOND)
             .filter_map(|card| path_at(card.index))
             .collect();
+        self.keep_decoded(built, near, window, cx);
+    }
+
+    /// Records the pictures `built` this frame and drops every recorded one not in
+    /// `near`. The selected bookmark's picture stays: the detail panel or the viewer may
+    /// be showing it. While one of them does, it is recorded too, so it goes once the
+    /// selection moves on, even in a view whose own rows never drew it.
+    pub(in crate::ui::main) fn keep_decoded(
+        &mut self,
+        built: Vec<PathBuf>,
+        mut near: HashSet<PathBuf>,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        self.decoded.0.extend(built);
         let selected = self
             .selected
             .and_then(|id| self.library.read(cx).bookmark(id))
             .and_then(|b| b.image.as_ref().map(|i| i.path.clone()));
         self.release_rewritten_images(selected.as_ref(), window, cx);
-        keep.extend(selected);
+        if self.detail_open || self.viewed().is_some() {
+            self.decoded.0.extend(selected.clone());
+        }
+        near.extend(selected);
 
-        let far: Vec<PathBuf> = self.decoded.0.difference(&keep).cloned().collect();
+        let far: Vec<PathBuf> = self.decoded.0.difference(&near).cloned().collect();
         for path in far {
             self.decoded.0.remove(&path);
             release(path, window, cx);
         }
+    }
+
+    /// Lets go of every recorded picture but the selected bookmark's, for views that draw
+    /// none.
+    pub(in crate::ui::main) fn keep_no_images(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        self.keep_decoded(Vec::new(), HashSet::new(), window, cx);
     }
 
     /// Drops pictures whose file a fetch wrote again, so they are decoded anew from it,

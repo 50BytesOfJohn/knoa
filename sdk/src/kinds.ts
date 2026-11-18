@@ -1,6 +1,7 @@
 //! What each kind of bookmark is and which typed fields it has.
 
 // The test script checks this packaged copy against crates/knoa-core/data/kinds.json.
+import { formatEventTime, parseEventTime } from "./events";
 import data from "./kinds.json";
 
 export type FieldType =
@@ -8,6 +9,7 @@ export type FieldType =
 	| "integer"
 	| "number"
 	| "date"
+	| "datetime"
 	| "duration"
 	| "list";
 
@@ -45,6 +47,10 @@ export function displayField(field: FieldDef, value: unknown): string {
 	if (value == null) return "";
 	if (field.type === "duration" && typeof value === "number") {
 		return formatDuration(Math.round(value));
+	}
+	if (field.type === "datetime") {
+		const time = parseEventTime(value);
+		if (time) return formatEventTime(time);
 	}
 	if (Array.isArray(value)) {
 		return value.filter((item) => typeof item === "string").join(", ");
