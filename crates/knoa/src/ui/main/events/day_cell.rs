@@ -101,6 +101,7 @@ fn more(hidden: usize, theme: &Theme) -> impl IntoElement {
         .px_1p5()
         .text_xs()
         .text_color(theme.muted)
+        .truncate()
         .child(format!("+{hidden} more"))
 }
 
@@ -118,6 +119,7 @@ fn chip_frame(event: usize, selected: bool, theme: &Theme) -> Stateful<Div> {
         .flex()
         .items_center()
         .gap_1()
+        .overflow_hidden()
         .rounded(px(4.))
         .bg(bg)
         .text_color(fg)

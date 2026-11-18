@@ -149,7 +149,7 @@ impl MainView {
             .pt(px(cards_top()))
             .flex()
             .flex_col()
-            .child(self.events_header(view, cx))
+            .child(self.events_header(view, right - left, cx))
             .child(div().h(px(body_height)).child(body));
         div()
             .absolute()

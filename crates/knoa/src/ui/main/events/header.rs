@@ -19,6 +19,9 @@ use crate::{
 
 /// The header and the space under it.
 pub const HEIGHT: f32 = 52.;
+/// Narrower than this, as beside the detail panel in a small window, the header leaves
+/// out its title and Today (still on Cmd-T) and shortens the month, so the switch fits.
+const FULL_WIDTH: f32 = 520.;
 
 const VIEWS: [(EventsView, &str); 2] = [
     (EventsView::Calendar, "Calendar"),
@@ -68,9 +71,31 @@ impl MainView {
     pub(super) fn events_header(
         &self,
         view: EventsView,
+        width: f32,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
+        let full = width >= FULL_WIDTH;
+        let controls = div()
+            .flex_1()
+            .min_w_0()
+            .overflow_hidden()
+            .flex()
+            .items_center()
+            .gap_3()
+            .when(full, |row| {
+                row.child(
+                    div()
+                        .flex_none()
+                        .font_family(SERIF)
+                        .text_2xl()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Events"),
+                )
+            })
+            .when(view == EventsView::Calendar, |row| {
+                row.children(self.month_controls(full, &theme, cx))
+            });
         div()
             .flex_none()
             .h(px(HEIGHT - 12.))
@@ -78,46 +103,52 @@ impl MainView {
             .flex()
             .items_center()
             .gap_3()
-            .child(
-                div()
-                    .font_family(SERIF)
-                    .text_2xl()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Events"),
-            )
-            .when(view == EventsView::Calendar, |row| {
-                row.children(self.month_controls(&theme, cx))
-            })
-            .child(div().flex_1())
-            .child(view_switch("events-view", view, &theme))
+            .child(controls)
+            .child(view_switch("events-view", view, &theme).flex_none())
     }
 
-    /// The month shown, the buttons to the months around it, and Today.
-    fn month_controls(&self, theme: &Theme, cx: &mut Context<'_, MainView>) -> [AnyElement; 4] {
+    /// The month shown, the buttons to the months around it, and Today when `full`.
+    fn month_controls(
+        &self,
+        full: bool,
+        theme: &Theme,
+        cx: &mut Context<'_, MainView>,
+    ) -> Vec<AnyElement> {
+        let page_month = self.events.month;
         let month = div()
-            .ml_2()
-            .min_w(px(150.))
+            .flex_none()
             .text_lg()
             .text_color(theme.muted)
-            .child(labels::month_heading(self.events.month));
+            .map(|s| {
+                if full {
+                    s.ml_2()
+                        .min_w(px(150.))
+                        .child(labels::month_heading(page_month))
+                } else {
+                    s.child(labels::short_month_heading(page_month))
+                }
+            });
         let previous = month_button("previous-month", "chevron-left", "Previous month", theme)
             .on_click(cx.listener(|this, _, window, cx| {
                 this.previous_month(&PreviousMonth, window, cx);
             }));
         let next = month_button("next-month", "chevron-right", "Next month", theme)
             .on_click(cx.listener(|this, _, window, cx| this.next_month(&NextMonth, window, cx)));
-        let today = button("events-today", "Today", Tone::Soft, cx)
-            .h(px(28.))
-            .px_3()
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.show_today(&ShowToday, window, cx);
-            }));
-        [
+        let mut controls = vec![
             month.into_any_element(),
             previous.into_any_element(),
             next.into_any_element(),
-            today.into_any_element(),
-        ]
+        ];
+        if full {
+            let today = button("events-today", "Today", Tone::Soft, cx)
+                .h(px(28.))
+                .px_3()
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.show_today(&ShowToday, window, cx);
+                }));
+            controls.push(today.into_any_element());
+        }
+        controls
     }
 }
 
@@ -130,6 +161,7 @@ fn month_button(
     let (bg, fg, border, hover) = (theme.panel, theme.text, theme.hairline, theme.hover);
     div()
         .id(id)
+        .flex_none()
         .size(px(28.))
         .rounded_full()
         .flex()
