@@ -15,10 +15,16 @@ export interface EventTime {
 	};
 }
 
-/** An event in the viewer's local time. `end` is exclusive and never before `start`. */
+/**
+ * An event in the viewer's local time. `end` is exclusive and never before `start`; when
+ * `endKnown` is false the page gave no usable end and `end` is only the end of the start's
+ * day, so show no end time.
+ */
 export interface EventSpan {
 	start: Date;
 	end: Date;
+	/** Whether `end` is the page's own end, read and not before `start`. */
+	endKnown: boolean;
 	allDay: boolean;
 }
 
@@ -96,10 +102,12 @@ export function eventSpan(fields: Record<string, unknown>): EventSpan | null {
 	if (!starts) return null;
 	const start = localStart(starts);
 	const ends = parseEventTime(fields.ends);
-	const end = ends ? localEnd(ends) : nextDay(startOfDay(start));
+	const end = ends ? localEnd(ends) : null;
+	const endKnown = end !== null && end >= start;
 	return {
 		start,
-		end: end >= start ? end : nextDay(startOfDay(start)),
+		end: endKnown ? end : nextDay(startOfDay(start)),
+		endKnown,
 		allDay: !starts.time,
 	};
 }
@@ -140,7 +148,9 @@ export function eventsByDay<T>(
 	for (const { item, span } of spans) {
 		for (const day of eventDays(span)) {
 			const key = dayKey(day);
-			days.set(key, [...(days.get(key) ?? []), item]);
+			const list = days.get(key);
+			if (list) list.push(item);
+			else days.set(key, [item]);
 		}
 	}
 	return days;

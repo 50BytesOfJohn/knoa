@@ -73,8 +73,11 @@ it("keeps an event upcoming until it ends, or until its day ends without an end"
 	const evening = new Date(2026, 11, 5, 22, 0);
 
 	expect(talk && isUpcoming(talk, evening)).toBe(false);
-	// An end before the start is ignored, so the meetup runs to midnight.
+	expect(talk?.endKnown).toBe(true);
+	// An end before the start is ignored, so the meetup runs to midnight, an end no view
+	// should show.
 	expect(meetup && isUpcoming(meetup, evening)).toBe(true);
+	expect(meetup?.endKnown).toBe(false);
 	expect(meetup && isUpcoming(meetup, new Date(2026, 11, 6, 0, 1))).toBe(false);
 });
 

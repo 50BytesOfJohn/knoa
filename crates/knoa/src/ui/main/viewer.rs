@@ -71,7 +71,7 @@ impl MainView {
     }
 
     /// The bookmark the viewer shows, while it is open.
-    fn viewed(&self) -> Option<BookmarkId> {
+    pub(super) fn viewed(&self) -> Option<BookmarkId> {
         match &self.overlay {
             Some(Overlay::Viewer(viewer)) => Some(viewer.bookmark),
             _ => None,

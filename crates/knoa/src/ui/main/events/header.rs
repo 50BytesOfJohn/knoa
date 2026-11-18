@@ -2,7 +2,7 @@
 //! calendar, and the switch between the calendar and the list.
 
 use gpui::{
-    Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::tooltip::Tooltip;
@@ -71,7 +71,6 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let calendar = view == EventsView::Calendar;
         div()
             .flex_none()
             .h(px(HEIGHT - 12.))
@@ -86,39 +85,39 @@ impl MainView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Events"),
             )
-            .when(calendar, |row| {
-                row.child(
-                    div()
-                        .ml_2()
-                        .min_w(px(150.))
-                        .text_lg()
-                        .text_color(theme.muted)
-                        .child(labels::month_heading(self.events.month)),
-                )
-                .child(
-                    month_button("previous-month", "chevron-left", "Previous month", &theme)
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.previous_month(&PreviousMonth, window, cx);
-                        })),
-                )
-                .child(
-                    month_button("next-month", "chevron-right", "Next month", &theme).on_click(
-                        cx.listener(|this, _, window, cx| {
-                            this.next_month(&NextMonth, window, cx);
-                        }),
-                    ),
-                )
-                .child(
-                    button("events-today", "Today", Tone::Soft, cx)
-                        .h(px(28.))
-                        .px_3()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.show_today(&ShowToday, window, cx);
-                        })),
-                )
+            .when(view == EventsView::Calendar, |row| {
+                row.children(self.month_controls(&theme, cx))
             })
             .child(div().flex_1())
             .child(view_switch("events-view", view, &theme))
+    }
+
+    /// The month shown, the buttons to the months around it, and Today.
+    fn month_controls(&self, theme: &Theme, cx: &mut Context<'_, MainView>) -> [AnyElement; 4] {
+        let month = div()
+            .ml_2()
+            .min_w(px(150.))
+            .text_lg()
+            .text_color(theme.muted)
+            .child(labels::month_heading(self.events.month));
+        let previous = month_button("previous-month", "chevron-left", "Previous month", theme)
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.previous_month(&PreviousMonth, window, cx);
+            }));
+        let next = month_button("next-month", "chevron-right", "Next month", theme)
+            .on_click(cx.listener(|this, _, window, cx| this.next_month(&NextMonth, window, cx)));
+        let today = button("events-today", "Today", Tone::Soft, cx)
+            .h(px(28.))
+            .px_3()
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.show_today(&ShowToday, window, cx);
+            }));
+        [
+            month.into_any_element(),
+            previous.into_any_element(),
+            next.into_any_element(),
+            today.into_any_element(),
+        ]
     }
 }
 

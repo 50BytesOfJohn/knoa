@@ -44,7 +44,8 @@ impl MainView {
 
     /// Records the pictures `built` this frame and drops every recorded one not in
     /// `near`. The selected bookmark's picture stays: the detail panel or the viewer may
-    /// be showing it.
+    /// be showing it. While one of them does, it is recorded too, so it goes once the
+    /// selection moves on, even in a view whose own rows never drew it.
     pub(in crate::ui::main) fn keep_decoded(
         &mut self,
         built: Vec<PathBuf>,
@@ -58,6 +59,9 @@ impl MainView {
             .and_then(|id| self.library.read(cx).bookmark(id))
             .and_then(|b| b.image.as_ref().map(|i| i.path.clone()));
         self.release_rewritten_images(selected.as_ref(), window, cx);
+        if self.detail_open || self.viewed().is_some() {
+            self.decoded.0.extend(selected.clone());
+        }
         near.extend(selected);
 
         let far: Vec<PathBuf> = self.decoded.0.difference(&near).cloned().collect();

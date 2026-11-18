@@ -4,7 +4,7 @@
 use jiff::civil::{Date, DateTime, Weekday};
 use knoa_core::Bookmark;
 
-use super::model::Span;
+use super::span::Span;
 
 const WEEKDAYS: [&str; 7] = [
     "Monday",
@@ -63,30 +63,27 @@ pub fn start_time(span: &Span) -> String {
     if span.all_day {
         "All day".into()
     } else {
-        clock(span.start)
+        clock(span.start.local)
     }
 }
 
-/// From start to end: "19:00 – 23:00", "5 – 7 Dec", "30 Nov 20:00 – 1 Dec 02:00".
+/// From start to end: "19:00 – 23:00", "5 – 7 Dec", "30 Nov 20:00 – 1 Dec 02:00". An
+/// end shows only where the page gave one.
 pub fn time_range(span: &Span) -> String {
-    let (first, last) = (span.start.date(), span.last_day());
-    match (span.all_day, first == last) {
-        (true, true) => "All day".into(),
-        (true, false) => day_range(first, last),
-        (false, true) => match span.end {
-            Some(end) => format!("{} – {}", clock(span.start), clock(end)),
-            None => clock(span.start),
-        },
-        (false, false) => {
-            let end = span.until();
-            format!(
-                "{} {} – {} {}",
-                day_month(first),
-                clock(span.start),
-                day_month(end.date()),
-                clock(end)
-            )
-        }
+    let (first, last) = (span.start.local.date(), span.last_day());
+    let start = span.start.local;
+    match (span.all_day, span.end) {
+        (true, _) if first == last => "All day".into(),
+        (true, _) => day_range(first, last),
+        (false, None) => clock(start),
+        (false, Some(end)) if first == last => format!("{} – {}", clock(start), clock(end.local)),
+        (false, Some(end)) => format!(
+            "{} {} – {} {}",
+            day_month(first),
+            clock(start),
+            day_month(end.local.date()),
+            clock(end.local)
+        ),
     }
 }
 
@@ -126,9 +123,9 @@ fn clock(time: DateTime) -> String {
 }
 
 fn weekday_name(day: Weekday) -> &'static str {
-    WEEKDAYS[day.to_monday_zero_offset() as usize]
+    WEEKDAYS[usize::from(day.to_monday_zero_offset().unsigned_abs())]
 }
 
 fn month_name(day: Date) -> &'static str {
-    MONTHS[(day.month() - 1) as usize]
+    MONTHS[usize::from(day.month().unsigned_abs()) - 1]
 }

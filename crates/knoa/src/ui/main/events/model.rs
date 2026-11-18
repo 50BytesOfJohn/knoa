@@ -1,37 +1,13 @@
-//! The events among the results, placed in this Mac's time zone: when each one runs, the
-//! days it covers, and whether it is on now, coming up or over. Built once per results
-//! and minute, so drawing a frame only looks things up.
+//! The events among the results, placed in this Mac's time zone: the days each covers,
+//! and whether it is on now, coming up or over. Built once per results and minute, so
+//! drawing a frame only looks things up.
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use jiff::{
-    ToSpan as _,
-    civil::{Date, DateTime, Time},
-    tz::{Offset, TimeZone},
-};
-use knoa_core::{Bookmark, BookmarkId, EventTime, Schedule};
+use jiff::{Timestamp, Zoned, civil::Date};
+use knoa_core::{Bookmark, BookmarkId, Schedule};
 
-/// The most days one event is shown on, so a season-long exhibition doesn't fill months
-/// of the calendar.
-const MAX_DAYS: usize = 60;
-
-/// When an event runs, in local wall time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Span {
-    pub start: DateTime,
-    /// The end the page gave, exclusive. `None` when it gave none.
-    pub end: Option<DateTime>,
-    /// Only a date was given: the event fills its days.
-    pub all_day: bool,
-}
-
-/// Where an event stands against the current time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Phase {
-    Happening,
-    Upcoming,
-    Past,
-}
+use super::span::{Phase, Span};
 
 /// One event bookmark and when it runs. `span` is `None` when its date isn't set.
 #[derive(Debug)]
@@ -47,7 +23,8 @@ pub struct Event {
 pub struct Model {
     pub results: Arc<Vec<Bookmark>>,
     pub events: Vec<Event>,
-    pub now: DateTime,
+    now: Timestamp,
+    today: Date,
     by_day: BTreeMap<Date, Vec<usize>>,
     pub happening: Vec<usize>,
     /// Events still to start, grouped by the local day they start on.
@@ -57,61 +34,9 @@ pub struct Model {
     pub past: Vec<usize>,
 }
 
-impl Span {
-    /// The event's span in `tz`, or `None` when its date can't be placed.
-    pub fn of(schedule: &Schedule, tz: &TimeZone) -> Option<Span> {
-        let start = local_time(&schedule.starts, tz)?;
-        let end = schedule
-            .ends
-            .and_then(|ends| end_of(&ends, tz))
-            // A start and an end in different offsets can cross once both are local.
-            .filter(|end| *end >= start);
-        Some(Span {
-            start,
-            end,
-            all_day: schedule.starts.time.is_none(),
-        })
-    }
-
-    /// When it is over: its end, or the end of the day it starts on.
-    pub fn until(&self) -> DateTime {
-        self.end.unwrap_or_else(|| next_midnight(self.start.date()))
-    }
-
-    /// The local days it covers, at most [`MAX_DAYS`].
-    pub fn days(&self) -> impl Iterator<Item = Date> {
-        let last = self.last_day();
-        self.start
-            .date()
-            .series(1.day())
-            .take_while(move |day| *day <= last)
-            .take(MAX_DAYS)
-    }
-
-    /// The last day it covers: an end at midnight belongs to the day before.
-    pub fn last_day(&self) -> Date {
-        let until = self.until();
-        let last = if until.time() == Time::midnight() {
-            until.date().yesterday().unwrap_or(until.date())
-        } else {
-            until.date()
-        };
-        last.max(self.start.date())
-    }
-
-    pub fn phase(&self, now: DateTime) -> Phase {
-        if now < self.start {
-            Phase::Upcoming
-        } else if now < self.until() {
-            Phase::Happening
-        } else {
-            Phase::Past
-        }
-    }
-}
-
 impl Model {
-    pub fn build(results: Arc<Vec<Bookmark>>, now: DateTime, tz: &TimeZone) -> Model {
+    pub fn build(results: Arc<Vec<Bookmark>>, now: &Zoned) -> Model {
+        let tz = now.time_zone();
         let mut events: Vec<Event> = results
             .iter()
             .enumerate()
@@ -126,7 +51,8 @@ impl Model {
         let mut model = Model {
             results,
             events,
-            now,
+            now: now.timestamp(),
+            today: now.date(),
             by_day: BTreeMap::new(),
             happening: Vec::new(),
             upcoming: Vec::new(),
@@ -154,7 +80,7 @@ impl Model {
     }
 
     pub fn today(&self) -> Date {
-        self.now.date()
+        self.today
     }
 
     fn group(&mut self) {
@@ -169,57 +95,31 @@ impl Model {
             match span.phase(self.now) {
                 Phase::Happening => self.happening.push(at),
                 Phase::Past => self.past.push(at),
-                Phase::Upcoming => match self.upcoming.last_mut() {
-                    Some((day, list)) if *day == span.start.date() => list.push(at),
-                    _ => self.upcoming.push((span.start.date(), vec![at])),
-                },
+                Phase::Upcoming => {
+                    let day = span.start.local.date();
+                    match self.upcoming.last_mut() {
+                        Some((last, events)) if *last == day => events.push(at),
+                        _ => self.upcoming.push((day, vec![at])),
+                    }
+                }
             }
         }
         self.past.reverse();
-    }
-}
-
-/// The wall time an event time shows in `tz`: an instant is converted, a floating time and
-/// a date stay as written.
-pub(in crate::ui::main) fn local_time(time: &EventTime, tz: &TimeZone) -> Option<DateTime> {
-    let date = civil_date(time.date)?;
-    let Some(clock) = time.time else {
-        return Some(date.to_datetime(Time::midnight()));
-    };
-    let wall = date.at(clock.hour as i8, clock.minute as i8, 0, 0);
-    match clock.offset_minutes {
-        None => Some(wall),
-        Some(minutes) => {
-            let offset = Offset::from_seconds(i32::from(minutes) * 60).ok()?;
-            let instant = offset.to_timestamp(wall).ok()?;
-            Some(tz.to_datetime(instant))
+        // An event that began on an earlier day joins each later day's list where its
+        // start falls, ahead of that day's all-day events: put those back in front.
+        let events = &self.events;
+        for list in self.by_day.values_mut() {
+            list.sort_by_key(|&at| events[at].span.map(|s| (!s.all_day, s.start)));
         }
     }
-}
-
-/// An end without a time lasts through that day.
-fn end_of(ends: &EventTime, tz: &TimeZone) -> Option<DateTime> {
-    match ends.time {
-        None => Some(next_midnight(civil_date(ends.date)?)),
-        Some(_) => local_time(ends, tz),
-    }
-}
-
-fn next_midnight(day: Date) -> DateTime {
-    day.tomorrow()
-        .map_or(DateTime::MAX, |next| next.to_datetime(Time::midnight()))
-}
-
-fn civil_date(date: knoa_core::Date) -> Option<Date> {
-    let year = i16::try_from(date.year()).ok()?;
-    let month = i8::try_from(date.month()).ok()?;
-    let day = i8::try_from(date.day()).ok()?;
-    Date::new(year, month, day).ok()
 }
 
 #[cfg(test)]
 mod tests {
-    use jiff::civil::date;
+    use jiff::{
+        civil::{DateTime, date},
+        tz::TimeZone,
+    };
     use knoa_core::{BookmarkId, Status, WorkspaceId};
     use serde_json::json;
 
@@ -261,7 +161,8 @@ mod tests {
 
     fn build(events: Vec<Bookmark>, now: DateTime) -> Model {
         let tz = TimeZone::get("Europe/Warsaw").expect("bundled tz database");
-        Model::build(Arc::new(events), now, &tz)
+        let now = now.to_zoned(tz).expect("a time Warsaw's clocks show");
+        Model::build(Arc::new(events), &now)
     }
 
     #[test]
@@ -305,5 +206,40 @@ mod tests {
         assert_eq!(ids(&model.undated), [3]);
         assert_eq!(model.upcoming.len(), 1);
         assert_eq!(ids(&model.upcoming[0].1), [4]);
+    }
+
+    #[test]
+    fn an_event_across_the_fall_back_hour_ends_at_its_instant() {
+        // Warsaw's clocks go back at 03:00 on 25 October 2026: 02:45 in summer time to
+        // 02:15 in winter time is half an hour, though the end's wall time is earlier.
+        let model = build(
+            vec![event(
+                1,
+                "2026-10-25T02:45+02:00",
+                Some("2026-10-25T02:15+01:00"),
+            )],
+            date(2026, 10, 25).at(4, 0, 0, 0),
+        );
+        assert_eq!(model.past, [0]);
+        let span = model.events[0].span.expect("a placed event");
+        assert!(span.end.is_some(), "the end is after the start as instants");
+    }
+
+    #[test]
+    fn a_day_lists_all_day_events_before_one_running_on_from_an_earlier_day() {
+        let model = build(
+            vec![
+                event(1, "2026-12-04T10:00", Some("2026-12-06T18:00")),
+                event(2, "2026-12-05", None),
+                event(3, "2026-12-05T09:00", None),
+            ],
+            date(2026, 12, 1).at(9, 0, 0, 0),
+        );
+        let ids: Vec<i64> = model
+            .on(date(2026, 12, 5))
+            .iter()
+            .map(|&i| model.events[i].id.0)
+            .collect();
+        assert_eq!(ids, [2, 1, 3]);
     }
 }

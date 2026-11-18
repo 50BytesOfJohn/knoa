@@ -1,6 +1,8 @@
 //! A column of headings and event rows at fixed heights, so a long list only builds the
 //! rows in view and the keys can scroll to a row without measuring it.
 
+use std::collections::HashSet;
+
 use gpui::{ScrollHandle, SharedString, point, px};
 
 /// One line of a column.
@@ -55,17 +57,19 @@ impl Lines {
         self.height += height;
     }
 
-    /// The lines that overlap the band from `top` to `bottom`.
-    pub fn visible(&self, top: f32, bottom: f32) -> impl Iterator<Item = &Placed> {
+    /// The lines that overlap the band from `top` to `bottom`, each with its position in
+    /// the column, which tells apart two rows of the same event.
+    pub fn visible(&self, top: f32, bottom: f32) -> impl Iterator<Item = (usize, &Placed)> {
         self.lines
             .iter()
-            .skip_while(move |placed| placed.y + placed.height < top)
-            .take_while(move |placed| placed.y <= bottom)
+            .enumerate()
+            .skip_while(move |(_, placed)| placed.y + placed.height < top)
+            .take_while(move |(_, placed)| placed.y <= bottom)
     }
 
     /// The events in the order the column shows them, each once.
     pub fn order(&self) -> Vec<usize> {
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = HashSet::new();
         self.lines
             .iter()
             .filter_map(|placed| match placed.line {
@@ -77,25 +81,25 @@ impl Lines {
     }
 
     /// Where the first row of `event` is.
-    pub fn row_of(&self, event: usize) -> Option<&Placed> {
+    fn row_of(&self, event: usize) -> Option<&Placed> {
         self.lines
             .iter()
             .find(|placed| matches!(placed.line, Line::Event(e) if e == event))
     }
-}
 
-impl Lines {
-    /// Scrolls `scroll` just enough to bring the first row of `event` into view.
-    pub fn reveal(&self, event: usize, scroll: &ScrollHandle) {
+    /// Scrolls `scroll` just enough to bring the first row of `event` into view. The
+    /// column starts `origin` down the scrolled content.
+    pub fn reveal(&self, event: usize, origin: f32, scroll: &ScrollHandle) {
         let Some(row) = self.row_of(event) else {
             return;
         };
         let viewport = f32::from(scroll.bounds().size.height);
         let top = -f32::from(scroll.offset().y);
-        let new_top = if row.y < top {
-            row.y
-        } else if row.y + row.height > top + viewport {
-            row.y + row.height - viewport
+        let row_top = origin + row.y;
+        let new_top = if row_top < top {
+            row_top
+        } else if row_top + row.height > top + viewport {
+            row_top + row.height - viewport
         } else {
             return;
         };
