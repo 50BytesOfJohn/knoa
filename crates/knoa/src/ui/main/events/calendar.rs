@@ -11,6 +11,7 @@ use jiff::{
 };
 
 use super::{
+    day_cell::Density,
     labels,
     upcoming::{self, Placement},
 };
@@ -76,6 +77,7 @@ impl MainView {
             return div().into_any_element();
         };
         let cell_height = (height - WEEKDAY_ROW - BORDERS) / WEEKS as f32;
+        let density = Density::for_cell_width((width - BORDERS) / 7.);
         let days: Vec<Date> = grid_days(page.month, page.week_start).collect();
         let mut grid = div().flex_1().flex().flex_col();
         for week in days.chunks(7) {
@@ -86,7 +88,7 @@ impl MainView {
                 .border_t_1()
                 .border_color(theme.hairline);
             for &day in week {
-                row = row.child(self.day_cell(model, day, cell_height, cx));
+                row = row.child(self.day_cell(model, day, cell_height, density, cx));
             }
             grid = grid.child(row);
         }

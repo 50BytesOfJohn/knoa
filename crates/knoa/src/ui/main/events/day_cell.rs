@@ -1,5 +1,5 @@
 //! One day of the month grid: its number, its first few events as chips, and how many
-//! more there are.
+//! more there are. Too narrow for a readable chip, the day shows its events as dots.
 
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
@@ -8,7 +8,7 @@ use gpui::{
 };
 use jiff::civil::Date;
 
-use super::{labels, model::Model};
+use super::{dots, labels, model::Model};
 use crate::ui::{
     main::{MainView, bookmark_menu::with_bookmark_menu},
     theme::Theme,
@@ -19,6 +19,27 @@ const CHIP: f32 = 18.;
 const CHIP_GAP: f32 = 2.;
 /// The most chips a day shows before "+N more".
 const MAX_CHIPS: usize = 3;
+/// How faint a past event's chip or dot is.
+pub const PAST_OPACITY: f32 = 0.55;
+/// Narrower than this, a chip has no room for its time and a few letters of its title.
+const MIN_CHIP_CELL: f32 = 90.;
+
+/// How a day shows its events: as chips with their time and title, or as dots.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Density {
+    Chips,
+    Dots,
+}
+
+impl Density {
+    pub fn for_cell_width(width: f32) -> Density {
+        if width < MIN_CHIP_CELL {
+            Density::Dots
+        } else {
+            Density::Chips
+        }
+    }
+}
 
 impl MainView {
     pub(super) fn day_cell(
@@ -26,14 +47,14 @@ impl MainView {
         model: &Model,
         day: Date,
         height: f32,
+        density: Density,
         cx: &mut Context<'_, MainView>,
     ) -> AnyElement {
         let theme = Theme::get(cx).clone();
         let page = &self.events;
         let in_month = day.year() == page.month.year() && day.month() == page.month.month();
         let events = model.on(day);
-        let shown = chips_shown(events.len(), height);
-        let mut cell = div()
+        let cell = div()
             .id(("day", day_id(day)))
             .flex_1()
             .min_w_0()
@@ -49,6 +70,13 @@ impl MainView {
             .when(!in_month, |s| s.opacity(0.45))
             .child(day_number(day, day == model.today(), &theme))
             .on_click(cx.listener(move |this, _, _, cx| this.toggle_event_day(day, cx)));
+        if density == Density::Dots {
+            return cell
+                .child(dots::dots(model, events, &theme))
+                .into_any_element();
+        }
+        let shown = chips_shown(events.len(), height);
+        let mut cell = cell;
         for &event in &events[..shown] {
             cell = cell.child(self.chip(model, event, day, cx));
         }
@@ -75,7 +103,7 @@ impl MainView {
             .filter(|s| !s.all_day && s.start.local.date() == day)
             .map(|s| labels::start_time(&s));
         let chip = chip_frame(event, self.selected == Some(id), theme)
-            .when(model.is_past(event), |s| s.opacity(0.55))
+            .when(model.is_past(event), |s| s.opacity(PAST_OPACITY))
             .when_some(time, |s, time| {
                 s.child(
                     div()

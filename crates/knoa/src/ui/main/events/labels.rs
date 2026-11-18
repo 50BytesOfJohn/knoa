@@ -48,9 +48,13 @@ pub fn month_heading(day: Date) -> String {
     format!("{} {}", month_name(day), day.year())
 }
 
-/// "Dec 2026".
-pub fn short_month_heading(day: Date) -> String {
-    format!("{} {}", short_month(day), day.year())
+/// "Dec", or "Dec 2027" when it isn't this year.
+pub fn short_month_heading(day: Date, today: Date) -> String {
+    if day.year() == today.year() {
+        short_month(day).into()
+    } else {
+        format!("{} {}", short_month(day), day.year())
+    }
 }
 
 /// "Sat 12 Dec".

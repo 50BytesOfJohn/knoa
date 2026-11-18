@@ -6,6 +6,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::tooltip::Tooltip;
+use jiff::Zoned;
 
 use super::{NextMonth, PreviousMonth, ShowToday, labels, set_events_view};
 use crate::{
@@ -82,7 +83,7 @@ impl MainView {
             .overflow_hidden()
             .flex()
             .items_center()
-            .gap_3()
+            .map(|row| if full { row.gap_3() } else { row.gap_1() })
             .when(full, |row| {
                 row.child(
                     div()
@@ -115,17 +116,20 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> Vec<AnyElement> {
         let page_month = self.events.month;
-        let month = div().text_lg().text_color(theme.muted).map(|s| {
+        let month = div().text_color(theme.muted).map(|s| {
             if full {
-                s.flex_none()
+                s.text_lg()
+                    .flex_none()
                     .ml_2()
                     .min_w(px(150.))
                     .child(labels::month_heading(page_month))
             } else {
                 // Shrinks before the buttons do, so both stay whole.
-                s.min_w_0()
+                s.text_base()
+                    .mr_2()
+                    .min_w_0()
                     .truncate()
-                    .child(labels::short_month_heading(page_month))
+                    .child(labels::short_month_heading(page_month, Zoned::now().date()))
             }
         });
         let previous = month_button("previous-month", "chevron-left", "Previous month", theme)

@@ -3,6 +3,7 @@
 
 mod calendar;
 mod day_cell;
+mod dots;
 mod header;
 mod labels;
 mod lines;

@@ -142,7 +142,6 @@ impl Written {
     }
 }
 
-/// An end without a time lasts through that day.
 /// Whether `end` is not before `start`. A date-only end is the midnight after its day,
 /// so it must pass the start to cover the start's day.
 fn reaches(ends: &EventTime, end: &Moment, start: &Moment) -> bool {
@@ -153,6 +152,7 @@ fn reaches(ends: &EventTime, end: &Moment, start: &Moment) -> bool {
     }
 }
 
+/// When an end is: one without a time lasts through that day.
 fn end_of(ends: &EventTime, tz: &TimeZone) -> Option<Moment> {
     match Written::of(ends)? {
         Written::Floating(day) if ends.time.is_none() => next_midnight(day.date(), tz),
