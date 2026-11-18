@@ -56,7 +56,7 @@ const DATE_TIME =
  */
 export function parseEventTime(value: unknown): EventTime | null {
 	if (typeof value !== "string") return null;
-	const text = value.trim().replace(/\[[^\]]*\]$/, "");
+	const text = dropZoneName(value.trim());
 	const match = DATE_TIME.exec(text);
 	if (!match) return null;
 	const [, y, mo, d, h, mi, s, zone] = match;
@@ -73,6 +73,16 @@ export function parseEventTime(value: unknown): EventTime | null {
 	const offsetMinutes = zone === undefined ? undefined : parseOffset(zone);
 	if (offsetMinutes === null) return null;
 	return { year, month, day, time: { hour, minute, offsetMinutes } };
+}
+
+/**
+ * Drops a trailing RFC 9557 zone name, as in `2026-12-05T19:00+01:00[Europe/Warsaw]`.
+ * A regex for this is quadratic on input like `[[[[`, so it scans instead.
+ */
+function dropZoneName(text: string): string {
+	if (!text.endsWith("]")) return text;
+	const open = text.indexOf("[", text.lastIndexOf("]", text.length - 2) + 1);
+	return open === -1 ? text : text.slice(0, open);
 }
 
 /**
