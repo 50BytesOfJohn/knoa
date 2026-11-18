@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.7.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.7.0) - 2026-11-18
+
+### Added
+
+- Add events and an Events page ([#47](https://github.com/50BytesOfJohn/knoa/pull/47))
 ## [0.6.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.6.0) - 2026-11-17
 
 ### Changed
