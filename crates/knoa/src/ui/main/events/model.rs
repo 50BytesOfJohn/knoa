@@ -60,12 +60,12 @@ pub struct Model {
 impl Span {
     /// The event's span in `tz`, or `None` when its date can't be placed.
     pub fn of(schedule: &Schedule, tz: &TimeZone) -> Option<Span> {
-        let start = local(&schedule.starts, tz)?;
+        let start = local_time(&schedule.starts, tz)?;
         let end = schedule
             .ends
             .and_then(|ends| end_of(&ends, tz))
             // A start and an end in different offsets can cross once both are local.
-            .filter(|end| *end > start);
+            .filter(|end| *end >= start);
         Some(Span {
             start,
             end,
@@ -181,7 +181,7 @@ impl Model {
 
 /// The wall time an event time shows in `tz`: an instant is converted, a floating time and
 /// a date stay as written.
-fn local(time: &EventTime, tz: &TimeZone) -> Option<DateTime> {
+pub(in crate::ui::main) fn local_time(time: &EventTime, tz: &TimeZone) -> Option<DateTime> {
     let date = civil_date(time.date)?;
     let Some(clock) = time.time else {
         return Some(date.to_datetime(Time::midnight()));
@@ -201,7 +201,7 @@ fn local(time: &EventTime, tz: &TimeZone) -> Option<DateTime> {
 fn end_of(ends: &EventTime, tz: &TimeZone) -> Option<DateTime> {
     match ends.time {
         None => Some(next_midnight(civil_date(ends.date)?)),
-        Some(_) => local(ends, tz),
+        Some(_) => local_time(ends, tz),
     }
 }
 

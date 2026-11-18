@@ -3,7 +3,7 @@
 use knoa_core::{Fields, Kind};
 use serde_json::Value;
 
-use super::{lookup, names, type_of};
+use super::{has_type, lookup, names};
 
 /// schema.org's Event and its subtypes that are something a person attends or watches.
 /// Deliveries, publications and sales are Events to schema.org but not to anyone else.
@@ -37,7 +37,12 @@ pub(super) fn fields(item: &Value) -> Fields {
         let def = Kind::Event
             .field(name)
             .expect("event fields are in kinds.json");
-        if let Some(value) = raw.and_then(|raw| def.coerce(&raw)) {
+        // A one-value field may come as a list of values; the first readable one counts.
+        let coerce = |raw: &Value| {
+            def.coerce(raw)
+                .or_else(|| raw.as_array()?.iter().find_map(|item| def.coerce(item)))
+        };
+        if let Some(value) = raw.as_ref().and_then(coerce) {
             fields.insert(name.to_owned(), value);
         }
     };
@@ -77,8 +82,10 @@ impl<'a> Location<'a> {
         };
         for item in items {
             match item {
-                Value::String(name) => location.name = location.name.or(Some(name)),
-                Value::Object(_) if type_of(item).as_deref() == Some("VirtualLocation") => {
+                Value::String(name) if !name.trim().is_empty() => {
+                    location.name = location.name.or(Some(name));
+                }
+                Value::Object(_) if has_type(item, "VirtualLocation") => {
                     location.online = true;
                 }
                 Value::Object(_) => location.place = location.place.or(Some(item)),

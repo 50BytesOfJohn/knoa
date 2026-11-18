@@ -24,10 +24,23 @@ it("reads the forms knoa_core stores and refuses loose text", () => {
 		time: { hour: 19, minute: 0, offsetMinutes: 0 },
 	});
 	expect(parseEventTime("2026-12-05")).toEqual({ year: 2026, month: 12, day: 5 });
-	for (const loose of ["Dec 5", "2026-02-29", "2026-12-05T24:00", "2026-12-05T19:00+15:00"])
+	for (const loose of [
+		"Dec 5",
+		"2026-02-29",
+		"2026-12-05T24:00",
+		"2026-12-05T19:00+15:00",
+		"0099-12-05",
+	])
 		expect(parseEventTime(loose), loose).toBeNull();
+});
+
+it("shows a time with an offset in the viewer's local time, as the calendar does", () => {
 	const starts = { name: "starts", type: "datetime" as const, description: "" };
-	expect(displayField(starts, "2026-12-05T19:00-08:00")).toBe("Sat 5 Dec 2026, 19:00");
+
+	// 19:00 in Los Angeles is 22:00 in New York; a floating time stays as written.
+	expect(displayField(starts, "2026-12-05T19:00-08:00")).toBe("Sat 5 Dec 2026, 22:00");
+	expect(displayField(starts, "2026-12-05T19:00")).toBe("Sat 5 Dec 2026, 19:00");
+	expect(displayField(starts, "2026-12-05")).toBe("Sat 5 Dec 2026");
 });
 
 it("places an instant on the viewer's local day", () => {
@@ -63,6 +76,12 @@ it("keeps an event upcoming until it ends, or until its day ends without an end"
 	// An end before the start is ignored, so the meetup runs to midnight.
 	expect(meetup && isUpcoming(meetup, evening)).toBe(true);
 	expect(meetup && isUpcoming(meetup, new Date(2026, 11, 6, 0, 1))).toBe(false);
+});
+
+it("ends an event whose end equals its start right then, not at midnight", () => {
+	const moment = eventSpan({ starts: "2026-12-05T19:00", ends: "2026-12-05T19:00" });
+
+	expect(moment && isUpcoming(moment, new Date(2026, 11, 5, 20, 0))).toBe(false);
 });
 
 it("starts the month grid on the given weekday", () => {

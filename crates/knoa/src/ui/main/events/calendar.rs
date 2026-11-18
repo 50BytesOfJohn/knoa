@@ -82,7 +82,12 @@ impl MainView {
         let days: Vec<Date> = grid_days(page.month, page.week_start).collect();
         let mut grid = div().flex_1().flex().flex_col();
         for week in days.chunks(7) {
-            let mut row = div().flex().h(px(cell_height));
+            // On the row, not the cells: a dimmed day outside the month would dim its line.
+            let mut row = div()
+                .flex()
+                .h(px(cell_height))
+                .border_t_1()
+                .border_color(theme.hairline);
             for &day in week {
                 row = row.child(self.day_cell(model, day, cell_height, &theme, cx));
             }
@@ -129,14 +134,12 @@ impl MainView {
             .id(("day", day_id(day)))
             .flex_1()
             .min_w_0()
-            .h(px(height))
+            .h_full()
             .px_1()
             .pb_1()
             .flex()
             .flex_col()
             .gap(px(CHIP_GAP))
-            .border_t_1()
-            .border_color(theme.hairline)
             .overflow_hidden()
             .cursor_pointer()
             .when(picked, |s| s.bg(theme.selected_row()))

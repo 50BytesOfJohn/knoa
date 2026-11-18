@@ -34,6 +34,7 @@ use crate::{
 pub(super) use header::view_switch;
 use lines::Lines;
 use model::Model;
+pub(super) use model::local_time;
 
 /// The Events page's own state: what it built from the results, and where the user is.
 pub struct EventsPage {

@@ -10,6 +10,7 @@ use knoa_core::{Bookmark, Status};
 use super::MainView;
 use crate::ui::{
     components::{Tone, button, icon},
+    main::field_display,
     mascot::{Mood, ai_mark, mascot},
     theme::{CARD_RADIUS, Theme},
 };
@@ -150,7 +151,10 @@ pub(super) fn fields(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
         .definition()
         .fields
         .iter()
-        .filter_map(|def| Some((def.label(), def.display(bookmark.fields.get(&def.name)?))))
+        .filter_map(|def| {
+            let shown = field_display::display(def, bookmark.fields.get(&def.name)?);
+            Some((def.label(), shown))
+        })
         .filter(|(_, v)| !v.is_empty())
         .collect();
     rows.extend(

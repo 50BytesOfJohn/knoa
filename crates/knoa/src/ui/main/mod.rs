@@ -9,6 +9,7 @@ mod delete_folder;
 mod detail;
 mod edits;
 mod events;
+mod field_display;
 mod folder_editor;
 mod groups;
 mod keys;

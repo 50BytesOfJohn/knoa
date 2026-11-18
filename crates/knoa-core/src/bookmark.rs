@@ -6,7 +6,9 @@ use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::{Fields, FolderLink, Kind, WorkspaceId};
+use serde_json::Value;
+
+use crate::{FieldDef, Fields, FolderLink, Kind, WorkspaceId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BookmarkId(pub i64);
@@ -133,8 +135,9 @@ pub struct Bookmark {
 }
 
 impl Bookmark {
-    /// The kind's key facts as display strings ("1999", "2h 19m").
-    pub fn key_facts(&self) -> Vec<String> {
+    /// The kind's key facts as display strings ("1999", "2h 19m"), each shown by `display`:
+    /// [`FieldDef::display`], or a view's own that knows the local time zone.
+    pub fn key_facts(&self, display: impl Fn(&FieldDef, &Value) -> String) -> Vec<String> {
         let Some(kind) = self.kind else {
             return Vec::new();
         };
@@ -143,7 +146,7 @@ impl Bookmark {
             .iter()
             .filter_map(|name| {
                 let def = kind.field(name)?;
-                let shown = def.display(self.fields.get(name)?);
+                let shown = display(def, self.fields.get(name)?);
                 (!shown.is_empty()).then_some(shown)
             })
             .collect()

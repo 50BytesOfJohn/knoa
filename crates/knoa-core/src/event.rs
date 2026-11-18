@@ -1,7 +1,7 @@
 //! When an event happens: its `starts` and `ends` field values, read without a time-zone
 //! database so this compiles to WebAssembly. Views convert to local time themselves.
 
-use std::{cmp::Ordering, fmt};
+use std::fmt;
 
 use crate::Fields;
 
@@ -29,7 +29,9 @@ pub struct EventTime {
     pub time: Option<TimeOfDay>,
 }
 
-/// An event's start, and its end when it is known and not before the start.
+/// An event's start, and its end when it is known and not before the start. An end and a
+/// start where only one has an offset can only be ordered in a time zone, so views check
+/// those.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Schedule {
     pub starts: EventTime,
@@ -44,9 +46,10 @@ const MONTHS: [&str; 12] = [
 const MAX_OFFSET_MINUTES: i16 = 14 * 60;
 
 impl Date {
-    /// `None` unless the date exists, in years 1 to 9999.
+    /// `None` unless the date exists, in years 1000 to 9999. Earlier years are typos, and
+    /// JavaScript's `Date` reads years below 100 as 19xx.
     pub fn new(year: u16, month: u8, day: u8) -> Option<Date> {
-        let valid = (1..=9999).contains(&year)
+        let valid = (1000..=9999).contains(&year)
             && (1..=12).contains(&month)
             && (1..=days_in_month(year, month)).contains(&day);
         valid.then_some(Date { year, month, day })
@@ -176,19 +179,19 @@ impl Schedule {
     pub fn of(fields: &Fields) -> Option<Schedule> {
         let read = |name: &str| fields.get(name)?.as_str().and_then(EventTime::parse);
         let starts = read("starts")?;
-        let ends = read("ends").filter(|ends| compare(ends, &starts) != Ordering::Less);
+        let ends = read("ends").filter(|ends| !ends_before(ends, &starts));
         Some(Schedule { starts, ends })
     }
 }
 
-/// Compares instants when both have offsets, wall times otherwise: without a time zone
-/// that is the best a floating time allows.
-fn compare(a: &EventTime, b: &EventTime) -> Ordering {
-    match (a.offset(), b.offset()) {
-        (Some(x), Some(y)) => {
-            (a.wall_minutes() - i64::from(x)).cmp(&(b.wall_minutes() - i64::from(y)))
-        }
-        _ => a.wall_minutes().cmp(&b.wall_minutes()),
+/// Whether `ends` is certainly before `starts`: instants when both have offsets, wall
+/// times when neither has. A date-only end means through that day.
+fn ends_before(ends: &EventTime, starts: &EventTime) -> bool {
+    let end = ends.wall_minutes() + if ends.time.is_none() { 1440 } else { 0 };
+    match (ends.offset(), starts.offset()) {
+        (Some(x), Some(y)) => end - i64::from(x) < starts.wall_minutes() - i64::from(y),
+        (None, None) => end < starts.wall_minutes(),
+        _ => false,
     }
 }
 
@@ -314,6 +317,7 @@ mod tests {
             "2026-12-05T19:00+15:00",
             "2026-12-05T7pm",
             "2026-12-5",
+            "0099-12-05",
         ] {
             assert_eq!(EventTime::parse(input), None, "{input}");
         }
@@ -338,5 +342,13 @@ mod tests {
         // 19:30 in New York is after 19:00 in Paris, though the wall time reads earlier.
         assert!(schedule("2026-12-05T13:30-05:00").is_some());
         assert_eq!(schedule("2026-12-05T18:30+01:00"), None);
+    }
+
+    #[test]
+    fn an_end_without_an_offset_is_kept_for_the_viewer_to_order() {
+        let fields = json!({"starts": "2026-12-05T19:00+01:00", "ends": "2026-12-05T18:00"});
+        let schedule = Schedule::of(fields.as_object().unwrap()).unwrap();
+        // In New York the start is 13:00, so a floating 18:00 end is five hours later.
+        assert!(schedule.ends.is_some());
     }
 }

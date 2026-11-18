@@ -58,7 +58,7 @@ export function parseEventTime(value: unknown): EventTime | null {
 	const month = Number(mo);
 	const day = Number(d);
 	const validDate =
-		year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= daysIn(year, month);
+		year >= 1000 && month >= 1 && month <= 12 && day >= 1 && day <= daysIn(year, month);
 	if (!validDate) return null;
 	if (h === undefined) return { year, month, day };
 	const hour = Number(h);
@@ -69,12 +69,22 @@ export function parseEventTime(value: unknown): EventTime | null {
 	return { year, month, day, time: { hour, minute, offsetMinutes } };
 }
 
-/** `Sat 5 Dec 2026, 19:00`, or `Sat 5 Dec 2026` without a time, in the value's own wall time. */
+/**
+ * `Sat 5 Dec 2026, 19:00`, or `Sat 5 Dec 2026` without a time. A time with an offset shows
+ * in the viewer's local time, as the calendar places it; a floating one as written.
+ */
 export function formatEventTime(time: EventTime): string {
-	const weekday = new Date(Date.UTC(time.year, time.month - 1, time.day)).getUTCDay();
-	const date = `${WEEKDAYS[weekday]} ${time.day} ${MONTHS[time.month - 1]} ${time.year}`;
+	if (time.time?.offsetMinutes !== undefined) {
+		const local = localStart(time);
+		return `${formatDate(local)}, ${pad(local.getHours())}:${pad(local.getMinutes())}`;
+	}
+	const date = formatDate(new Date(time.year, time.month - 1, time.day));
 	if (!time.time) return date;
 	return `${date}, ${pad(time.time.hour)}:${pad(time.time.minute)}`;
+}
+
+function formatDate(day: Date): string {
+	return `${WEEKDAYS[day.getDay()]} ${day.getDate()} ${MONTHS[day.getMonth()]} ${day.getFullYear()}`;
 }
 
 /**
@@ -89,7 +99,7 @@ export function eventSpan(fields: Record<string, unknown>): EventSpan | null {
 	const end = ends ? localEnd(ends) : nextDay(startOfDay(start));
 	return {
 		start,
-		end: end > start ? end : nextDay(startOfDay(start)),
+		end: end >= start ? end : nextDay(startOfDay(start)),
 		allDay: !starts.time,
 	};
 }
