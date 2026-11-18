@@ -8,6 +8,7 @@ mod content;
 mod delete_folder;
 mod detail;
 mod edits;
+mod events;
 mod folder_editor;
 mod groups;
 mod keys;
@@ -46,6 +47,7 @@ use crate::{
 };
 use content::{DecodedImages, LayoutCache};
 use detail::TagEdits;
+use events::EventsPage;
 use keys::{
     CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
     MoveRight, MoveUp, NewFolder, NewLink, NextImage, OpenSelected, OpenSelectedInBackground,
@@ -76,6 +78,7 @@ pub struct MainView {
     /// Empty Trash was clicked once; the next click deletes for good.
     confirm_empty_trash: bool,
     layout: LayoutCache,
+    events: EventsPage,
     decoded: DecodedImages,
     /// Until when Knoa takes focus back from a browser it opened a link in behind itself.
     keep_focus_until: Option<Instant>,
@@ -125,6 +128,7 @@ impl MainView {
             overlay: None,
             confirm_empty_trash: false,
             layout: LayoutCache::default(),
+            events: EventsPage::new(),
             decoded: DecodedImages::default(),
             keep_focus_until: None,
             _subscriptions: subscriptions,

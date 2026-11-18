@@ -277,11 +277,21 @@ Keychain in release-channel builds and in a plain file in dev builds
   library, organizer or cloud update only when it changes what the sidebar shows, not for
   new search results or another sync round. Animations follow macOS's
   Reduce Motion, which the app hands to GPUI at launch and whenever it changes.
-- Places: Everything, Gallery, Up next, Unsorted, Not organized, Set aside and Trash.
+- Places: Everything, Gallery, Events, Up next, Unsorted, Not organized, Set aside and
+  Trash.
   The Gallery shows bookmarks of a media kind (today only images) while the workspace has
   one. It is a device-side `Place`, not part of the sync protocol. Its results are laid
   out as pictures only: each tile at the stored image's shape, cropped to a range, in one
   continuous grid with the title and site over the picture on hover or selection.
+- Events: a place shown while the workspace has event bookmarks, after the Gallery. It is
+  a month calendar with an Upcoming panel (the clicked day, then happening now and
+  upcoming by day, then undated) or one list (happening now, upcoming by day under month
+  names, undated, then past), as the `events_view` setting on this Mac says; it is never
+  synced. Times with an offset are converted to the Mac's time zone with jiff, floating
+  times and dates stay as written. The page builds its model from the results once per
+  results and minute, so events move on to happening and past, and a new day moves
+  Today, without a restart. Months move with ⌘← and ⌘→ and ⌘T goes to today: plain
+  letters start a search. List thumbnails follow the card grid's image release.
 - Image viewer: a full-window overlay with its own key context that occludes the screen
   beneath, opened with Space on a picture, a double-click on a Gallery tile or the detail
   panel's cover. In the Gallery a click only selects; Show details (Cmd-I), in the

@@ -19,6 +19,7 @@ actions!(
         Dismiss
     ]
 );
+actions!(events, [PreviousMonth, NextMonth, ShowToday]);
 actions!(
     viewer,
     [PreviousImage, NextImage, CloseViewer, CopyImage, SaveImage]
@@ -57,6 +58,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-backspace", DeleteSelected, cards),
         KeyBinding::new("escape", Dismiss, cards),
         KeyBinding::new("escape", Dismiss, Some("Settings")),
+        // Plain letters and brackets start a search, so the month keys take Command.
+        KeyBinding::new("cmd-left", PreviousMonth, Some("Events")),
+        KeyBinding::new("cmd-right", NextMonth, Some("Events")),
+        KeyBinding::new("cmd-t", ShowToday, Some("Events")),
         KeyBinding::new("left", PreviousImage, viewer),
         KeyBinding::new("right", NextImage, viewer),
         KeyBinding::new("space", CloseViewer, viewer),

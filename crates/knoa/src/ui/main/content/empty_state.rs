@@ -11,11 +11,19 @@ use crate::ui::{
 };
 
 impl MainView {
-    pub(super) fn empty_state(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
+    pub(in crate::ui::main) fn empty_state(
+        &self,
+        cx: &mut Context<'_, MainView>,
+    ) -> impl IntoElement {
         let theme = Theme::get(cx);
         let library = self.library.read(cx);
         let caught_up = library.search().is_empty() && library.place() == Place::NotOrganized;
-        let (title, body) = if !library.search().is_empty() {
+        let (title, body) = if !library.search().is_empty() && library.place() == Place::Events {
+            (
+                "No events match",
+                "Try fewer words, or a date filter like starts>2026-12-01.".to_owned(),
+            )
+        } else if !library.search().is_empty() {
             (
                 "Nothing matches",
                 "Try fewer words, or filters like kind:movie, site:github.com or #tag.".to_owned(),
@@ -34,6 +42,11 @@ impl MainView {
             (
                 "No pictures here",
                 "Links straight to an image file show up here.".to_owned(),
+            )
+        } else if library.place() == Place::Events {
+            (
+                "No events here",
+                "Pages for concerts, talks and meetups show up here by date.".to_owned(),
             )
         } else if library.place() == Place::Everything {
             let synced = library.workspace().is_some_and(|w| !w.browsers.is_empty());

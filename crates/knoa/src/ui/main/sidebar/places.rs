@@ -1,4 +1,4 @@
-//! The places at the top of the sidebar: Everything, Gallery, Up next and the rest.
+//! The places at the top of the sidebar: Everything, Gallery, Events, Up next and the rest.
 
 use std::rc::Rc;
 
@@ -80,6 +80,12 @@ fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
             counts.gallery,
         ),
         (
+            Place::Events,
+            "Events",
+            line_icon!("calendar"),
+            counts.events,
+        ),
+        (
             Place::UpNext,
             "Up next",
             line_icon!("bookmark"),
@@ -111,7 +117,7 @@ fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
         .filter(|&(place, _, _, n)| {
             let hideable = matches!(
                 place,
-                Place::Gallery | Place::NotOrganized | Place::SetAside | Place::Trash
+                Place::Gallery | Place::Events | Place::NotOrganized | Place::SetAside | Place::Trash
             );
             !hideable || n > 0 || place == current
         })

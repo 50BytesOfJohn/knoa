@@ -77,8 +77,9 @@ come first (12 px dots, 8 px apart, 10 px before the next control).
 
 ### Places
 
-Everything (layers), Gallery (image), Up next (bookmark), Unsorted (inbox), Not organized
-(dashed circle), Trash (trash), Set aside (when its rule applies, as today).
+Everything (layers), Gallery (image), Events (calendar), Up next (bookmark), Unsorted
+(inbox), Not organized (dashed circle), Trash (trash), Set aside (when its rule applies,
+as today). Gallery and Events show only while the workspace has pictures or events.
 
 - **Not organized** shows while any bookmark is waiting for the AI. Its icon is the
   Lucide dashed circle in `muted` like the rest, with a `muted` count: no red dot. While

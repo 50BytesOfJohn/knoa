@@ -32,7 +32,7 @@ impl MainView {
     /// Moves a bookmark to Trash and selects its neighbour, so ⌫ can be pressed again.
     pub(super) fn move_to_trash(&mut self, id: BookmarkId, cx: &mut Context<'_, MainView>) {
         if self.selected == Some(id) {
-            let neighbour = self.neighbour_of(id);
+            let neighbour = self.neighbour_of(id, cx);
             self.set_selected(neighbour, cx);
             self.detail_open &= self.selected.is_some();
         }
