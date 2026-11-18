@@ -48,8 +48,7 @@ impl Span {
         let start = Written::of(&schedule.starts)?.moment(tz)?;
         let end = schedule
             .ends
-            .and_then(|ends| end_of(&ends, tz))
-            .filter(|end| end.at >= start.at);
+            .and_then(|ends| end_of(&ends, tz).filter(|end| reaches(&ends, end, &start)));
         let until = match end {
             Some(end) => end,
             None => next_midnight(start.local.date(), tz)?,
@@ -144,6 +143,16 @@ impl Written {
 }
 
 /// An end without a time lasts through that day.
+/// Whether `end` is not before `start`. A date-only end is the midnight after its day,
+/// so it must pass the start to cover the start's day.
+fn reaches(ends: &EventTime, end: &Moment, start: &Moment) -> bool {
+    if ends.time.is_none() {
+        end.at > start.at
+    } else {
+        end.at >= start.at
+    }
+}
+
 fn end_of(ends: &EventTime, tz: &TimeZone) -> Option<Moment> {
     match Written::of(ends)? {
         Written::Floating(day) if ends.time.is_none() => next_midnight(day.date(), tz),

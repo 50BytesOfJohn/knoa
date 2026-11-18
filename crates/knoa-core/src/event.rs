@@ -185,12 +185,14 @@ impl Schedule {
 }
 
 /// Whether `ends` is certainly before `starts`: instants when both have offsets, wall
-/// times when neither has. A date-only end means through that day.
+/// times when neither has. A date-only end means through that day, so it needs only to
+/// reach the start's date.
 fn ends_before(ends: &EventTime, starts: &EventTime) -> bool {
-    let end = ends.wall_minutes() + if ends.time.is_none() { 1440 } else { 0 };
+    let (end, start) = (ends.wall_minutes(), starts.wall_minutes());
     match (ends.offset(), starts.offset()) {
-        (Some(x), Some(y)) => end - i64::from(x) < starts.wall_minutes() - i64::from(y),
-        (None, None) => end < starts.wall_minutes(),
+        (Some(x), Some(y)) => end - i64::from(x) < start - i64::from(y),
+        (None, None) if ends.time.is_none() => ends.date < starts.date,
+        (None, None) => end < start,
         _ => false,
     }
 }
@@ -342,6 +344,18 @@ mod tests {
         // 19:30 in New York is after 19:00 in Paris, though the wall time reads earlier.
         assert!(schedule("2026-12-05T13:30-05:00").is_some());
         assert_eq!(schedule("2026-12-05T18:30+01:00"), None);
+    }
+
+    #[test]
+    fn a_date_only_end_must_reach_the_start_date() {
+        let schedule = |starts, ends| {
+            let fields = json!({"starts": starts, "ends": ends});
+            Schedule::of(fields.as_object().unwrap()).unwrap().ends
+        };
+        assert_eq!(schedule("2026-12-05", "2026-12-04"), None);
+        assert_eq!(schedule("2026-12-05T00:00", "2026-12-04"), None);
+        assert!(schedule("2026-12-05T19:00", "2026-12-05").is_some());
+        assert!(schedule("2026-12-05T19:00", "2026-12-05T19:00").is_some());
     }
 
     #[test]

@@ -87,6 +87,26 @@ it("ends an event whose end equals its start right then, not at midnight", () =>
 	expect(moment && isUpcoming(moment, new Date(2026, 11, 5, 20, 0))).toBe(false);
 });
 
+it("ignores a date-only end before the start's date", () => {
+	const fair = eventSpan({ starts: "2026-12-05", ends: "2026-12-04" });
+
+	expect(fair?.endKnown).toBe(false);
+	expect([...eventsByDay([fair], (span) => span).keys()]).toEqual(["2026-12-05"]);
+});
+
+it("keeps an event that ends as it starts at midnight on its day", () => {
+	const instant = { starts: "2026-12-05T00:00", ends: "2026-12-05T00:00" };
+
+	expect([...eventsByDay([instant], eventSpan).keys()]).toEqual(["2026-12-05"]);
+});
+
+it("lists all-day events before one running on from an earlier day", () => {
+	const trip = { starts: "2026-12-04T10:00", ends: "2026-12-06T18:00" };
+	const fair = { starts: "2026-12-05" };
+
+	expect(eventsByDay([trip, fair], eventSpan).get("2026-12-05")).toEqual([fair, trip]);
+});
+
 it("starts the month grid on the given weekday", () => {
 	const days = monthGridDays(2026, 12, 1);
 

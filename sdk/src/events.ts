@@ -103,7 +103,9 @@ export function eventSpan(fields: Record<string, unknown>): EventSpan | null {
 	const start = localStart(starts);
 	const ends = parseEventTime(fields.ends);
 	const end = ends ? localEnd(ends) : null;
-	const endKnown = end !== null && end >= start;
+	// A date-only end is the midnight after its day, so it must pass the start to cover
+	// the start's day.
+	const endKnown = end !== null && (ends?.time ? end >= start : end > start);
 	return {
 		start,
 		end: endKnown ? end : nextDay(startOfDay(start)),
@@ -121,11 +123,14 @@ export function isHappening(span: EventSpan, now: Date): boolean {
 	return span.start <= now && now < span.end;
 }
 
-/** The local days the event spans, each as its local midnight, at most `MAX_EVENT_DAYS`. */
+/**
+ * The local days the event spans, each as its local midnight, at most `MAX_EVENT_DAYS`.
+ * Always its start's day, even when it ends the moment it starts.
+ */
 export function eventDays(span: EventSpan): Date[] {
-	const days: Date[] = [];
+	const days = [startOfDay(span.start)];
 	for (
-		let day = startOfDay(span.start);
+		let day = nextDay(days[0]);
 		day < span.end && days.length < MAX_EVENT_DAYS;
 		day = nextDay(day)
 	) {
@@ -134,24 +139,34 @@ export function eventDays(span: EventSpan): Date[] {
 	return days;
 }
 
-/** Items on each local day they span, keyed by `dayKey`, soonest first within a day. */
+/**
+ * Items on each local day they span, keyed by `dayKey`. Within a day, all-day events come
+ * first, then the rest by start, so one running on from an earlier day follows them.
+ */
 export function eventsByDay<T>(
 	items: T[],
 	spanOf: (item: T) => EventSpan | null,
 ): Map<string, T[]> {
-	const spans = items.flatMap((item) => {
+	const buckets = new Map<string, { item: T; span: EventSpan }[]>();
+	for (const item of items) {
 		const span = spanOf(item);
-		return span ? [{ item, span }] : [];
-	});
-	spans.sort((a, b) => a.span.start.getTime() - b.span.start.getTime());
-	const days = new Map<string, T[]>();
-	for (const { item, span } of spans) {
+		if (!span) continue;
 		for (const day of eventDays(span)) {
 			const key = dayKey(day);
-			const list = days.get(key);
-			if (list) list.push(item);
-			else days.set(key, [item]);
+			const bucket = buckets.get(key);
+			if (bucket) bucket.push({ item, span });
+			else buckets.set(key, [{ item, span }]);
 		}
+	}
+	const days = new Map<string, T[]>();
+	for (const key of [...buckets.keys()].sort()) {
+		const bucket = buckets.get(key) ?? [];
+		bucket.sort(
+			(a, b) =>
+				Number(b.span.allDay) - Number(a.span.allDay) ||
+				a.span.start.getTime() - b.span.start.getTime(),
+		);
+		days.set(key, bucket.map(({ item }) => item));
 	}
 	return days;
 }

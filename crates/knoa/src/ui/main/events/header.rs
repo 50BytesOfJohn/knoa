@@ -115,19 +115,19 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> Vec<AnyElement> {
         let page_month = self.events.month;
-        let month = div()
-            .flex_none()
-            .text_lg()
-            .text_color(theme.muted)
-            .map(|s| {
-                if full {
-                    s.ml_2()
-                        .min_w(px(150.))
-                        .child(labels::month_heading(page_month))
-                } else {
-                    s.child(labels::short_month_heading(page_month))
-                }
-            });
+        let month = div().text_lg().text_color(theme.muted).map(|s| {
+            if full {
+                s.flex_none()
+                    .ml_2()
+                    .min_w(px(150.))
+                    .child(labels::month_heading(page_month))
+            } else {
+                // Shrinks before the buttons do, so both stay whole.
+                s.min_w_0()
+                    .truncate()
+                    .child(labels::short_month_heading(page_month))
+            }
+        });
         let previous = month_button("previous-month", "chevron-left", "Previous month", theme)
             .on_click(cx.listener(|this, _, window, cx| {
                 this.previous_month(&PreviousMonth, window, cx);
