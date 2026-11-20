@@ -54,6 +54,11 @@ pub struct Cloud {
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
     session_events: Option<Task<()>>,
     waiting: waiting::Waiting,
+    /// The stored sign-in is being read at launch.
+    restoring: bool,
+    /// Stamps account reads, so one that started before a language pick or a language
+    /// answer can't bring back the older language. See `language::decide`.
+    language_epoch: u64,
     _library_changes: Subscription,
 }
 
@@ -168,6 +173,8 @@ impl Cloud {
                 problem: None,
                 session_events: None,
                 waiting: waiting::Waiting::default(),
+                restoring: false,
+                language_epoch: 0,
                 _library_changes: changes,
             }
         });
@@ -237,14 +244,15 @@ impl Cloud {
         }
     }
 
-    /// The server said who the account is and what it has. Asked on every pull, so this
-    /// only writes and redraws when something changed.
-    fn set_account(&mut self, account: Account, cx: &mut Context<'_, Cloud>) {
+    /// The server said who the account is and what it has, in a read that started in
+    /// language epoch `read_in`. Asked on every pull, so this only writes and redraws
+    /// when something changed.
+    fn set_account(&mut self, account: Account, read_in: u64, cx: &mut Context<'_, Cloud>) {
         match account.organizer {
             Who::Cloud => set_cloud_organizes(true, "the account is organized in the cloud", cx),
             Who::Device => set_cloud_organizes(false, "the account is organized on this Mac", cx),
         }
-        self.follow_account_language(&account, cx);
+        self.follow_account_language(&account, read_in, cx);
         if SettingsFile::get(cx).account.as_ref() != Some(&account) {
             SettingsFile::update(cx, |s| s.account = Some(account.clone()));
         }

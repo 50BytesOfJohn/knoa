@@ -25,6 +25,8 @@ struct Here {
     delivery: Delivery,
     /// A request to set the account's language is on its way.
     sending: bool,
+    /// Bumped on every pick and every answer to a request to set the account's language.
+    epoch: u64,
 }
 
 /// What to do about the account's language.
@@ -45,10 +47,12 @@ struct Answered {
     resend: Option<Language>,
 }
 
-/// Acts on an account's language. One request at a time, and the user's unsent pick
-/// beats whatever the account says, as the server keeps the last one it's sent.
-fn decide(here: Here, account: Option<Language>) -> Step {
-    if here.sending {
+/// Acts on the language of an account read in epoch `read_in`. One request at a time,
+/// and the user's unsent pick beats whatever the account says, as the server keeps the
+/// last one it's sent. A read that started before the latest pick or answer may predate
+/// them, so its language counts for nothing.
+fn decide(here: Here, account: Option<Language>, read_in: u64) -> Step {
+    if here.sending || read_in < here.epoch {
         return Step::Wait;
     }
     match account {
@@ -75,17 +79,18 @@ fn answered(sent: Language, delivered: bool, here: Here) -> Answered {
 }
 
 impl Cloud {
-    /// The user picked `language` on this Mac: switch to it, and when signed in, keep it
-    /// as unsent until the account has it.
+    /// The user picked `language` on this Mac: switch to it, and when signed in or
+    /// restoring a sign-in, keep it as unsent until the account has it.
     pub fn choose_language(language: Language, cx: &mut App) {
         i18n::set_language(language, cx);
         Cloud::entity(cx).update(cx, |cloud, cx| {
-            if cloud.account().is_none() {
+            if !cloud.signed_in_or_restoring() {
                 return;
             }
+            cloud.language_epoch += 1;
             set_delivery(Delivery::Unsent, cx);
             let account = cloud.account().and_then(|account| account.language);
-            cloud.follow(account, cx);
+            cloud.follow(account, cloud.language_epoch, cx);
         });
     }
 
@@ -99,17 +104,24 @@ impl Cloud {
         cloud_organizes && SettingsFile::get(cx).language_delivery == Delivery::Unsent
     }
 
-    /// Acts on the language of an account the server just answered with.
+    /// Credentials are present: an account exists even before `/v1/me` names it.
+    fn signed_in_or_restoring(&self) -> bool {
+        self.restoring || matches!(self.phase, Phase::SignedIn(_) | Phase::OtherAccount(_))
+    }
+
+    /// Acts on the language of an account the server answered with, read in epoch
+    /// `read_in`.
     pub(super) fn follow_account_language(
         &mut self,
         account: &Account,
+        read_in: u64,
         cx: &mut Context<'_, Cloud>,
     ) {
-        self.follow(account.language, cx);
+        self.follow(account.language, read_in, cx);
     }
 
-    fn follow(&mut self, account: Option<Language>, cx: &mut Context<'_, Cloud>) {
-        match decide(self.here(cx), account) {
+    fn follow(&mut self, account: Option<Language>, read_in: u64, cx: &mut Context<'_, Cloud>) {
+        match decide(self.here(cx), account, read_in) {
             Step::Adopt(language) => i18n::set_language(language, cx),
             Step::Send(language) => self.send_language(language, cx),
             Step::Wait => {}
@@ -126,6 +138,7 @@ impl Cloud {
             language: settings.language,
             delivery: settings.language_delivery,
             sending,
+            epoch: self.language_epoch,
         }
     }
 
@@ -160,6 +173,7 @@ impl Cloud {
         if let Phase::SignedIn(connection) = &mut self.phase {
             connection.language_push = None;
         }
+        self.language_epoch += 1;
         if let Err(err) = &result {
             tracing::warn!("can't set the account's language: {err}");
         }
@@ -169,7 +183,7 @@ impl Cloud {
             self.send_language(language, cx);
         }
         if let Ok(account) = result {
-            self.set_account(account, cx);
+            self.set_account(account, self.language_epoch, cx);
         }
     }
 }
@@ -192,6 +206,7 @@ mod tests {
             language,
             delivery,
             sending,
+            epoch: 0,
         }
     }
 
@@ -199,19 +214,36 @@ mod tests {
     fn an_account_language_is_adopted_and_a_missing_one_gets_this_macs() {
         let settled = here(Language::En, Sent, false);
         assert_eq!(
-            decide(settled, Some(Language::Pl)),
+            decide(settled, Some(Language::Pl), 0),
             Step::Adopt(Language::Pl)
         );
-        assert_eq!(decide(settled, Some(Language::En)), Step::Wait);
-        assert_eq!(decide(settled, None), Step::Send(Language::En));
+        assert_eq!(decide(settled, Some(Language::En), 0), Step::Wait);
+        assert_eq!(decide(settled, None, 0), Step::Send(Language::En));
     }
 
     #[test]
     fn an_unsent_pick_beats_the_account_language() {
         let picked = here(Language::Pl, Unsent, false);
-        assert_eq!(decide(picked, Some(Language::En)), Step::Send(Language::Pl));
+        assert_eq!(
+            decide(picked, Some(Language::En), 0),
+            Step::Send(Language::Pl)
+        );
         let on_its_way = here(Language::Pl, Unsent, true);
-        assert_eq!(decide(on_its_way, Some(Language::En)), Step::Wait);
+        assert_eq!(decide(on_its_way, Some(Language::En), 0), Step::Wait);
+    }
+
+    #[test]
+    fn an_account_read_from_before_the_last_pick_or_answer_keeps_this_macs_language() {
+        // Picked Polish and the account took it, while a read from before still said English.
+        let delivered = Here {
+            epoch: 2,
+            ..here(Language::Pl, Sent, false)
+        };
+        assert_eq!(decide(delivered, Some(Language::En), 1), Step::Wait);
+        assert_eq!(
+            decide(delivered, Some(Language::En), 2),
+            Step::Adopt(Language::En)
+        );
     }
 
     #[test]

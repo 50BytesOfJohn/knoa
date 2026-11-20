@@ -29,9 +29,11 @@ impl Cloud {
         }
         let generation = self.generation.ticket();
         let read = Credentials::read(config.credential_url(), cx);
+        self.restoring = true;
         cx.spawn(async move |this, cx| {
             let read = read.await;
             let _ = this.update(cx, |this, cx| {
+                this.restoring = false;
                 if generation.if_current(|| ()).is_none() {
                     return;
                 }
