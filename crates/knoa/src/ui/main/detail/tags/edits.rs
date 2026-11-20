@@ -5,7 +5,7 @@ use gpui::{AppContext as _, Context, Entity, Focusable as _, Subscription, Windo
 use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, Origin, normalize_tag, tag_fits};
 
-use crate::ui::main::MainView;
+use crate::{i18n::t, ui::main::MainView};
 
 /// Tag changes on the bookmark in the detail panel. It lives as long as that bookmark
 /// stays selected.
@@ -124,7 +124,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Add a tag"));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(t!("detail-add-a-tag")));
         input.update(cx, |input, cx| input.focus(window, cx));
         let events = cx.subscribe_in(&input, window, move |this, input, event, window, cx| {
             this.on_tag_field_event(bookmark, input, event, window, cx);

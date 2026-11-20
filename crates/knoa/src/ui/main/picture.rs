@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use gpui::{AppContext as _, ClipboardItem, Context, Image, ImageFormat};
 use knoa_core::{Bookmark, BookmarkId, Kind, link_file_name};
 
-use super::MainView;
+use super::{MainView, viewer::Notice};
+use crate::i18n::t;
 
 /// Long titles make unwieldy file names; the save panel lets the user change it anyway.
 const NAME_CHARS: usize = 80;
@@ -30,11 +31,11 @@ impl MainView {
             let _ = this.update(cx, |this, cx| match image {
                 Ok(image) => {
                     cx.write_to_clipboard(ClipboardItem::new_image(&image));
-                    this.tell_viewer("Image copied", cx);
+                    this.tell_viewer(Notice::ImageCopied, cx);
                 }
                 Err(err) => {
                     tracing::warn!(?id, "can't copy the image: {err}");
-                    this.tell_viewer("Couldn't copy the image", cx);
+                    this.tell_viewer(Notice::CopyFailed, cx);
                 }
             });
         })
@@ -66,10 +67,10 @@ impl MainView {
             let copy = cx.background_spawn(async move { std::fs::copy(&path, &target) });
             let outcome = copy.await;
             let _ = this.update(cx, |this, cx| match outcome {
-                Ok(_) => this.tell_viewer("Image saved", cx),
+                Ok(_) => this.tell_viewer(Notice::ImageSaved, cx),
                 Err(err) => {
                     tracing::warn!(?id, "can't save the image: {err}");
-                    this.tell_viewer("Couldn't save the image", cx);
+                    this.tell_viewer(Notice::SaveFailed, cx);
                 }
             });
         })
@@ -137,8 +138,11 @@ fn file_name(title: &str, stored: &Path) -> String {
         .collect();
     // A leading dot would hide the file.
     let stem = stem.trim().trim_start_matches('.').trim_start();
-    let stem = if stem.is_empty() { "Image" } else { stem };
-    format!("{stem}.{extension}")
+    if stem.is_empty() {
+        format!("{}.{extension}", t!("main-image-file-name"))
+    } else {
+        format!("{stem}.{extension}")
+    }
 }
 
 #[cfg(test)]

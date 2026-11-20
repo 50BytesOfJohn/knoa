@@ -6,6 +6,7 @@ use gpui::{
 use knoa_core::{BookmarkId, Image};
 
 use crate::{
+    i18n::t,
     services::thumbnails::{Refresh, Thumbnails},
     ui::{
         components::icon,
@@ -21,9 +22,9 @@ const MAX_COVER_HEIGHT: f32 = 300.;
 /// takes the cards' dark badge look, so it reads on any picture.
 pub(super) fn refresh_status(id: BookmarkId, on_image: bool, cx: &App) -> Option<Div> {
     let (glyph, text) = match Thumbnails::entity(cx).read(cx).refresh_of(id)? {
-        Refresh::Running => ("refresh-cw", "Refreshing thumbnail…"),
-        Refresh::NoImage => ("image-off", "No thumbnail on the page"),
-        Refresh::Failed => ("wifi-off", "Couldn't reach the page"),
+        Refresh::Running => ("refresh-cw", t!("main-refreshing-thumbnail")),
+        Refresh::NoImage => ("image-off", t!("detail-no-thumbnail")),
+        Refresh::Failed => ("wifi-off", t!("detail-page-unreachable")),
     };
     let theme = Theme::get(cx);
     let (bg, fg) = if on_image {

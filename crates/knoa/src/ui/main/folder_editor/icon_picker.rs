@@ -8,9 +8,12 @@ use gpui::{
 use knoa_core::{FolderGlyph, FolderIcon};
 
 use super::FolderEditor;
-use crate::ui::{
-    components::{Finish, folder_mark, tip},
-    theme::{ROW_RADIUS, Theme},
+use crate::{
+    i18n::{LOADER, t},
+    ui::{
+        components::{Finish, folder_mark, tip},
+        theme::{ROW_RADIUS, Theme},
+    },
 };
 
 const CELL: f32 = 30.;
@@ -37,9 +40,9 @@ impl FolderEditor {
         let selected = icon == self.icon;
         let color = theme.folder_color(self.color);
         let label = match &icon {
-            None => "Folder",
-            Some(FolderIcon::Glyph(glyph)) => glyph.label(),
-            Some(FolderIcon::Emoji(_)) => "Emoji",
+            None => t!("main-folder-icon-none"),
+            Some(FolderIcon::Glyph(glyph)) => glyph_label(*glyph),
+            Some(FolderIcon::Emoji(_)) => t!("main-folder-icon-emoji"),
         };
         let hover = theme.hover;
         div()
@@ -64,5 +67,28 @@ impl FolderEditor {
                 this.clear_typed_emoji(window, cx);
                 cx.notify();
             }))
+    }
+}
+
+/// What a glyph stands for, in the current language: "Reading", "Travel". Its message ID
+/// is built at run time, so a test checks that each one exists.
+fn glyph_label(glyph: FolderGlyph) -> String {
+    LOADER.get(&glyph_id(glyph))
+}
+
+fn glyph_id(glyph: FolderGlyph) -> String {
+    format!("main-glyph-{}", glyph.name())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_glyph_has_a_message() {
+        for &glyph in FolderGlyph::ALL {
+            let id = glyph_id(glyph);
+            assert!(LOADER.has(&id), "{id} is missing");
+        }
     }
 }

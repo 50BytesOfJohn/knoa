@@ -9,10 +9,13 @@ use jiff::civil::Date;
 use knoa_core::Bookmark;
 
 use super::{labels, model::Model, rows::RowStyle};
-use crate::ui::{
-    components::site_mark,
-    main::{MainView, bookmark_menu::with_bookmark_menu},
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        components::site_mark,
+        main::{MainView, bookmark_menu::with_bookmark_menu},
+        theme::Theme,
+    },
 };
 
 /// The list's side padding, for its rows and the headings between them.
@@ -35,7 +38,7 @@ impl MainView {
         let theme = Theme::get(cx).clone();
         let bookmark = model.bookmark(event);
         let span = model.events[event].span;
-        let when = span.map_or_else(|| "Date not set".to_owned(), |s| labels::time_range(&s));
+        let when = span.map_or_else(|| t!("events-date-not-set"), |s| labels::time_range(&s));
         let row = self
             .event_row(("event-row", line).into(), model, event, STYLE, cx)
             .gap_4()

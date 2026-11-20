@@ -7,6 +7,7 @@ use gpui::{
 use knoa_core::{Bookmark, Place};
 
 use crate::{
+    i18n::t,
     state::settings::SettingsFile,
     ui::{
         components::{icon, site_mark},
@@ -87,11 +88,15 @@ impl MainView {
                     .text_xs()
                     .gap_1p5()
                     .child(icon("bookmark", px(13.), theme.accent))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Up next"))
+                    .child(
+                        div()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(t!("main-up-next")),
+                    )
                     .child(
                         div()
                             .text_color(theme.muted)
-                            .child(format!("· {} to read and watch", items.len())),
+                            .child(t!("main-up-next-count", count = (items.len()))),
                     )
                     .child(div().flex_1())
                     .child(

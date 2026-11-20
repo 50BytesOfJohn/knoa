@@ -13,10 +13,13 @@ use super::{
     model::Model,
     rows::{self, RowStyle},
 };
-use crate::ui::{
-    components::site_mark,
-    main::{MainView, bookmark_menu::with_bookmark_menu},
-    theme::{PANEL_RADIUS, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::site_mark,
+        main::{MainView, bookmark_menu::with_bookmark_menu},
+        theme::{PANEL_RADIUS, Theme},
+    },
 };
 
 pub const WIDTH: f32 = 300.;
@@ -66,21 +69,21 @@ pub fn lines(model: &Model, day: Option<Date>) -> Lines {
         let events = model.on(day);
         section(&mut lines, labels::day_heading(day, today), events);
         if events.is_empty() {
-            lines.push(Line::Note("Nothing on this day.".into()), &HEIGHTS);
+            lines.push(Line::Note(t!("events-nothing-on-day").into()), &HEIGHTS);
         }
     }
     if !model.happening.is_empty() {
-        section(&mut lines, "Happening now".into(), &model.happening);
+        section(&mut lines, t!("events-happening-now"), &model.happening);
     }
     for (start, events) in &model.upcoming {
         section(&mut lines, labels::day_heading(*start, today), events);
     }
     if model.happening.is_empty() && model.upcoming.is_empty() {
-        let note = "Nothing coming up. Events you save show here until they end.";
+        let note = t!("events-nothing-coming-up-panel");
         lines.push(Line::Note(note.into()), &HEIGHTS);
     }
     if !model.undated.is_empty() {
-        section(&mut lines, "Date not set".into(), &model.undated);
+        section(&mut lines, t!("events-date-not-set"), &model.undated);
     }
     lines
 }
@@ -214,5 +217,5 @@ fn title() -> impl IntoElement {
         .items_center()
         .text_sm()
         .font_weight(FontWeight::SEMIBOLD)
-        .child("Upcoming")
+        .child(t!("events-upcoming"))
 }

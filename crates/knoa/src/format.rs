@@ -10,10 +10,10 @@ use std::{
 
 use jiff::{Timestamp, civil, tz::TimeZone};
 use knoa_core::Language;
-use objc2::rc::Retained;
+use objc2::{rc::Retained, runtime::AnyObject};
 use objc2_foundation::{
-    NSDate, NSDateFormatter, NSDateIntervalFormatter, NSFormattingContext, NSLocale, NSString,
-    NSTimeZone,
+    NSArray, NSDate, NSDateFormatter, NSDateIntervalFormatter, NSFormattingContext,
+    NSListFormatter, NSLocale, NSString, NSTimeZone,
 };
 
 use crate::i18n;
@@ -76,6 +76,26 @@ pub fn floating_range(
     formatter
         .stringFromDate_toDate(&floating_date(start), &floating_date(end))
         .to_string()
+}
+
+/// Names joined as the language lists them: "Chrome and Brave", "Chrome, Brave and Edge".
+#[expect(
+    unsafe_code,
+    reason = "NSListFormatter takes an array of any objects, so objc2 can't check them"
+)]
+pub fn list(items: &[&str]) -> String {
+    let formatter = NSListFormatter::new();
+    formatter.setLocale(Some(&locale(i18n::language())));
+    let strings: Vec<Retained<NSString>> =
+        items.iter().map(|item| NSString::from_str(item)).collect();
+    let objects: Vec<&AnyObject> = strings
+        .iter()
+        .map(|string| -> &AnyObject { string })
+        .collect();
+    let array = NSArray::from_slice(&objects);
+    // SAFETY: the formatter reads each item's description, and NSStrings have one.
+    let joined = unsafe { formatter.stringFromItems(&array) };
+    joined.map(|joined| joined.to_string()).unwrap_or_default()
 }
 
 /// Formatters are slow to make, so each language, skeleton and zone gets one, kept.

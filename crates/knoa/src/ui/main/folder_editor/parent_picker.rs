@@ -12,13 +12,15 @@ use gpui_component::{
 use knoa_core::{FolderId, FolderTree};
 
 use super::FolderEditor;
-use crate::ui::{
-    components::icon,
-    main::menu_trigger::MenuTrigger,
-    theme::{ROW_RADIUS, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::icon,
+        main::menu_trigger::MenuTrigger,
+        theme::{ROW_RADIUS, Theme},
+    },
 };
 
-const NONE: &str = "None";
 /// Enough for every path at the deepest level the menu offers.
 const MENU_WIDTH: f32 = 300.;
 const MENU_MAX_HEIGHT: f32 = 320.;
@@ -38,7 +40,7 @@ impl FolderEditor {
         }
         let label: SharedString = match self.parent {
             Some(id) if tree.get(id).is_some() => tree.path_name(id).into(),
-            _ => NONE.into(),
+            _ => t!("main-folder-parent-none").into(),
         };
         let (current, editor) = (self.parent, cx.entity().downgrade());
         let field = div()
@@ -63,7 +65,12 @@ impl FolderEditor {
                 .max_h(px(MENU_MAX_HEIGHT))
                 .scrollable(true)
                 .check_side(Side::Right)
-                .item(choice(&editor, NONE.into(), None, current));
+                .item(choice(
+                    &editor,
+                    t!("main-folder-parent-none").into(),
+                    None,
+                    current,
+                ));
             parents.iter().fold(menu, |menu, (id, path)| {
                 menu.item(choice(&editor, path.clone(), Some(*id), current))
             })
@@ -73,7 +80,7 @@ impl FolderEditor {
                 .flex()
                 .items_center()
                 .gap_3()
-                .child(div().text_sm().child("Parent"))
+                .child(div().text_sm().child(t!("main-folder-parent")))
                 .child(picker),
         )
     }

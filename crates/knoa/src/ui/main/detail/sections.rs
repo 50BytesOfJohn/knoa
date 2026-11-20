@@ -76,29 +76,27 @@ impl MainView {
             .child(
                 div()
                     .font_weight(FontWeight::MEDIUM)
-                    .child("Set aside: doesn't fit this workspace"),
+                    .child(t!("detail-set-aside")),
             )
             .child(div().text_color(theme.muted).child(reason));
-        notice(theme.soft)
-            .child(text)
-            .child(
-                button("keep", "Keep", Tone::Primary, cx).on_click(move |_, _, cx| {
-                    library.update(cx, |library, cx| {
-                        library.change(cx, move |store| store.keep(id));
-                    });
-                }),
-            )
+        notice(theme.soft).child(text).child(
+            button("keep", t!("detail-keep"), Tone::Primary, cx).on_click(move |_, _, cx| {
+                library.update(cx, |library, cx| {
+                    library.change(cx, move |store| store.keep(id));
+                });
+            }),
+        )
     }
 
     fn organize_notice(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Option<Div> {
         let (message, action) = match bookmark.status {
             status if status.is_organized() => return None,
-            Status::Queued | Status::Organizing => ("Organizing this one now…", None),
-            Status::Failed => ("Organizing didn't work out.", Some("Try again")),
+            Status::Queued | Status::Organizing => (t!("detail-organizing-now"), None),
+            Status::Failed => (t!("detail-organize-failed"), Some(t!("detail-try-again"))),
             _ if bookmark.summary.is_none() => {
-                ("Only the title and link so far.", Some("Organize"))
+                (t!("detail-title-and-link-only"), Some(t!("main-organize")))
             }
-            _ => ("Read from the page only, without AI.", Some("Organize")),
+            _ => (t!("detail-read-without-ai"), Some(t!("main-organize"))),
         };
         let theme = Theme::get(cx).clone();
         let id = bookmark.id;

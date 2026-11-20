@@ -18,6 +18,7 @@ use knoa_core::Bookmark;
 use super::{CopyLink, DeleteSelected, MainView, QuickLook, ToggleUpNext};
 use crate::{
     i18n,
+    i18n::t,
     ui::{
         components::{Tone, button, icon, kind_icon, site_mark, tip},
         theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
@@ -134,7 +135,7 @@ impl MainView {
                 cover
                     .id("detail-cover")
                     .cursor_pointer()
-                    .tooltip(tip("View picture", Some(&QuickLook), theme))
+                    .tooltip(tip(t!("main-view-picture"), Some(&QuickLook), theme))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.open_viewer(id, window, cx);
                     })),
@@ -203,9 +204,13 @@ impl MainView {
             .as_ref()
             .is_some_and(|(copied, _)| *copied == id);
         let (queue_icon, queue_color, queue_tip) = if bookmark.up_next {
-            ("bookmark-check", theme.accent, "Remove from Up next")
+            (
+                "bookmark-check",
+                theme.accent,
+                t!("main-remove-from-up-next"),
+            )
         } else {
-            ("bookmark-plus", theme.muted, "Add to Up next")
+            ("bookmark-plus", theme.muted, t!("main-add-to-up-next"))
         };
         div()
             .flex_none()
@@ -216,7 +221,7 @@ impl MainView {
             .border_t_1()
             .border_color(theme.hairline)
             .child(
-                button("open", "Open", Tone::Primary, cx)
+                button("open", t!("main-open"), Tone::Primary, cx)
                     .flex_1()
                     .mr_1()
                     .child(icon(
@@ -241,7 +246,11 @@ impl MainView {
                     &theme,
                 )
                 .tooltip(tip(
-                    if copied { "Copied" } else { "Copy link" },
+                    if copied {
+                        t!("main-copied")
+                    } else {
+                        t!("main-copy-link")
+                    },
                     Some(&CopyLink),
                     &theme,
                 ))
@@ -251,7 +260,7 @@ impl MainView {
             )
             .child(
                 icon_button("delete", "trash", theme.muted, &theme)
-                    .tooltip(tip("Move to Trash", Some(&DeleteSelected), &theme))
+                    .tooltip(tip(t!("main-move-to-trash"), Some(&DeleteSelected), &theme))
                     .on_click(cx.listener(move |this, _, _, cx| this.move_to_trash(id, cx))),
             )
             .child(self.more_button(id, cx))

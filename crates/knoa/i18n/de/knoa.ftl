@@ -397,12 +397,187 @@ sidebar-workspaces-from = From { $browsers }
 
 ## Main
 
+main-blocked-browsers =
+    { $count ->
+        [one] { $browsers } is installed, but macOS keeps its bookmarks private. Give { -knoa } Full Disk Access, then restart { -knoa }.
+       *[other] { $browsers } are installed, but macOS keeps their bookmarks private. Give { -knoa } Full Disk Access, then restart { -knoa }.
+    }
+main-open-privacy-settings = Open Privacy settings
+main-cancel = Cancel
+main-delete = Delete
+main-save = Save
+main-folder-new-title = New folder
+main-folder-edit-title = Edit folder
+main-folder-name-placeholder = Folder name
+main-folder-description-placeholder = What belongs here? The AI uses this to file bookmarks.
+main-folder-name-too-long = A name can be at most { $max } characters.
+main-folder-description-too-long = A description can be at most { $max } characters.
+main-folder-auto-assign = Let the AI add bookmarks
+main-folder-auto-assign-about = New bookmarks that fit go here on their own.
+main-glyph-read = Reading
+main-glyph-article = Articles
+main-glyph-code = Code
+main-glyph-write = Writing
+main-glyph-work = Work
+main-glyph-tag = Deals
+main-glyph-bag = Shopping
+main-glyph-plane = Travel
+main-glyph-cup = Food
+main-glyph-music = Music
+main-glyph-play = Video
+main-glyph-photo = Photos
+main-glyph-bulb = Ideas
+main-glyph-heart = Health
+main-glyph-home = Home
+main-glyph-star = Favorites
+main-glyph-clock = Later
+main-glyph-flask = Science
+main-glyph-globe = Web
+main-glyph-person = People
+main-glyph-box = Archive
+main-glyph-inbox = Inbox
+main-glyph-leaf = Nature
+main-glyph-bolt = Quick
+main-glyph-lock = Private
+main-glyph-pin = Places
+main-glyph-chat = Threads
+main-glyph-game = Games
+main-folder-icon-none = Folder
+main-folder-icon-emoji = Emoji
+main-folder-parent = Parent
+main-folder-parent-none = None
+main-folder-emoji-placeholder = Type or paste
+main-folder-any-emoji = Any emoji
+main-folder-custom-color = Custom
+main-delete-folder-title = Delete “{ $name }”?
+main-delete-folder-detail =
+    { $count ->
+        [0] Its bookmarks stay in your library.
+        [one] Its subfolder is deleted with it. Their bookmarks stay in your library.
+       *[other] Its { $count } subfolders are deleted with it. Their bookmarks stay in your library.
+    }
+main-open = Open
+main-open-in-background = Open in background
+main-copy-link = Copy link
+main-copied = Copied
+main-show-details = Show details
+main-view-picture = View picture
+main-copy-image = Copy image
+main-save-image = Save image…
+main-add-to-up-next = Add to Up next
+main-remove-from-up-next = Remove from Up next
+main-add-to-folder = Add to folder
+main-remove-from-folder = Remove from { $folder }
+main-refresh-thumbnail = Refresh thumbnail
+main-refreshing-thumbnail = Refreshing thumbnail…
+main-organize = Organize
+main-organize-again = Organize again
+main-organizing = Organizing…
+main-move-to-trash = Move to Trash
+main-restore = Restore
+main-delete-now = Delete now
+main-open-link = Open link
+main-card-failed = Couldn't organize
+main-card-not-organized = Not organized yet
+main-empty-no-events-match = No events match
+main-empty-no-events-match-body = Try fewer words, or a date filter like starts>2026-12-01.
+main-empty-nothing-matches = Nothing matches
+main-empty-nothing-matches-body = Try fewer words, or filters like kind:movie, site:github.com or #tag.
+main-empty-trash = Trash is empty
+main-empty-trash-body = Bookmarks you delete wait here for 30 days.
+main-empty-caught-up = All caught up
+main-empty-caught-up-body = Every bookmark here has been organized.
+main-empty-no-pictures = No pictures here
+main-empty-no-pictures-body = Links straight to an image file show up here.
+main-empty-no-events = No events here
+main-empty-no-events-body = Pages for concerts, talks and meetups show up here by date.
+main-empty-nothing-yet = Nothing here yet
+main-empty-nothing-yet-synced-body = Bookmark something in your browser and it lands here a moment later.
+main-empty-nothing-yet-unsynced-body = Add a link with ⌘N, or pick a browser for this workspace from the workspace menu.
+main-empty-nothing-yet-body = Bookmarks show up here as you add them.
+main-up-next = Up next
+main-up-next-count =
+    { $count ->
+        [one] · { $count } to read and watch
+       *[other] · { $count } to read and watch
+    }
+main-best-matches = Best matches
+main-place-gallery = Gallery
+main-place-events = Events
+main-place-up-next = Up next
+main-place-unsorted = Unsorted
+main-place-not-organized = Not organized
+main-place-set-aside = Set aside
+main-place-trash = Trash
+main-search-found =
+    { $count ->
+        [one] { $count } found
+       *[other] { $count } found
+    }
+main-kind-all = All
+main-kind-chip = { $kind } { $count }
+main-trash-empty = Empty Trash
+main-trash-delete-count =
+    { $count ->
+        [one] Delete { $count } for good
+       *[other] Delete { $count } for good
+    }
+main-trash-about = Bookmarks in Trash are deleted for good after 30 days.
+main-trash-days-left =
+    { $days ->
+        [1] In Trash. Deleted for good within a day.
+       *[other] In Trash. Deleted for good in { $days } days.
+    }
+main-add-link-title = Add a link to { $workspace }
+main-add-link-not-a-link = That doesn't look like a web address.
+main-add-link-add = Add
+main-image-file-name = Image
+main-viewer-position = { $position } of { $count }
+main-viewer-open-original = Open original
+main-viewer-close = Close
+main-viewer-image-copied = Image copied
+main-viewer-copy-failed = Couldn't copy the image
+main-viewer-image-saved = Image saved
+main-viewer-save-failed = Couldn't save the image
+main-search-placeholder = Just start typing to search
+main-view-options-title = View
+main-view-options-summaries = Show summaries on cards
+main-view-options-up-next = Show the Up next strip
+main-view-options-about = Cards are grouped by date. Searching ranks by best match.
+main-duration-minutes = { $minutes } min
+main-duration-hours = { $hours }h
+main-duration-hours-minutes = { $hours }h { $minutes }m
+
 ## Detail
 
 detail-details = Details
 detail-removed-from-browser = Removed from the browser, kept here
 detail-saved = Saved { $date }
 detail-chosen-by = Marks what { $model } chose
+detail-folders = Folders
+detail-no-folders = No folders yet. Make one in the sidebar.
+detail-folder-undo = Undo: take it out
+detail-folder-take-out = Take it out
+detail-folder-probability = { $percent }%
+detail-add-to-another-folder = Add to another folder
+detail-set-aside = Set aside: doesn't fit this workspace
+detail-keep = Keep
+detail-organizing-now = Organizing this one now…
+detail-organize-failed = Organizing didn't work out.
+detail-try-again = Try again
+detail-title-and-link-only = Only the title and link so far.
+detail-read-without-ai = Read from the page only, without AI.
+detail-no-thumbnail = No thumbnail on the page
+detail-page-unreachable = Couldn't reach the page
+detail-more = More
+detail-tags = Tags
+detail-remove-tag = Remove tag
+detail-put-back = Put back
+detail-add-tag = Add tag
+detail-add-a-tag = Add a tag
+detail-in-tag-list = In tag list
+detail-in-tag-list-full = In tag list (list is full)
+detail-edit-tag-list = Edit tag list…
 
 ## Events
 
@@ -412,6 +587,14 @@ events-view-list = List
 events-previous-month = Previous month
 events-next-month = Next month
 events-today = Today
+events-upcoming = Upcoming
+events-happening-now = Happening now
+events-date-not-set = Date not set
+events-past = Past
+events-nothing-on-day = Nothing on this day.
+events-nothing-coming-up = Nothing coming up.
+events-nothing-coming-up-panel = Nothing coming up. Events you save show here until they end.
+events-more = +{ $count } more
 
 ## Dates
 

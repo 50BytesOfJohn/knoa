@@ -15,9 +15,12 @@ use super::{
     model::Model,
     rows,
 };
-use crate::ui::{
-    main::{MainView, content::KEEP_BEYOND},
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        main::{MainView, content::KEEP_BEYOND},
+        theme::Theme,
+    },
 };
 
 const HEIGHTS: Heights = Heights {
@@ -38,7 +41,7 @@ pub fn lines(model: &Model) -> Lines {
         }
     };
     if !model.happening.is_empty() {
-        lines.push(Line::Heading("Happening now".into()), &HEIGHTS);
+        lines.push(Line::Heading(t!("events-happening-now").into()), &HEIGHTS);
         rows(&mut lines, &model.happening);
     }
     let mut month = None;
@@ -55,14 +58,14 @@ pub fn lines(model: &Model) -> Lines {
         rows(&mut lines, events);
     }
     if model.happening.is_empty() && model.upcoming.is_empty() {
-        lines.push(Line::Note("Nothing coming up.".into()), &HEIGHTS);
+        lines.push(Line::Note(t!("events-nothing-coming-up").into()), &HEIGHTS);
     }
     if !model.undated.is_empty() {
-        lines.push(Line::Heading("Date not set".into()), &HEIGHTS);
+        lines.push(Line::Heading(t!("events-date-not-set").into()), &HEIGHTS);
         rows(&mut lines, &model.undated);
     }
     if !model.past.is_empty() {
-        lines.push(Line::Month("Past".into()), &HEIGHTS);
+        lines.push(Line::Month(t!("events-past").into()), &HEIGHTS);
         rows(&mut lines, &model.past);
     }
     lines

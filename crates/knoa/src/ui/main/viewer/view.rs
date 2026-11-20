@@ -8,10 +8,14 @@ use gpui::{
 };
 use knoa_core::{Bookmark, BookmarkId, Image};
 
-use crate::ui::{
-    components::{icon, tip_in},
-    main::{CloseViewer, CopyImage, MainView, OpenSelected, SaveImage, ShowDetails, picture},
-    theme::Theme,
+use super::Notice;
+use crate::{
+    i18n::t,
+    ui::{
+        components::{icon, tip_in},
+        main::{CloseViewer, CopyImage, MainView, OpenSelected, SaveImage, ShowDetails, picture},
+        theme::Theme,
+    },
 };
 
 const BAR_HEIGHT: f32 = 56.;
@@ -25,14 +29,20 @@ impl MainView {
     pub(in crate::ui::main) fn render_viewer(
         &self,
         id: BookmarkId,
-        notice: Option<&'static str>,
+        notice: Option<Notice>,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) -> AnyElement {
         let bookmark = self.library.read(cx).bookmark(id).cloned();
         let pictures = self.viewable();
         let at = pictures.iter().position(|picture| *picture == id);
-        let position = at.map(|at| format!("{} of {}", at + 1, pictures.len()));
+        let position = at.map(|at| {
+            t!(
+                "main-viewer-position",
+                position = (at + 1),
+                count = (pictures.len())
+            )
+        });
         let (has_before, has_after) =
             at.map_or((false, false), |at| (at > 0, at + 1 < pictures.len()));
         let mut root = div()
@@ -99,7 +109,7 @@ impl MainView {
             )
             .child(
                 bar_button("viewer-info", "info")
-                    .tooltip(tip_in("Show details", Some(&ShowDetails), "Viewer", &theme))
+                    .tooltip(tip_in(t!("main-show-details"), Some(&ShowDetails), "Viewer", &theme))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.show_details(&ShowDetails, window, cx);
                     })),
@@ -107,7 +117,7 @@ impl MainView {
             .child(
                 bar_button("viewer-open", "external-link")
                     .tooltip(tip_in(
-                        "Open original",
+                        t!("main-viewer-open-original"),
                         Some(&OpenSelected),
                         "Viewer",
                         &theme,
@@ -118,21 +128,21 @@ impl MainView {
             )
             .child(
                 bar_button("viewer-copy", "copy")
-                    .tooltip(tip_in("Copy image", Some(&CopyImage), "Viewer", &theme))
+                    .tooltip(tip_in(t!("main-copy-image"), Some(&CopyImage), "Viewer", &theme))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.copy_image(&CopyImage, window, cx);
                     })),
             )
             .child(
                 bar_button("viewer-save", "download")
-                    .tooltip(tip_in("Save image…", Some(&SaveImage), "Viewer", &theme))
+                    .tooltip(tip_in(t!("main-save-image"), Some(&SaveImage), "Viewer", &theme))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.save_image(&SaveImage, window, cx);
                     })),
             )
             .child(
                 bar_button("viewer-close", "x")
-                    .tooltip(tip_in("Close", Some(&CloseViewer), "Viewer", &theme))
+                    .tooltip(tip_in(t!("main-viewer-close"), Some(&CloseViewer), "Viewer", &theme))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.close_viewer(&CloseViewer, window, cx);
                     })),
@@ -193,7 +203,7 @@ impl MainView {
 }
 
 /// Title, then site, resolution and format: what the picture is and where it's from.
-fn caption(bookmark: &Bookmark, notice: Option<&'static str>) -> Div {
+fn caption(bookmark: &Bookmark, notice: Option<Notice>) -> Div {
     let field = |name: &str| {
         bookmark
             .fields
@@ -234,7 +244,13 @@ fn caption(bookmark: &Bookmark, notice: Option<&'static str>) -> Div {
                 .text_color(gpui::white().opacity(0.6))
                 .child(details.join(" · ")),
         )
-        .children(notice.map(|text| {
+        .children(notice.map(|notice| {
+            let text = match notice {
+                Notice::ImageCopied => t!("main-viewer-image-copied"),
+                Notice::CopyFailed => t!("main-viewer-copy-failed"),
+                Notice::ImageSaved => t!("main-viewer-image-saved"),
+                Notice::SaveFailed => t!("main-viewer-save-failed"),
+            };
             div()
                 .mt_1()
                 .px_2p5()

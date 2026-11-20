@@ -20,6 +20,7 @@ use super::{
     viewer::Viewer,
 };
 use crate::{
+    i18n::t,
     state::settings::SettingsFile,
     ui::{
         motion,
@@ -261,7 +262,7 @@ impl MainView {
     fn view_options(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let settings = SettingsFile::get(cx).clone();
-        let row = |label: &'static str, id: &'static str, on: bool| {
+        let row = |label: String, id: &'static str, on: bool| {
             div()
                 .flex()
                 .items_center()
@@ -281,11 +282,11 @@ impl MainView {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.faint)
-                    .child("View"),
+                    .child(t!("main-view-options-title")),
             )
             .child(
                 row(
-                    "Show summaries on cards",
+                    t!("main-view-options-summaries"),
                     "show-summaries",
                     settings.show_summaries,
                 )
@@ -299,7 +300,7 @@ impl MainView {
             )
             .child(
                 row(
-                    "Show the Up next strip",
+                    t!("main-view-options-up-next"),
                     "show-up-next",
                     settings.show_up_next,
                 )
@@ -315,7 +316,7 @@ impl MainView {
                 div()
                     .text_xs()
                     .text_color(theme.muted)
-                    .child("Cards are grouped by date. Searching ranks by best match."),
+                    .child(t!("main-view-options-about")),
             )
     }
 }
