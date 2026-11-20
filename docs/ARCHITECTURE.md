@@ -216,7 +216,9 @@ resumes on its own once that one gets through, or when the user sets a new key.
    organizer, the account's for the cloud's); names and titles of works stay as written,
    and listed tags keep their spelling. For an event the prompt also carries the organizer's date (the
    Mac's local date, the cloud's UTC date), so a date without a year resolves to the
-   next one. Values read from the page override the model's. When the workspace
+   next one. Values read from the page override the model's, except in a field marked
+   `translated` in `kinds.json` (a genre, a cuisine) outside English, where the model's
+   answer, the page's value translated, wins. When the workspace
    holds the AI to its tag list, tags not on it are dropped. A bookmark whose title is
    still its URL also gets a short title, which replaces the URL under the same rule as
    the page's own title. Some endpoints answer that title empty whatever the schema says;

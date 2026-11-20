@@ -8,7 +8,7 @@
       { "name": "author", "type": "text", "description": "Author's name" },
       { "name": "published", "type": "date", "description": "Publication date, YYYY-MM-DD" },
       { "name": "reading_minutes", "type": "duration", "description": "Estimated reading time in minutes" },
-      { "name": "language", "type": "text", "description": "Language of the text, named in the language you write in" }
+      { "name": "language", "type": "text", "description": "Language of the text, named in the language you write in", "translated": true }
     ]
   },
   "video": {
@@ -33,7 +33,7 @@
       { "name": "runtime", "type": "duration", "description": "Runtime in minutes" },
       { "name": "director", "type": "list", "description": "Directors" },
       { "name": "cast", "type": "list", "description": "Main cast, at most 5" },
-      { "name": "genre", "type": "list", "description": "Genres" },
+      { "name": "genre", "type": "list", "description": "Genres, in the language you write in", "translated": true },
       { "name": "rating", "type": "number", "description": "Rating out of 10" }
     ]
   },
@@ -43,10 +43,10 @@
     "description": "Instructions for cooking or baking a dish or drink.",
     "key_facts": ["total_time", "cuisine"],
     "fields": [
-      { "name": "cuisine", "type": "text", "description": "Cuisine, e.g. Italian" },
+      { "name": "cuisine", "type": "text", "description": "Cuisine, such as Italian, in the language you write in", "translated": true },
       { "name": "total_time", "type": "duration", "description": "Total time in minutes" },
       { "name": "servings", "type": "integer", "description": "Number of servings" },
-      { "name": "diet", "type": "list", "description": "Diets it fits, e.g. vegetarian" }
+      { "name": "diet", "type": "list", "description": "Diets it fits, such as vegetarian, in the language you write in", "translated": true }
     ]
   },
   "product": {
@@ -58,7 +58,7 @@
       { "name": "brand", "type": "text", "description": "Brand or maker" },
       { "name": "price", "type": "number", "description": "Price as a number" },
       { "name": "currency", "type": "text", "description": "ISO currency code" },
-      { "name": "category", "type": "text", "description": "Product category" }
+      { "name": "category", "type": "text", "description": "Product category, in the language you write in", "translated": true }
     ]
   },
   "repository": {
@@ -93,8 +93,8 @@
     "key_facts": ["medium", "resolution"],
     "fields": [
       { "name": "author", "type": "text", "description": "Artist or photographer" },
-      { "name": "medium", "type": "text", "description": "photo, illustration, painting, screenshot, diagram, 3D render, pixel art, ..." },
-      { "name": "colors", "type": "list", "description": "Dominant colors, at most 4 plain names like teal, orange, black" },
+      { "name": "medium", "type": "text", "description": "Medium, in the language you write in: photo, illustration, painting, screenshot, diagram, 3D render, pixel art, ...", "translated": true },
+      { "name": "colors", "type": "list", "description": "Dominant colors, at most 4 plain names like teal, orange, black, in the language you write in", "translated": true },
       { "name": "visible_text", "type": "text", "description": "The few most telling words written in the image, at most 100 characters; not a transcription" },
       { "name": "resolution", "type": "text", "description": "Width×height in pixels" },
       { "name": "format", "type": "text", "description": "File format: JPEG, PNG, WebP, GIF, ..." }
@@ -107,8 +107,8 @@
     "key_facts": ["category", "pricing"],
     "fields": [
       { "name": "maker", "type": "text", "description": "Company or developer" },
-      { "name": "category", "type": "text", "description": "What it is for, e.g. analytics" },
-      { "name": "pricing", "type": "text", "description": "free, freemium, paid, open source" },
+      { "name": "category", "type": "text", "description": "What it is for, such as analytics, in the language you write in", "translated": true },
+      { "name": "pricing", "type": "text", "description": "Pricing, in the language you write in: free, freemium, paid, open source", "translated": true },
       { "name": "platform", "type": "list", "description": "web, macOS, iOS, ..." }
     ]
   },
@@ -130,7 +130,7 @@
     "description": "A physical place: restaurant, shop, venue, hotel, sight, a map link. A venue's own page is a place; a dated happening at it is an event.",
     "key_facts": ["city", "category"],
     "fields": [
-      { "name": "category", "type": "text", "description": "restaurant, cafe, hotel, museum, ..." },
+      { "name": "category", "type": "text", "description": "Kind of place, in the language you write in: restaurant, cafe, hotel, museum, ...", "translated": true },
       { "name": "address", "type": "text", "description": "Street address" },
       { "name": "city", "type": "text", "description": "City" },
       { "name": "country", "type": "text", "description": "Country" }
@@ -148,7 +148,7 @@
       { "name": "city", "type": "text", "description": "City" },
       { "name": "country", "type": "text", "description": "Country" },
       { "name": "organizer", "type": "text", "description": "Organizer or host" },
-      { "name": "attendance", "type": "text", "description": "in person, online or hybrid" }
+      { "name": "attendance", "type": "text", "description": "In person, online or hybrid, in the language you write in", "translated": true }
     ]
   },
   "other": {

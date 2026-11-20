@@ -26,7 +26,8 @@ pub struct BookmarkInput<'a> {
     pub browser_folder: Option<&'a str>,
     /// The fetch's evidence JSON, if the page was fetched.
     pub evidence: Option<&'a str>,
-    /// Kind and fields read from the page itself. They win over the models'.
+    /// Kind and fields read from the page itself. They win over the models', except where
+    /// the model translated a word field: see [`merge_page_fields`].
     pub page_kind: Option<Kind>,
     pub page_fields: &'a Fields,
     /// For a link straight to an image file: a small copy for the model to look at.
@@ -111,9 +112,12 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
     };
     let folder_ids: Vec<FolderId> = input.folders.iter().map(|f| f.id).collect();
     let mut answer = answer::parse(reply.json, kind, &folder_ids, input.tag_list)?;
-    for (name, value) in input.bookmark.page_fields {
-        answer.fields.insert(name.clone(), value.clone());
-    }
+    merge_page_fields(
+        &mut answer.fields,
+        input.bookmark.page_fields,
+        answer.kind,
+        input.language,
+    );
 
     let folders = match classifier {
         // A bookmark set aside isn't filed; it gets folders once the user keeps it.
@@ -140,6 +144,20 @@ pub async fn organize<M: LanguageModel, C: Classifier>(
         set_aside: answer.set_aside,
         model: reply.model,
     })
+}
+
+/// Values read from the page win over the model's, which may misread them. A translated
+/// field's page value is in the page's language, though, and the model saw it in the
+/// evidence, so outside English its answer is that value translated.
+fn merge_page_fields(fields: &mut Fields, page_fields: &Fields, kind: Kind, language: Language) {
+    let definitions = &kind.definition().fields;
+    let translated = |name: &str| definitions.iter().any(|f| f.name == name && f.translated);
+    for (name, value) in page_fields {
+        if language != Language::En && translated(name) && fields.contains_key(name) {
+            continue;
+        }
+        fields.insert(name.clone(), value.clone());
+    }
 }
 
 /// A link added by hand is titled with its URL until something names it. Pages usually do,
@@ -286,6 +304,27 @@ mod tests {
                 model: "fake".into(),
             })
         }
+    }
+
+    #[test]
+    fn outside_english_the_models_translated_word_fields_beat_the_pages() {
+        let page = json!({"genre": ["Comedy"], "year": 1999});
+        let page = page.as_object().expect("an object");
+        let merged = |language| {
+            let mut fields = json!({"genre": ["Komedia"], "year": 2000});
+            let map = fields.as_object_mut().expect("an object");
+            merge_page_fields(map, page, Kind::Movie, language);
+            fields
+        };
+
+        assert_eq!(
+            merged(Language::Pl),
+            json!({"genre": ["Komedia"], "year": 1999})
+        );
+        assert_eq!(
+            merged(Language::En),
+            json!({"genre": ["Comedy"], "year": 1999})
+        );
     }
 
     #[tokio::test]
