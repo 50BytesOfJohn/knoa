@@ -1,6 +1,6 @@
 //! The user's language: for every client's UI and for what the AI writes.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 /// On the wire and in settings as the bare ISO 639-1 code, like `"pl"`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -59,6 +59,22 @@ impl Language {
     }
 }
 
+/// For `#[serde(deserialize_with)]` on a `Language` or `Option<Language>` field: a code
+/// this build doesn't know reads as the default, `En` or `None`, so a newer server or a
+/// newer Knoa adding a language doesn't make the whole value unreadable.
+///
+/// # Errors
+///
+/// Only when the input isn't valid for the format at all.
+pub fn unknown_language_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(T::deserialize(value).unwrap_or_default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,5 +88,22 @@ mod tests {
         assert_eq!(Language::parse("pt"), None);
         assert_eq!(Language::parse("pt-BR"), None);
         assert_eq!(Language::parse(""), None);
+    }
+
+    #[test]
+    fn unknown_language_as_default_keeps_known_codes_and_defaults_unknown_ones() {
+        #[derive(Deserialize)]
+        struct Holder {
+            #[serde(deserialize_with = "unknown_language_as_default")]
+            language: Option<Language>,
+        }
+        let read = |json: &str| {
+            serde_json::from_str::<Holder>(json)
+                .expect("an unknown language still reads")
+                .language
+        };
+
+        assert_eq!(read(r#"{"language":"pl"}"#), Some(Language::Pl));
+        assert_eq!(read(r#"{"language":"pt"}"#), None);
     }
 }

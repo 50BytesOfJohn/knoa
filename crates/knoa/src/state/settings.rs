@@ -7,7 +7,7 @@ use std::{
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
-use knoa_core::{Ink, Language, protocol::Account};
+use knoa_core::{Ink, Language, protocol::Account, unknown_language_as_default};
 use knoa_store::Store;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,7 @@ pub struct Settings {
     pub ai: Option<ProviderConfig>,
     pub theme: String,
     /// The UI's language and the AI's. Signed in, the account's language wins.
+    #[serde(deserialize_with = "unknown_language_as_default")]
     pub language: Language,
     pub show_up_next: bool,
     pub show_summaries: bool,
