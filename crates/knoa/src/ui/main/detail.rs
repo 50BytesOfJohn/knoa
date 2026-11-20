@@ -16,9 +16,12 @@ use knoa_browser::Activation;
 use knoa_core::Bookmark;
 
 use super::{CopyLink, DeleteSelected, MainView, QuickLook, ToggleUpNext};
-use crate::ui::{
-    components::{Tone, button, icon, kind_icon, site_mark, tip},
-    theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
+use crate::{
+    i18n,
+    ui::{
+        components::{Tone, button, icon, kind_icon, site_mark, tip},
+        theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
+    },
 };
 
 impl MainView {
@@ -152,7 +155,7 @@ impl MainView {
             .when_some(bookmark.kind, |s, kind| {
                 s.child(div().text_color(theme.faint).child("·"))
                     .child(icon(kind_icon(Some(kind)), px(12.), theme.muted))
-                    .child(kind.label())
+                    .child(i18n::kind_label(kind))
             })
     }
 

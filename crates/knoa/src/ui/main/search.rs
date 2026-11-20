@@ -8,9 +8,12 @@ use gpui_component::input::Input;
 use knoa_core::{Kind, Place};
 
 use super::{MainView, Overlay};
-use crate::ui::{
-    components::icon,
-    theme::{MARGIN, Theme},
+use crate::{
+    i18n,
+    ui::{
+        components::icon,
+        theme::{MARGIN, Theme},
+    },
 };
 
 pub const PILL_HEIGHT: f32 = 50.;
@@ -162,7 +165,7 @@ impl MainView {
                 row = row.child(
                     chip(
                         kind.slug(),
-                        format!("{} {count}", kind.plural()),
+                        format!("{} {count}", i18n::kind_plural(kind)),
                         current == Some(kind),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
