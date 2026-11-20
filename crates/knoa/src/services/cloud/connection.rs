@@ -194,6 +194,7 @@ impl Cloud {
             replacement: None,
             mcp: super::McpState::default(),
             mcp_task: None,
+            language_push: None,
         });
         cx.notify();
     }

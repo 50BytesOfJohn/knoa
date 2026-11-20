@@ -8,6 +8,7 @@
 mod config;
 mod connection;
 mod engine;
+mod language;
 mod link;
 mod mcp;
 mod notice;
@@ -95,6 +96,8 @@ pub struct Connection {
     replacement: Option<Task<()>>,
     mcp: McpState,
     mcp_task: Option<Task<()>>,
+    /// Sending a language the user picked here.
+    language_push: Option<Task<()>>,
 }
 
 impl Drop for Connection {
@@ -241,6 +244,7 @@ impl Cloud {
             Who::Cloud => set_cloud_organizes(true, "the account is organized in the cloud", cx),
             Who::Device => set_cloud_organizes(false, "the account is organized on this Mac", cx),
         }
+        self.follow_account_language(&account, cx);
         if SettingsFile::get(cx).account.as_ref() != Some(&account) {
             SettingsFile::update(cx, |s| s.account = Some(account.clone()));
         }
