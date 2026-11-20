@@ -51,7 +51,7 @@ impl FolderEditor {
             let selected = self.color == FolderColor::Ink(ink);
             inks = inks.child(
                 swatch(("ink", ink.index()), theme.ink(ink), selected, theme)
-                    .tooltip(tip(ink.label(), None, theme))
+                    .tooltip(tip(crate::i18n::ink_label(ink), None, theme))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.color = FolderColor::Ink(ink);
                         cx.notify();

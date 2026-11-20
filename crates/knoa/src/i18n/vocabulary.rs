@@ -1,7 +1,7 @@
-//! Names from the core's data, like kinds and fields, in the current language. Their
+//! Names from the core's data, like kinds, fields and inks, in the current language. Their
 //! message IDs are built at run time, so a test checks that each one exists.
 
-use knoa_core::{FieldDef, Kind};
+use knoa_core::{FieldDef, Ink, Kind};
 
 use super::LOADER;
 
@@ -16,6 +16,11 @@ pub fn kind_plural(kind: Kind) -> String {
 
 pub fn field_label(def: &FieldDef) -> String {
     LOADER.get(&field_id(&def.name))
+}
+
+/// A color's name, as in the color pickers' tooltips: "Ochre".
+pub fn ink_label(ink: Ink) -> String {
+    LOADER.get(&ink_id(ink))
 }
 
 /// Search input with `kind:` filters in the current language ("kind:filmy") turned into
@@ -44,12 +49,16 @@ fn field_id(name: &str) -> String {
     format!("field-{}", name.replace('_', "-"))
 }
 
+fn ink_id(ink: Ink) -> String {
+    format!("ink-{}", ink.label().to_lowercase())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn every_kind_and_field_has_a_message() {
+    fn every_kind_field_and_ink_has_a_message() {
         for kind in Kind::ALL {
             let slug = kind.slug();
             assert!(
@@ -64,6 +73,10 @@ mod tests {
                 let id = field_id(&def.name);
                 assert!(LOADER.has(&id), "{id} is missing");
             }
+        }
+        for ink in Ink::ALL {
+            let id = ink_id(ink);
+            assert!(LOADER.has(&id), "{id} is missing");
         }
     }
 }

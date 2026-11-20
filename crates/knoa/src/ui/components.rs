@@ -289,7 +289,7 @@ pub fn workspace_mark(name: &str, color: Ink, size: Pixels, cx: &App) -> Div {
 /// A tooltip in the theme's panel colors, with the key that does the same from the card
 /// grid, if any.
 pub fn tip(
-    text: &'static str,
+    text: impl Into<SharedString>,
     action: Option<&'static dyn gpui::Action>,
     theme: &Theme,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
@@ -298,14 +298,15 @@ pub fn tip(
 
 /// A [`tip`] showing the key bound to `action` in key context `context`.
 pub fn tip_in(
-    text: &'static str,
+    text: impl Into<SharedString>,
     action: Option<&'static dyn gpui::Action>,
     context: &'static str,
     theme: &Theme,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let text: SharedString = text.into();
     let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
     move |window, cx| {
-        let tooltip = Tooltip::new(text);
+        let tooltip = Tooltip::new(text.clone());
         let tooltip = match action {
             Some(action) => tooltip.action(action, Some(context)),
             None => tooltip,

@@ -267,6 +267,21 @@ field-venue = Venue
 field-visible-text = Visible text
 field-year = Year
 
+## Inks
+
+ink-ochre = Ochre
+ink-olive = Olive
+ink-moss = Moss
+ink-pine = Pine
+ink-teal = Teal
+ink-sky = Sky
+ink-cobalt = Cobalt
+ink-violet = Violet
+ink-plum = Plum
+ink-rose = Rose
+ink-cocoa = Cocoa
+ink-slate = Slate
+
 ## Errors
 
 error-cant-start = { $name } can't start
