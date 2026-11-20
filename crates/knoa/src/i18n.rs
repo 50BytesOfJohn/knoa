@@ -16,7 +16,7 @@ use objc2_foundation::NSLocale;
 use rust_embed::RustEmbed;
 
 pub use vocabulary::{
-    field_label, ink_label, kind_label, kind_plural, with_kind_names, with_kind_slugs,
+    field_label, glyph_label, ink_label, kind_label, kind_plural, with_kind_names, with_kind_slugs,
 };
 
 use crate::state::settings::SettingsFile;

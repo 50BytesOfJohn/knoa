@@ -1,6 +1,6 @@
 //! Dates, numbers and lists as the app's language writes them, with the Mac's region's
-//! conventions, through macOS's own formatters. Formatters are slow to make, so each
-//! module keeps the ones it made, per language.
+//! conventions, through macOS's own formatters. Date and number formatters are slow to
+//! make and used on every frame, so those modules keep the ones they made, per language.
 
 mod dates;
 mod list;

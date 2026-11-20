@@ -20,37 +20,6 @@ use crate::{
 
 pub(super) fn page(view: &SettingsView, cx: &mut Context<'_, SettingsView>) -> Div {
     let theme = Theme::get(cx).clone();
-    let paths = &cx.global::<AppPaths>().0;
-    let (support, database) = (paths.support.clone(), paths.database());
-
-    let location = form::row(
-        &t!("settings-general-location"),
-        Some(&home_relative(&support)),
-        button(
-            "show-library",
-            t!("settings-general-show-in-finder"),
-            Tone::Soft,
-            cx,
-        )
-        .on_click(move |_, _, cx| cx.reveal_path(&database)),
-        &theme,
-    );
-    let setup = form::row(
-        &t!("settings-general-run-setup-again"),
-        Some(&t!("settings-general-run-setup-about")),
-        button(
-            "rerun-setup",
-            t!("settings-general-run-setup"),
-            Tone::Soft,
-            cx,
-        )
-        .on_click(cx.listener(|this, _, window, cx| {
-            SettingsFile::update(cx, |s| s.onboarded = false);
-            this.close(window, cx);
-            cx.refresh_windows();
-        })),
-        &theme,
-    );
     div()
         .flex()
         .flex_col()
@@ -61,16 +30,8 @@ pub(super) fn page(view: &SettingsView, cx: &mut Context<'_, SettingsView>) -> D
             &theme,
         ))
         .child(language_group(view, &theme, cx))
-        .child(form::group(
-            &t!("settings-general-library"),
-            vec![location],
-            &theme,
-        ))
-        .child(form::group(
-            &t!("settings-general-setup"),
-            vec![setup],
-            &theme,
-        ))
+        .child(library_group(&theme, cx))
+        .child(setup_group(&theme, cx))
         .child(updates::group(cx))
 }
 
@@ -107,6 +68,44 @@ impl SettingsView {
             cx.notify();
         }
     }
+}
+
+fn library_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
+    let paths = &cx.global::<AppPaths>().0;
+    let (support, database) = (paths.support.clone(), paths.database());
+    let location = form::row(
+        &t!("settings-general-location"),
+        Some(&home_relative(&support)),
+        button(
+            "show-library",
+            t!("settings-general-show-in-finder"),
+            Tone::Soft,
+            cx,
+        )
+        .on_click(move |_, _, cx| cx.reveal_path(&database)),
+        theme,
+    );
+    form::group(&t!("settings-general-library"), vec![location], theme)
+}
+
+fn setup_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
+    let setup = form::row(
+        &t!("settings-general-run-setup-again"),
+        Some(&t!("settings-general-run-setup-about")),
+        button(
+            "rerun-setup",
+            t!("settings-general-run-setup"),
+            Tone::Soft,
+            cx,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            SettingsFile::update(cx, |s| s.onboarded = false);
+            this.close(window, cx);
+            cx.refresh_windows();
+        })),
+        theme,
+    );
+    form::group(&t!("settings-general-setup"), vec![setup], theme)
 }
 
 /// `~/Library/Application Support/Knoa` rather than the full path with the user's name.

@@ -1,7 +1,7 @@
-//! Names from the core's data, like kinds, fields and inks, in the current language. Their
+//! Names from the core's data, like kinds, fields, inks and folder glyphs, in the current language. Their
 //! message IDs are built at run time, so a test checks that each one exists.
 
-use knoa_core::{FieldDef, Ink, Kind};
+use knoa_core::{FieldDef, FolderGlyph, Ink, Kind};
 
 use super::LOADER;
 
@@ -21,6 +21,11 @@ pub fn field_label(def: &FieldDef) -> String {
 /// A color's name, as in the color pickers' tooltips: "Ochre".
 pub fn ink_label(ink: Ink) -> String {
     LOADER.get(&ink_id(ink))
+}
+
+/// What a folder glyph stands for: "Reading", "Travel".
+pub fn glyph_label(glyph: FolderGlyph) -> String {
+    LOADER.get(&glyph_id(glyph))
 }
 
 /// Search input with `kind:` filters in the current language ("kind:filmy") turned into
@@ -69,12 +74,16 @@ fn ink_id(ink: Ink) -> String {
     format!("ink-{}", ink.label().to_lowercase())
 }
 
+fn glyph_id(glyph: FolderGlyph) -> String {
+    format!("main-glyph-{}", glyph.name())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn every_kind_field_and_ink_has_a_message() {
+    fn every_kind_field_ink_and_glyph_has_a_message() {
         for kind in Kind::ALL {
             let slug = kind.slug();
             assert!(
@@ -90,8 +99,9 @@ mod tests {
                 assert!(LOADER.has(&id), "{id} is missing");
             }
         }
-        for ink in Ink::ALL {
-            let id = ink_id(ink);
+        let inks = Ink::ALL.into_iter().map(ink_id);
+        let glyphs = FolderGlyph::ALL.iter().map(|&glyph| glyph_id(glyph));
+        for id in inks.chain(glyphs) {
             assert!(LOADER.has(&id), "{id} is missing");
         }
     }

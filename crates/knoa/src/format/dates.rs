@@ -76,7 +76,7 @@ pub fn floating_range(
         .to_string()
 }
 
-/// Formatters are slow to make, so each language, skeleton and zone gets one, kept.
+/// The time zone a formatter reads instants in.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Zone {
     Local,
@@ -84,6 +84,7 @@ enum Zone {
     Utc,
 }
 
+/// Formatters are slow to make, so each language, skeleton and zone gets one, kept.
 type Key = (Language, &'static str, Zone);
 
 static FORMATTERS: LazyLock<Mutex<HashMap<Key, Retained<NSDateFormatter>>>> =

@@ -3,7 +3,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    Anchor, App, InteractiveElement as _, IntoElement, ParentElement as _, Styled as _, div, px,
+    Anchor, App, Div, InteractiveElement as _, IntoElement, ParentElement as _, Stateful,
+    Styled as _, div, px,
 };
 use gpui_component::{
     Side,
@@ -33,6 +34,33 @@ pub fn language_picker(
     theme: &Theme,
     on_pick: impl Fn(Language, &mut App) + 'static,
 ) -> impl IntoElement {
+    let on_pick = Rc::new(on_pick);
+    let anchor = match look {
+        Look::Field => Anchor::TopRight,
+        Look::Compact => Anchor::TopCenter,
+    };
+    MenuTrigger::new(trigger(id, current, look, theme), theme.soft).dropdown_menu_with_anchor(
+        anchor,
+        move |menu, _, _| {
+            let menu = menu.check_side(Side::Right);
+            Language::ALL.into_iter().fold(menu, |menu, language| {
+                let on_pick = on_pick.clone();
+                menu.item(
+                    PopupMenuItem::new(language.native_name())
+                        .checked(language == current)
+                        .on_click(move |_, _, cx| {
+                            if language != current {
+                                on_pick(language, cx);
+                            }
+                        }),
+                )
+            })
+        },
+    )
+}
+
+/// What the picker shows closed: the current language and a chevron.
+fn trigger(id: &'static str, current: Language, look: Look, theme: &Theme) -> Stateful<Div> {
     let base = div()
         .id(id)
         .h(px(30.))
@@ -43,7 +71,7 @@ pub fn language_picker(
         .rounded(ROW_RADIUS)
         .text_sm()
         .cursor_pointer();
-    let base = match look {
+    match look {
         Look::Field => base
             .min_w(px(160.))
             .border_1()
@@ -55,25 +83,5 @@ pub fn language_picker(
             .child(icon("globe", px(14.), theme.muted))
             .child(current.native_name()),
     }
-    .child(icon("chevrons-up-down", px(13.), theme.muted));
-    let on_pick = Rc::new(on_pick);
-    let anchor = match look {
-        Look::Field => Anchor::TopRight,
-        Look::Compact => Anchor::TopCenter,
-    };
-    MenuTrigger::new(base, theme.soft).dropdown_menu_with_anchor(anchor, move |menu, _, _| {
-        let menu = menu.check_side(Side::Right);
-        Language::ALL.into_iter().fold(menu, |menu, language| {
-            let on_pick = on_pick.clone();
-            menu.item(
-                PopupMenuItem::new(language.native_name())
-                    .checked(language == current)
-                    .on_click(move |_, _, cx| {
-                        if language != current {
-                            on_pick(language, cx);
-                        }
-                    }),
-            )
-        })
-    })
+    .child(icon("chevrons-up-down", px(13.), theme.muted))
 }
