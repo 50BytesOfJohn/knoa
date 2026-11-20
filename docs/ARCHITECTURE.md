@@ -160,6 +160,10 @@ share. Signed out, the app is Local mode and none of this runs.
   organizes with the user's own key, pushes the results and uploads the thumbnails.
 - **Browser extension:** signed in, it saves through the API instead of the bridge, and
   the bookmark reaches this Mac by sync.
+- **Language:** one per user, for every client's UI and for what the AI writes. Signed
+  in, it is an account setting (`PUT /v1/me/language`) and the account wins: this Mac
+  adopts the account's language, pushes its own when the account has none, and pushes a
+  change made here. Signed out, it lives in this Mac's settings.
 - **Account page** in Settings: sign in and out, the plan and its usage, AI access, and
   how sync is doing. AI access settings are fetched when the page is shown and saved on
   change, separately from library sync. Pro accounts can set a default and workspace
@@ -207,7 +211,10 @@ resumes on its own once that one gets through, or when the user sets a new key.
    tags, and whether it fits when the workspace has a guideline. Input: the workspace's
    instructions, guideline and tag list, the extracted evidence and about 4k characters
    of page text. A bookmark that doesn't fit is stored as set aside, with the reason, and
-   gets no folders. For an event the prompt also carries the organizer's date (the
+   gets no folders. The summary, tags, a generated title, extras, free-text field values
+   and the fit reason are written in the user's language (the Mac's setting for its own
+   organizer, the account's for the cloud's); names and titles of works stay as written,
+   and listed tags keep their spelling. For an event the prompt also carries the organizer's date (the
    Mac's local date, the cloud's UTC date), so a date without a year resolves to the
    next one. Values read from the page override the model's. When the workspace
    holds the AI to its tag list, tags not on it are dropped. A bookmark whose title is
