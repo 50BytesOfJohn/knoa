@@ -8,7 +8,7 @@
       { "name": "author", "type": "text", "description": "Author's name" },
       { "name": "published", "type": "date", "description": "Publication date, YYYY-MM-DD" },
       { "name": "reading_minutes", "type": "duration", "description": "Estimated reading time in minutes" },
-      { "name": "language", "type": "text", "description": "Language of the text, English name" }
+      { "name": "language", "type": "text", "description": "Language of the text, named in the language you write in" }
     ]
   },
   "video": {
