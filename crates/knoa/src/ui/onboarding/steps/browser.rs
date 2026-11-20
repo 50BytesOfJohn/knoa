@@ -6,10 +6,13 @@ use gpui::{
 };
 
 use super::{lead, nav, title};
-use crate::ui::{
-    components::{blocked_browsers_notice, icon},
-    onboarding::Onboarding,
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        components::{blocked_browsers_notice, icon},
+        onboarding::Onboarding,
+        theme::Theme,
+    },
 };
 
 impl Onboarding {
@@ -56,7 +59,7 @@ impl Onboarding {
                                 div()
                                     .text_xs()
                                     .text_color(theme.muted)
-                                    .child(format!("{count} bookmarks")),
+                                    .child(t!("onboarding-browser-count", count = (*count))),
                             ),
                     )
                     .child(
@@ -82,11 +85,7 @@ impl Onboarding {
             );
         }
         if self.profiles.is_empty() && self.blocked.is_empty() {
-            list = list.child(
-                div().p_4().rounded(px(14.)).bg(theme.soft).text_sm().text_color(theme.muted).child(
-                    "I couldn't find a Chromium-based browser here (Helium, Chrome, Brave, Edge, Vivaldi). No worries: you can pick one later in Settings.",
-                ),
-            );
+            list = list.child(none_found(&theme));
         }
         let total: usize = self
             .profiles
@@ -98,10 +97,28 @@ impl Onboarding {
             .flex()
             .flex_col()
             .gap_4()
-            .child(title("Where do your bookmarks live?"))
-            .child(lead("Keep bookmarking the way you do. I'll notice new ones within a couple of seconds. I only read; I never touch your browser's bookmarks.", &theme))
+            .child(title(&t!("onboarding-browser-title")))
+            .child(lead(&t!("onboarding-browser-lead"), &theme))
             .child(list)
             .children(blocked_browsers_notice(&self.blocked, cx))
-            .child(nav(self.step, if total > 0 { format!("Bring in {total}") } else { "Next".to_owned() }, cx))
+            .child(nav(
+                self.step,
+                if total > 0 {
+                    t!("onboarding-browser-bring-in", count = total)
+                } else {
+                    t!("onboarding-next")
+                },
+                cx,
+            ))
     }
+}
+
+fn none_found(theme: &Theme) -> Div {
+    div()
+        .p_4()
+        .rounded(px(14.))
+        .bg(theme.soft)
+        .text_sm()
+        .text_color(theme.muted)
+        .child(t!("onboarding-browser-none-found"))
 }

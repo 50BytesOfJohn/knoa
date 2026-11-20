@@ -6,12 +6,17 @@ use gpui::{
 };
 
 use super::{lead, link, title};
-use crate::services::cloud::Cloud;
-use crate::ui::{
-    components::{Tone, button},
-    onboarding::{Onboarding, Step},
-    theme::Theme,
-    wordmark::written_wordmark,
+use crate::{
+    i18n::t,
+    services::cloud::Cloud,
+    state::settings::SettingsFile,
+    ui::{
+        components::{Tone, button},
+        language_picker::{Look, language_picker},
+        onboarding::{Onboarding, Step},
+        theme::Theme,
+        wordmark::written_wordmark,
+    },
 };
 
 impl Onboarding {
@@ -25,24 +30,41 @@ impl Onboarding {
             .gap_4()
             .pt_6()
             .child(written_wordmark("hello-wordmark", px(84.), theme.text))
-            .child(title("Hi, I'm Knoa."))
-            .child(lead(
-                "You keep bookmarking things like a squirrel stocking up for winter. I find them again. \
-                 I read your browser's bookmarks, work out what each one is, and keep the lot tidy.",
-                &theme,
-            ))
-            .child(div().text_sm().text_color(theme.faint).child("Three quick questions. Or none, if you're in a hurry."))
+            .child(title(&t!("onboarding-hello-title")))
+            .child(lead(&t!("onboarding-hello-lead"), &theme))
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(theme.faint)
+                    .child(t!("onboarding-hello-questions")),
+            )
             .child(
                 div()
                     .mt_4()
                     .flex()
                     .gap_2()
-                    .child(button("start", "Let's go", Tone::Primary, cx).px_6().on_click(cx.listener(|this, _, window, cx| this.go(Step::Browser, window, cx))))
-                    .child(button("defaults", "Use the defaults", Tone::Ghost, cx).on_click(cx.listener(|this, _, _, cx| this.skip_all(cx)))),
+                    .child(
+                        button("start", t!("onboarding-hello-start"), Tone::Primary, cx)
+                            .px_6()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.go(Step::Browser, window, cx);
+                            })),
+                    )
+                    .child(
+                        button("defaults", t!("onboarding-hello-defaults"), Tone::Ghost, cx)
+                            .on_click(cx.listener(|this, _, _, cx| this.skip_all(cx))),
+                    ),
             )
             .when(Cloud::entity(cx).read(cx).config().is_some(), |step| {
                 step.child(self.sign_in_line(&theme, cx))
             })
+            .child(language_picker(
+                "onboarding-language",
+                SettingsFile::get(cx).language,
+                Look::Compact,
+                &theme,
+                Cloud::choose_language,
+            ))
     }
 
     /// For a new Mac and an existing account: skip setup and go straight to signing in.
@@ -52,9 +74,9 @@ impl Onboarding {
             .gap_1()
             .text_sm()
             .text_color(theme.faint)
-            .child("Already have a Knoa account?")
+            .child(t!("onboarding-hello-have-account"))
             .child(
-                link("sign-in", "Sign in", theme)
+                link("sign-in", t!("onboarding-hello-sign-in"), theme)
                     .track_focus(&self.sign_in)
                     .focus_visible(gpui::Styled::underline)
                     .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))

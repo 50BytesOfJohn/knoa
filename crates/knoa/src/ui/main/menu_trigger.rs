@@ -7,7 +7,7 @@ use gpui::{
 use gpui_component::{Selectable, menu::DropdownMenu};
 
 #[derive(IntoElement)]
-pub(super) struct MenuTrigger {
+pub(in crate::ui) struct MenuTrigger {
     base: Stateful<Div>,
     open: bool,
     open_bg: Hsla,

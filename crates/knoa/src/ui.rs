@@ -1,6 +1,7 @@
 //! Views. The root shows onboarding until it's done, then the main screen.
 
 pub mod components;
+mod language_picker;
 mod main;
 pub mod mascot;
 pub mod motion;

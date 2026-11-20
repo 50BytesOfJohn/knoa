@@ -12,9 +12,12 @@ use gpui::{
 };
 
 use super::{Onboarding, Step};
-use crate::ui::{
-    components::{Tone, button},
-    theme::{SERIF, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::{Tone, button},
+        theme::{SERIF, Theme},
+    },
 };
 
 impl Onboarding {
@@ -58,7 +61,7 @@ fn nav(step: Step, label: impl Into<SharedString>, cx: &mut Context<'_, Onboardi
         .items_center()
         .gap_2()
         .child(
-            button("back", "Back", Tone::Ghost, cx)
+            button("back", t!("onboarding-back"), Tone::Ghost, cx)
                 .on_click(cx.listener(|this, _, window, cx| this.go(this.step.back(), window, cx))),
         )
         .child(div().flex_1())
@@ -69,7 +72,7 @@ fn nav(step: Step, label: impl Into<SharedString>, cx: &mut Context<'_, Onboardi
         )
 }
 
-fn link(id: &'static str, text: &'static str, theme: &Theme) -> gpui::Stateful<Div> {
+fn link(id: &'static str, text: String, theme: &Theme) -> gpui::Stateful<Div> {
     div()
         .id(id)
         .text_color(theme.accent)

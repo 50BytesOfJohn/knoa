@@ -7,11 +7,14 @@ use gpui_component::input::Input;
 use knoa_ai::ProviderKind;
 
 use super::{lead, link, title};
-use crate::ui::{
-    components::{Tone, button, problem},
-    mascot::{Mood, mascot},
-    onboarding::{KeyCheck, Onboarding, Step},
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        components::{Tone, button, problem},
+        mascot::{Mood, mascot},
+        onboarding::{KeyCheck, Onboarding, Step},
+        theme::Theme,
+    },
 };
 
 impl Onboarding {
@@ -27,7 +30,7 @@ impl Onboarding {
         };
         match &self.key_check {
             KeyCheck::Idle => None,
-            KeyCheck::Checking(_) => Some(note().child("Knocking on OpenRouter's door…")),
+            KeyCheck::Checking(_) => Some(note().child(t!("onboarding-ai-checking"))),
             KeyCheck::Failed(message) => Some(problem(message.clone(), theme)),
             KeyCheck::Passed => Some(
                 note()
@@ -38,7 +41,7 @@ impl Onboarding {
                         theme.ai,
                         theme.panel,
                     ))
-                    .child("That key works."),
+                    .child(t!("onboarding-ai-key-works")),
             ),
         }
     }
@@ -49,18 +52,22 @@ impl Onboarding {
             .flex()
             .flex_col()
             .gap_4()
-            .child(title("Want me to do the tidying?"))
-            .child(lead(
-                "With an OpenRouter key I'll read each new page and give it a kind, a summary, tags and a folder. \
-                 It's your key and your account: about 17 cents per thousand bookmarks.",
-                &theme,
-            ))
+            .child(title(&t!("onboarding-ai-title")))
+            .child(lead(&t!("onboarding-ai-lead"), &theme))
             .child(
                 div()
                     .flex()
                     .gap_2()
                     .child(div().flex_1().child(Input::new(&self.key)))
-                    .child(button("check-key", "Check key", Tone::Primary, cx).on_click(cx.listener(|this, _, window, cx| this.check_key(window, cx)))),
+                    .child(
+                        button(
+                            "check-key",
+                            t!("onboarding-ai-check-key"),
+                            Tone::Primary,
+                            cx,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| this.check_key(window, cx))),
+                    ),
             )
             .children(self.key_message(&theme))
             .child(
@@ -68,9 +75,16 @@ impl Onboarding {
                     .flex()
                     .gap_3()
                     .text_sm()
-                    .child(link("get-key", "Get a key ↗", &theme).on_click(|_, _, cx| cx.open_url(ProviderKind::OpenRouter.keys_url())))
+                    .child(
+                        link("get-key", t!("onboarding-ai-get-key"), &theme)
+                            .on_click(|_, _, cx| cx.open_url(ProviderKind::OpenRouter.keys_url())),
+                    )
                     .child(div().text_color(theme.faint).child("·"))
-                    .child(div().text_color(theme.muted).child("Without one, I still fetch images and descriptions.")),
+                    .child(
+                        div()
+                            .text_color(theme.muted)
+                            .child(t!("onboarding-ai-without-key")),
+                    ),
             )
             .child(
                 div()
@@ -78,12 +92,22 @@ impl Onboarding {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(button("back", "Back", Tone::Ghost, cx).on_click(cx.listener(|this, _, window, cx| this.go(this.step.back(), window, cx))))
+                    .child(
+                        button("back", t!("onboarding-back"), Tone::Ghost, cx).on_click(
+                            cx.listener(|this, _, window, cx| {
+                                this.go(this.step.back(), window, cx);
+                            }),
+                        ),
+                    )
                     .child(div().flex_1())
-                    .child(button("no-ai", "Skip, no AI", Tone::Ghost, cx).on_click(cx.listener(|this, _, window, cx| {
-                        this.key_check = KeyCheck::Idle;
-                        this.go(Step::Library, window, cx);
-                    }))),
+                    .child(
+                        button("no-ai", t!("onboarding-ai-skip"), Tone::Ghost, cx).on_click(
+                            cx.listener(|this, _, window, cx| {
+                                this.key_check = KeyCheck::Idle;
+                                this.go(Step::Library, window, cx);
+                            }),
+                        ),
+                    ),
             )
     }
 }

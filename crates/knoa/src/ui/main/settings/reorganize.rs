@@ -1,6 +1,6 @@
 //! The "organize again" row: queues bookmarks that were already organized, so new
-//! folders and changed instructions reach them. Either just their folders or everything.
-//! Both cost AI credit, so each takes a second click.
+//! folders, changed instructions or a new language reach them. Either just their folders
+//! or everything. Both cost AI credit, so each takes a second click.
 
 use gpui::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
@@ -10,6 +10,7 @@ use knoa_core::WorkspaceId;
 
 use super::form;
 use crate::{
+    i18n::t,
     services::organizer::Organizer,
     state::library::Library,
     ui::{
@@ -42,18 +43,43 @@ impl Mode {
         }
     }
 
-    fn label(self, confirming: bool) -> &'static str {
-        match (self, confirming) {
-            (Mode::Folders, false) => "Folders only…",
-            (Mode::Folders, true) => "File them all",
-            (Mode::Everything, false) => "Everything…",
-            (Mode::Everything, true) => "Organize them all",
+    fn label(self, offer: Offer, confirming: bool) -> String {
+        match (self, offer, confirming) {
+            (Mode::Folders, _, false) => t!("settings-reorganize-folders"),
+            (Mode::Folders, _, true) => t!("settings-reorganize-folders-confirm"),
+            (Mode::Everything, Offer::Both, false) => t!("settings-reorganize-everything"),
+            (Mode::Everything, Offer::Both, true) => t!("settings-reorganize-everything-confirm"),
+            (Mode::Everything, Offer::NewLanguage, false) => {
+                t!("settings-general-language-organize")
+            }
+            (Mode::Everything, Offer::NewLanguage, true) => {
+                t!("settings-general-language-organize-confirm")
+            }
+        }
+    }
+}
+
+/// What the row offers, and why.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Offer {
+    /// Folders only, or everything.
+    Both,
+    /// Everything, after the language changed: only then are summaries and tags rewritten.
+    NewLanguage,
+}
+
+impl Offer {
+    fn modes(self) -> &'static [Mode] {
+        match self {
+            Offer::Both => &[Mode::Folders, Mode::Everything],
+            Offer::NewLanguage => &[Mode::Everything],
         }
     }
 }
 
 pub struct Reorganize {
     scope: Scope,
+    offer: Offer,
     library: Entity<Library>,
     confirming: Option<Mode>,
     /// How many bookmarks the last click queued.
@@ -63,8 +89,19 @@ pub struct Reorganize {
 
 impl Reorganize {
     pub fn new(scope: Scope, library: Entity<Library>) -> Reorganize {
+        Reorganize::offering(Offer::Both, scope, library)
+    }
+
+    /// The note under the language setting: what a new language leaves as it was, and
+    /// organizing every workspace again to rewrite it.
+    pub fn after_language_change(library: Entity<Library>) -> Reorganize {
+        Reorganize::offering(Offer::NewLanguage, Scope::AllWorkspaces, library)
+    }
+
+    fn offering(offer: Offer, scope: Scope, library: Entity<Library>) -> Reorganize {
         Reorganize {
             scope,
+            offer,
             library,
             confirming: None,
             queued: None,
@@ -126,7 +163,7 @@ impl Reorganize {
         let confirming = self.confirming == Some(mode);
         button(
             (mode.id(), self.scope_key()),
-            mode.label(confirming),
+            mode.label(self.offer, confirming),
             Tone::Soft,
             cx,
         )
@@ -139,25 +176,28 @@ impl Render for Reorganize {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let theme = &theme;
-        let (label, about) = match self.scope {
-            Scope::Workspace(_) => (
-                "Organize again",
-                "Folders only files organized bookmarks into the current folders, without reading pages or asking the chat model again. Everything also redoes summaries, fields and tags with the current instructions. Folders you set or removed stay as they are.",
+        let (label, about) = match (self.offer, self.scope) {
+            (Offer::NewLanguage, _) => (t!("settings-general-language-note"), None),
+            (Offer::Both, Scope::Workspace(_)) => (
+                t!("settings-reorganize-title"),
+                Some(t!("settings-reorganize-about")),
             ),
-            Scope::AllWorkspaces => (
-                "Organize every workspace again",
-                "The same for all workspaces at once, after you've changed folders in several.",
+            (Offer::Both, Scope::AllWorkspaces) => (
+                t!("settings-reorganize-all-title"),
+                Some(t!("settings-reorganize-all-about")),
             ),
         };
         let about = match self.queued {
-            Some(count) => format!("Queued {count} bookmarks."),
-            None => about.to_owned(),
+            Some(count) => Some(t!("settings-reorganize-queued", count = count)),
+            None => about,
         };
-        let controls = div()
-            .flex()
-            .gap_2()
-            .child(self.mode_button(Mode::Folders, theme, cx))
-            .child(self.mode_button(Mode::Everything, theme, cx));
-        form::row(label, Some(&about), controls, theme)
+        let controls = self
+            .offer
+            .modes()
+            .iter()
+            .fold(div().flex().gap_2(), |row, &mode| {
+                row.child(self.mode_button(mode, theme, cx))
+            });
+        form::row(&label, about.as_deref(), controls, theme)
     }
 }

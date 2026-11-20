@@ -7,10 +7,13 @@ use gpui::{
 };
 
 use super::{Page, SettingsView};
-use crate::ui::{
-    components::{icon, workspace_mark},
-    mascot::ai_mark,
-    theme::{PANEL_RADIUS, ROW_HEIGHT, ROW_RADIUS, SERIF, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::{icon, workspace_mark},
+        mascot::ai_mark,
+        theme::{PANEL_RADIUS, ROW_HEIGHT, ROW_RADIUS, SERIF, Theme},
+    },
 };
 
 const NAV_WIDTH: gpui::Pixels = px(220.);
@@ -26,22 +29,26 @@ impl SettingsView {
         for (page, label, mark) in [
             (
                 Page::General,
-                "General",
+                t!("settings-nav-general"),
                 icon_mark(Page::General, "settings-2"),
             ),
             (
                 Page::Appearance,
-                "Appearance",
+                t!("settings-nav-appearance"),
                 icon_mark(Page::Appearance, "palette"),
             ),
             (
                 Page::Ai,
-                "AI",
+                t!("settings-nav-ai"),
                 ai_mark(px(15.), theme.ai).into_any_element(),
             ),
-            (Page::Account, "Account", icon_mark(Page::Account, "cloud")),
+            (
+                Page::Account,
+                t!("settings-nav-account"),
+                icon_mark(Page::Account, "cloud"),
+            ),
         ] {
-            app_pages = app_pages.child(self.nav_row(page, label, mark, cx));
+            app_pages = app_pages.child(self.nav_row(page, &label, mark, cx));
         }
 
         let mut workspace_pages = div().flex().flex_col().gap_0p5().px_2();
@@ -51,8 +58,12 @@ impl SettingsView {
             workspace_pages = workspace_pages.child(self.nav_row(page, &workspace.name, mark, cx));
         }
         let plus = icon("plus", px(15.), theme.muted);
-        workspace_pages =
-            workspace_pages.child(self.nav_row(Page::NewWorkspace, "New workspace", plus, cx));
+        workspace_pages = workspace_pages.child(self.nav_row(
+            Page::NewWorkspace,
+            &t!("settings-new-workspace"),
+            plus,
+            cx,
+        ));
 
         // One radius less than the sheet's, so the fill sits inside its 1 px border.
         div()
@@ -75,7 +86,7 @@ impl SettingsView {
                     .font_family(SERIF)
                     .text_lg()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Settings"),
+                    .child(t!("settings-title")),
             )
             .child(app_pages)
             .child(
@@ -86,7 +97,7 @@ impl SettingsView {
                     .text_xs()
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(theme.faint)
-                    .child("Workspaces"),
+                    .child(t!("settings-workspaces")),
             )
             .child(workspace_pages)
     }

@@ -11,6 +11,7 @@ use gpui_component::{switch::Switch, tooltip::Tooltip};
 
 use super::{SettingsView, form};
 use crate::{
+    i18n::t,
     state::settings::SettingsFile,
     ui::{main::events::view_switch, theme::Theme},
 };
@@ -28,8 +29,8 @@ pub(super) fn page(cx: &mut Context<'_, SettingsView>) -> Div {
         .flex_col()
         .gap_8()
         .child(form::header(
-            "Appearance",
-            "How Knoa looks. Changes show right away.",
+            t!("settings-appearance-title"),
+            &t!("settings-appearance-about"),
             &theme,
         ))
         .child(
@@ -37,9 +38,21 @@ pub(super) fn page(cx: &mut Context<'_, SettingsView>) -> Div {
                 .flex()
                 .flex_col()
                 .gap_4()
-                .child(form::group_title("Theme", &theme))
-                .child(gallery("Light", &light, &current, &theme, cx))
-                .child(gallery("Dark", &dark, &current, &theme, cx)),
+                .child(form::group_title(&t!("settings-appearance-theme"), &theme))
+                .child(gallery(
+                    &t!("settings-appearance-light"),
+                    &light,
+                    &current,
+                    &theme,
+                    cx,
+                ))
+                .child(gallery(
+                    &t!("settings-appearance-dark"),
+                    &dark,
+                    &current,
+                    &theme,
+                    cx,
+                )),
         )
         .child(library_group(&theme, cx))
 }
@@ -172,8 +185,8 @@ fn preview(option: &Theme) -> Div {
 fn library_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
     let settings = SettingsFile::get(cx).clone();
     let summaries = form::row(
-        "Show summaries on cards",
-        Some("Up to three lines under each title."),
+        &t!("settings-appearance-summaries"),
+        Some(&t!("settings-appearance-summaries-about")),
         Switch::new("settings-show-summaries")
             .checked(settings.show_summaries)
             .on_click(cx.listener(|this, on: &bool, _, cx| {
@@ -185,8 +198,8 @@ fn library_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
         theme,
     );
     let up_next = form::row(
-        "Show the Up next strip",
-        Some("The row of things to read or watch, at the top of Everything."),
+        &t!("settings-appearance-up-next"),
+        Some(&t!("settings-appearance-up-next-about")),
         Switch::new("settings-show-up-next")
             .checked(settings.show_up_next)
             .on_click(cx.listener(|_, on: &bool, _, cx| {
@@ -197,10 +210,14 @@ fn library_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
         theme,
     );
     let events = form::row(
-        "Show events as",
-        Some("A month calendar with what's coming up, or one list. On this Mac only."),
+        &t!("settings-appearance-events"),
+        Some(&t!("settings-appearance-events-about")),
         view_switch("settings-events-view", settings.events_view, theme),
         theme,
     );
-    form::group("Library", vec![summaries, up_next, events], theme)
+    form::group(
+        &t!("settings-appearance-library"),
+        vec![summaries, up_next, events],
+        theme,
+    )
 }
