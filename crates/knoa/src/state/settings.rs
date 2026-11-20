@@ -24,6 +24,9 @@ pub struct Settings {
     /// The UI's language and the AI's. Signed in, the account's language wins.
     #[serde(deserialize_with = "unknown_language_as_default")]
     pub language: Language,
+    /// The user picked `language` here while signed in, and the account doesn't have it
+    /// yet. Until it does, the account's language doesn't replace it.
+    pub language_unsent: bool,
     pub show_up_next: bool,
     pub show_summaries: bool,
     /// How the Events place shows events on this Mac.
@@ -86,6 +89,7 @@ impl Default for Settings {
             ai: None,
             theme: crate::ui::theme::DEFAULT_THEME.into(),
             language: Language::default(),
+            language_unsent: false,
             show_up_next: true,
             show_summaries: true,
             events_view: EventsView::default(),

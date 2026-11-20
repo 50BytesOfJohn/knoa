@@ -3,16 +3,17 @@
 //! or everything. Both cost AI credit, so each takes a second click.
 
 use gpui::{
-    AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Task, Window, div, prelude::FluentBuilder as _,
+    App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div,
+    prelude::FluentBuilder as _,
 };
 use knoa_core::WorkspaceId;
 
 use super::form;
 use crate::{
     i18n::t,
-    services::organizer::Organizer,
-    state::library::Library,
+    services::{cloud::Cloud, organizer::Organizer},
+    state::{library::Library, settings::SettingsFile},
     ui::{
         components::{Tone, button},
         theme::Theme,
@@ -85,6 +86,7 @@ pub struct Reorganize {
     /// How many bookmarks the last click queued.
     queued: Option<usize>,
     queuing: Option<Task<()>>,
+    _watching: Vec<Subscription>,
 }
 
 impl Reorganize {
@@ -93,9 +95,18 @@ impl Reorganize {
     }
 
     /// The note under the language setting: what a new language leaves as it was, and
-    /// organizing every workspace again to rewrite it.
-    pub fn after_language_change(library: Entity<Library>) -> Reorganize {
-        Reorganize::offering(Offer::NewLanguage, Scope::AllWorkspaces, library)
+    /// organizing every workspace again to rewrite it. When the cloud organizes, that
+    /// waits until the account has the new language.
+    pub fn after_language_change(
+        library: Entity<Library>,
+        cx: &mut Context<'_, Reorganize>,
+    ) -> Reorganize {
+        let mut note = Reorganize::offering(Offer::NewLanguage, Scope::AllWorkspaces, library);
+        note._watching = vec![
+            cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify()),
+            cx.observe_global::<SettingsFile>(|_, cx| cx.notify()),
+        ];
+        note
     }
 
     fn offering(offer: Offer, scope: Scope, library: Entity<Library>) -> Reorganize {
@@ -106,7 +117,14 @@ impl Reorganize {
             confirming: None,
             queued: None,
             queuing: None,
+            _watching: Vec::new(),
         }
+    }
+
+    /// Whether the new language is still on its way to an account whose cloud organizes.
+    fn waits_for_language(&self, cx: &App) -> bool {
+        self.offer == Offer::NewLanguage
+            && Cloud::entity(cx).read(cx).organizer_waits_for_language(cx)
     }
 
     fn scope_key(&self) -> usize {
@@ -187,17 +205,16 @@ impl Render for Reorganize {
                 Some(t!("settings-reorganize-all-about")),
             ),
         };
+        let waiting = self.waits_for_language(cx);
         let about = match self.queued {
             Some(count) => Some(t!("settings-reorganize-queued", count = count)),
+            None if waiting => Some(t!("settings-general-language-waiting")),
             None => about,
         };
-        let controls = self
-            .offer
-            .modes()
-            .iter()
-            .fold(div().flex().gap_2(), |row, &mode| {
-                row.child(self.mode_button(mode, theme, cx))
-            });
+        let modes = if waiting { &[] } else { self.offer.modes() };
+        let controls = modes.iter().fold(div().flex().gap_2(), |row, &mode| {
+            row.child(self.mode_button(mode, theme, cx))
+        });
         form::row(&label, about.as_deref(), controls, theme)
     }
 }

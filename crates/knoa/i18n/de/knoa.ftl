@@ -106,6 +106,7 @@ settings-general-language-about = Menus, settings and dates, and the summaries a
 settings-general-language-note = Summaries and tags already written stay in their old language. Organizing your library again rewrites them.
 settings-general-language-organize = Organize again…
 settings-general-language-organize-confirm = Organize them all
+settings-general-language-waiting = You can organize again once your account has the new language.
 settings-updates = Updates
 settings-updates-version = { -knoa } { $version }
 settings-updates-self-built = This build doesn't update itself. Release builds from GitHub do.

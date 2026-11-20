@@ -1,60 +1,128 @@
 //! The account's language and this Mac's. Signed in, the account's is the one that counts:
-//! this Mac adopts it, gives it its own when the account has none yet, and sends every
-//! change the user makes here.
+//! this Mac adopts it and gives it its own when the account has none yet. A language the
+//! user picks here is the exception: it's kept as unsent in settings until the account
+//! has it, so a failed request, being offline or quitting can't let the account's older
+//! language undo the pick.
 
 use gpui::{App, Context};
-use knoa_core::{Language, protocol::Account};
+use knoa_core::{
+    Language,
+    protocol::{Account, Organizer as Who},
+};
 
 use super::{Cloud, Phase};
 use crate::{i18n, services::network::Network, state::settings::SettingsFile};
 
-/// What an account's language means for this Mac.
+/// This Mac's side of the language when a decision is due.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Follow {
-    /// Switch to the account's language.
-    Adopt(Language),
-    /// The account has none yet: give it this Mac's.
-    Push(Language),
-    Nothing,
+struct Here {
+    language: Language,
+    /// The user picked `language` here and the account doesn't have it yet.
+    unsent: bool,
+    /// A request to set the account's language is on its way.
+    sending: bool,
 }
 
-fn follow(account: Option<Language>, here: Language) -> Follow {
+/// What to do about the account's language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    /// Switch this Mac to the account's language.
+    Adopt(Language),
+    /// Give the account this language.
+    Send(Language),
+    Wait,
+}
+
+/// What follows the server answering a request to set `sent`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Answered {
+    unsent: bool,
+    /// A newer pick made while `sent` was on its way, to send now.
+    resend: Option<Language>,
+}
+
+/// Acts on an account's language. One request at a time, and the user's unsent pick
+/// beats whatever the account says, as the server keeps the last one it's sent.
+fn decide(here: Here, account: Option<Language>) -> Step {
+    if here.sending {
+        return Step::Wait;
+    }
     match account {
-        None => Follow::Push(here),
-        Some(language) if language != here => Follow::Adopt(language),
-        Some(_) => Follow::Nothing,
+        _ if here.unsent => Step::Send(here.language),
+        None => Step::Send(here.language),
+        Some(language) if language != here.language => Step::Adopt(language),
+        Some(_) => Step::Wait,
+    }
+}
+
+/// A failed request leaves the pick unsent for the next account fetch to retry, rather
+/// than retrying at once in a loop. Only a newer pick is sent straight away.
+fn answered(sent: Language, delivered: bool, here: Here) -> Answered {
+    let newer = here.unsent && sent != here.language;
+    Answered {
+        unsent: here.unsent && !(delivered && sent == here.language),
+        resend: newer.then_some(here.language),
     }
 }
 
 impl Cloud {
-    /// The user picked `language` on this Mac: switch to it, and tell the account when
-    /// signed in.
+    /// The user picked `language` on this Mac: switch to it, and when signed in, keep it
+    /// as unsent until the account has it.
     pub fn choose_language(language: Language, cx: &mut App) {
         i18n::set_language(language, cx);
-        Cloud::entity(cx).update(cx, |cloud, cx| cloud.push_language(language, cx));
+        Cloud::entity(cx).update(cx, |cloud, cx| {
+            if cloud.account().is_none() {
+                return;
+            }
+            set_unsent(true, cx);
+            let account = cloud.account().and_then(|account| account.language);
+            cloud.follow(account, cx);
+        });
     }
 
-    /// Acts on the language of an account the server just answered with. While a change
-    /// from here is on its way, an older answer would undo it, so it waits for that one.
+    /// Whether the cloud organizes and its account doesn't have the language picked here
+    /// yet. The cloud organizer writes in the account's language, so organizing again
+    /// would still write in the old one.
+    pub fn organizer_waits_for_language(&self, cx: &App) -> bool {
+        let cloud_organizes = self
+            .account()
+            .is_some_and(|account| account.organizer == Who::Cloud);
+        cloud_organizes && SettingsFile::get(cx).language_unsent
+    }
+
+    /// Acts on the language of an account the server just answered with.
     pub(super) fn follow_account_language(
         &mut self,
         account: &Account,
         cx: &mut Context<'_, Cloud>,
     ) {
-        if let Phase::SignedIn(connection) = &self.phase
-            && connection.language_push.is_some()
-        {
-            return;
-        }
-        match follow(account.language, SettingsFile::get(cx).language) {
-            Follow::Adopt(language) => i18n::set_language(language, cx),
-            Follow::Push(language) => self.push_language(language, cx),
-            Follow::Nothing => {}
+        self.follow(account.language, cx);
+    }
+
+    fn follow(&mut self, account: Option<Language>, cx: &mut Context<'_, Cloud>) {
+        match decide(self.here(cx), account) {
+            Step::Adopt(language) => i18n::set_language(language, cx),
+            Step::Send(language) => self.send_language(language, cx),
+            Step::Wait => {}
         }
     }
 
-    /// `PUT /v1/me/language`. Signed out, there's no account to tell.
-    fn push_language(&mut self, language: Language, cx: &mut Context<'_, Cloud>) {
+    fn here(&self, cx: &App) -> Here {
+        let settings = SettingsFile::get(cx);
+        let sending = matches!(
+            &self.phase,
+            Phase::SignedIn(connection) if connection.language_push.is_some()
+        );
+        Here {
+            language: settings.language,
+            unsent: settings.language_unsent,
+            sending,
+        }
+    }
+
+    /// `PUT /v1/me/language`. Signed out, or linked to another account, there's no
+    /// account to tell yet.
+    fn send_language(&mut self, language: Language, cx: &mut Context<'_, Cloud>) {
         let Phase::SignedIn(connection) = &mut self.phase else {
             return;
         };
@@ -62,21 +130,45 @@ impl Cloud {
         let generation = self.generation.ticket();
         let task = Network::spawn(cx, async move { api.set_language(language).await });
         connection.language_push = Some(cx.spawn(async move |this, cx| {
-            let result = task.await;
+            let result = match task.await {
+                Ok(result) => result.map_err(anyhow::Error::from),
+                Err(err) => Err(anyhow::Error::from(err)),
+            };
             let _ = this.update(cx, |this, cx| {
-                if generation.if_current(|| ()).is_none() {
-                    return;
-                }
-                if let Phase::SignedIn(connection) = &mut this.phase {
-                    connection.language_push = None;
-                }
-                match result {
-                    Ok(Ok(account)) => this.set_account(account, cx),
-                    Ok(Err(err)) => tracing::warn!("can't set the account's language: {err}"),
-                    Err(err) => tracing::warn!("can't set the account's language: {err}"),
+                if generation.if_current(|| ()).is_some() {
+                    this.language_answered(language, result, cx);
                 }
             });
         }));
+    }
+
+    fn language_answered(
+        &mut self,
+        sent: Language,
+        result: anyhow::Result<Account>,
+        cx: &mut Context<'_, Cloud>,
+    ) {
+        if let Phase::SignedIn(connection) = &mut self.phase {
+            connection.language_push = None;
+        }
+        if let Err(err) = &result {
+            tracing::warn!("can't set the account's language: {err}");
+        }
+        let next = answered(sent, result.is_ok(), self.here(cx));
+        set_unsent(next.unsent, cx);
+        if let Some(language) = next.resend {
+            self.send_language(language, cx);
+        }
+        if let Ok(account) = result {
+            self.set_account(account, cx);
+        }
+    }
+}
+
+/// Saved only on a change: settings are written to disk on every update.
+pub(super) fn set_unsent(unsent: bool, cx: &mut App) {
+    if SettingsFile::get(cx).language_unsent != unsent {
+        SettingsFile::update(cx, |s| s.language_unsent = unsent);
     }
 }
 
@@ -84,13 +176,64 @@ impl Cloud {
 mod tests {
     use super::*;
 
+    fn here(language: Language, unsent: bool, sending: bool) -> Here {
+        Here {
+            language,
+            unsent,
+            sending,
+        }
+    }
+
     #[test]
-    fn the_account_language_wins_and_a_missing_one_gets_this_macs() {
+    fn an_account_language_is_adopted_and_a_missing_one_gets_this_macs() {
+        let settled = here(Language::En, false, false);
         assert_eq!(
-            follow(Some(Language::Pl), Language::En),
-            Follow::Adopt(Language::Pl)
+            decide(settled, Some(Language::Pl)),
+            Step::Adopt(Language::Pl)
         );
-        assert_eq!(follow(None, Language::De), Follow::Push(Language::De));
-        assert_eq!(follow(Some(Language::Fr), Language::Fr), Follow::Nothing);
+        assert_eq!(decide(settled, Some(Language::En)), Step::Wait);
+        assert_eq!(decide(settled, None), Step::Send(Language::En));
+    }
+
+    #[test]
+    fn an_unsent_pick_beats_the_account_language() {
+        let picked = here(Language::Pl, true, false);
+        assert_eq!(decide(picked, Some(Language::En)), Step::Send(Language::Pl));
+        let on_its_way = here(Language::Pl, true, true);
+        assert_eq!(decide(on_its_way, Some(Language::En)), Step::Wait);
+    }
+
+    #[test]
+    fn picks_made_while_one_is_sent_coalesce_and_the_newest_wins() {
+        // Picked German, then French and Polish while German was on its way.
+        let now = here(Language::Pl, true, false);
+        let after_german = answered(Language::De, true, now);
+        assert_eq!(
+            after_german,
+            Answered {
+                unsent: true,
+                resend: Some(Language::Pl)
+            }
+        );
+        let after_polish = answered(Language::Pl, true, now);
+        assert_eq!(
+            after_polish,
+            Answered {
+                unsent: false,
+                resend: None
+            }
+        );
+    }
+
+    #[test]
+    fn a_failed_request_keeps_the_pick_unsent_without_retrying_at_once() {
+        let now = here(Language::Pl, true, false);
+        assert_eq!(
+            answered(Language::Pl, false, now),
+            Answered {
+                unsent: true,
+                resend: None
+            }
+        );
     }
 }

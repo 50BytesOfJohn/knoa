@@ -207,6 +207,7 @@ impl Cloud {
             Credentials::delete(config.credential_url(), cx).detach_and_log_err(cx);
         }
         crate::state::settings::SettingsFile::update(cx, |s| s.account = None);
+        super::language::set_unsent(false, cx);
         set_cloud_organizes(false, "signed out of the cloud", cx);
         self.session_events = None;
         self.sync = SyncStatus::Starting;

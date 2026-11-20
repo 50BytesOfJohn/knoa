@@ -103,7 +103,7 @@ impl SettingsView {
     fn show_language_note(&mut self, cx: &mut Context<'_, SettingsView>) {
         if self.language_note.is_none() {
             let library = self.library.clone();
-            self.language_note = Some(cx.new(|_| Reorganize::after_language_change(library)));
+            self.language_note = Some(cx.new(|cx| Reorganize::after_language_change(library, cx)));
             cx.notify();
         }
     }

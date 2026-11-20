@@ -96,7 +96,7 @@ pub struct Connection {
     replacement: Option<Task<()>>,
     mcp: McpState,
     mcp_task: Option<Task<()>>,
-    /// Sending a language the user picked here.
+    /// Setting the account's language. One at a time, so they arrive in order.
     language_push: Option<Task<()>>,
 }
 
