@@ -1,5 +1,5 @@
 //! Knoa's domain types: workspaces, bookmarks, kinds and their fields, folders, tags,
-//! search queries, AI usage, and the cloud sync protocol.
+//! languages, search queries, AI usage, and the cloud sync protocol.
 //!
 //! No I/O lives here. Storage is in `knoa-store`, network work in `knoa-fetch` and `knoa-ai`.
 
@@ -9,6 +9,7 @@ mod event;
 mod field;
 mod folder;
 mod kind;
+mod language;
 pub mod protocol;
 mod query;
 mod tag;
@@ -27,6 +28,7 @@ pub use folder::{
     FolderTree, Hue, Ink, MAX_FOLDER_DEPTH, MoveError, NewFolder,
 };
 pub use kind::{Kind, KindDef};
+pub use language::Language;
 pub use query::{Comparison, FieldFilter, Place, Query};
 pub use tag::{
     ListedTag, MAX_AI_TAGS, MAX_LISTED_TAGS, MAX_TAG_CHARS, MAX_TAG_DESCRIPTION_CHARS, TagList,

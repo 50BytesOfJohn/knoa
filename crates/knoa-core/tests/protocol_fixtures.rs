@@ -72,7 +72,7 @@ fn account_and_organize_answers_preserve_the_complete_contract() {
 
 #[test]
 fn cached_accounts_without_billing_keep_their_existing_details() {
-    let wire = serde_json::json!({
+    let mut wire = serde_json::json!({
         "user_id": "user_legacy", "email": null, "plan": "pro", "organizer": "cloud",
         "limits": {"bookmarks": 10000, "organized_per_month": 1000},
         "usage": {"bookmarks": 12, "organized_this_month": 3},
@@ -82,6 +82,8 @@ fn cached_accounts_without_billing_keep_their_existing_details() {
         account.billing.is_none(),
         "unknown cached billing must not imply a free account"
     );
+    // They predate languages too, and write the language back as not yet set.
+    wire["language"] = Value::Null;
     assert_eq!(serde_json::to_value(account).unwrap(), wire);
 }
 

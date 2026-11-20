@@ -18,7 +18,8 @@
         "period_end": null,
         "cancel_at_period_end": false,
         "trial_available": true
-      }
+      },
+      "language": null
     },
     {
       "user_id": "user_fixture",
@@ -38,7 +39,8 @@
         "period_end": null,
         "cancel_at_period_end": false,
         "trial_available": false
-      }
+      },
+      "language": null
     },
     {
       "user_id": "user_fixture",
@@ -58,7 +60,8 @@
         "period_end": 1797465600,
         "cancel_at_period_end": false,
         "trial_available": false
-      }
+      },
+      "language": "pl"
     },
     {
       "user_id": "user_fixture",
@@ -78,7 +81,8 @@
         "period_end": 1797465600,
         "cancel_at_period_end": true,
         "trial_available": false
-      }
+      },
+      "language": null
     },
     {
       "user_id": "user_fixture",
@@ -98,7 +102,8 @@
         "period_end": 1797465600,
         "cancel_at_period_end": false,
         "trial_available": false
-      }
+      },
+      "language": "de"
     },
     {
       "user_id": "user_fixture",
@@ -118,7 +123,8 @@
         "period_end": 1797465600,
         "cancel_at_period_end": true,
         "trial_available": false
-      }
+      },
+      "language": null
     }
   ],
   "organize": [

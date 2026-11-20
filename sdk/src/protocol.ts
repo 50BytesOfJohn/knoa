@@ -304,6 +304,11 @@ export const PONG = "pong";
 
 // ── Account ────────────────────────────────────────────────────────────────────────────
 
+/** Bare ISO 639-1 codes. */
+export const LANGUAGES = ["en", "pl", "de", "es", "fr"] as const;
+export type Language = (typeof LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: Language = "en";
+
 export type Plan = "free" | "pro";
 
 /** What a plan allows. The server enforces these; clients show them. */
@@ -348,6 +353,13 @@ export interface Account {
 	limits: Pick<PlanLimits, "bookmarks" | "organized_per_month">;
 	usage: { bookmarks: number; organized_this_month: number };
 	billing: Billing;
+	/** The user's language for every client's UI and for the AI's writing. null until a client sets it. */
+	language: Language | null;
+}
+
+/** `PUT /v1/me/language`. Answers the updated {@link Account}; the server also sends `account` on the socket. */
+export interface LanguageRequest {
+	language: Language;
 }
 
 /** The account's Pro subscription, for showing it and for offering one. */

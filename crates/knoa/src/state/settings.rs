@@ -7,7 +7,7 @@ use std::{
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
-use knoa_core::{Ink, protocol::Account};
+use knoa_core::{Ink, Language, protocol::Account};
 use knoa_store::Store;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,8 @@ pub struct Settings {
     /// `None` when the user runs Knoa without AI.
     pub ai: Option<ProviderConfig>,
     pub theme: String,
+    /// The UI's language and the AI's. Signed in, the account's language wins.
+    pub language: Language,
     pub show_up_next: bool,
     pub show_summaries: bool,
     /// How the Events place shows events on this Mac.
@@ -82,6 +84,7 @@ impl Default for Settings {
             current_workspace: None,
             ai: None,
             theme: crate::ui::theme::DEFAULT_THEME.into(),
+            language: Language::default(),
             show_up_next: true,
             show_summaries: true,
             events_view: EventsView::default(),

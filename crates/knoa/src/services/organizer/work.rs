@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use gpui::{App, BackgroundExecutor};
 use knoa_ai::Provider;
+use knoa_core::Language;
 use knoa_fetch::Fetcher;
 use knoa_store::{Job, Store};
 use tokio::runtime::Handle;
@@ -11,7 +12,7 @@ use tokio::runtime::Handle;
 use super::job::Outcome;
 use crate::{
     services::{generation::Ticket, network::Network},
-    state::{database::Database, rewritten_images::RewrittenImages},
+    state::{database::Database, rewritten_images::RewrittenImages, settings::SettingsFile},
 };
 
 /// Everything one job needs, owned so it can move to other threads.
@@ -22,6 +23,8 @@ pub(super) struct Work {
     pub(super) background: BackgroundExecutor,
     pub(super) network: Handle,
     pub(super) rewritten_images: RewrittenImages,
+    /// Read as the jobs start, so a change in Settings applies from the next job on.
+    pub(super) language: Language,
     ticket: Ticket,
 }
 
@@ -40,6 +43,7 @@ impl Work {
             background: cx.background_executor().clone(),
             network: Network::handle(cx),
             rewritten_images: RewrittenImages::handle(cx),
+            language: SettingsFile::get(cx).language,
             ticket,
         }
     }

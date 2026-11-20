@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::Language;
+
 /// `GET /v1/me`. An `account` message on the socket says this changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Account {
@@ -14,6 +16,15 @@ pub struct Account {
     /// Older cached accounts predate billing details; the API always provides them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub billing: Option<Billing>,
+    /// `None` until a client sets it, and from servers that predate languages.
+    #[serde(default)]
+    pub language: Option<Language>,
+}
+
+/// `PUT /v1/me/language`. Answers the updated [`Account`]; the socket also says `account`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageRequest {
+    pub language: Language,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

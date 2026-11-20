@@ -6,6 +6,8 @@ import type {
 	BillingRefreshResponse,
 	BillingUrlResponse,
 	ErrorResponse,
+	Language,
+	LanguageRequest,
 	McpSettings,
 	McpSettingsResponse,
 	OrganizeRequest,
@@ -76,6 +78,11 @@ export class Api {
 
 	me(): Promise<Account> {
 		return this.call("GET", "/v1/me");
+	}
+
+	setLanguage(language: Language): Promise<Account> {
+		const body: LanguageRequest = { language };
+		return this.call("PUT", "/v1/me/language", body);
 	}
 
 	mcpSettings(): Promise<McpSettingsResponse> {

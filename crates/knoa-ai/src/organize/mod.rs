@@ -11,7 +11,8 @@ mod schema;
 
 pub use folders::{FilingInput, file_into_folders};
 use knoa_core::{
-    AnalysisImage, Date, Enrichment, Fields, FolderId, Kind, TagList, link_file_name, site_of,
+    AnalysisImage, Date, Enrichment, Fields, FolderId, Kind, Language, TagList, link_file_name,
+    site_of,
 };
 
 use crate::{Classifier, Error, LanguageModel, StructuredRequest};
@@ -76,6 +77,8 @@ pub struct OrganizeInput<'a> {
     pub tag_list: &'a TagList,
     /// The organizer's date, for event pages that leave out the year.
     pub today: Date,
+    /// What the AI writes in: summary, tags, title, extras and free-text fields.
+    pub language: Language,
 }
 
 pub async fn organize<M: LanguageModel, C: Classifier>(
@@ -264,6 +267,7 @@ mod tests {
             folders: &[],
             tag_list: &TagList::default(),
             today: Date::new(2026, 11, 18).expect("a real date"),
+            language: Language::default(),
         };
         organize(models, None::<&Provider>, &input).await
     }
@@ -305,6 +309,7 @@ mod tests {
             folders: &[],
             tag_list: &TagList::default(),
             today: Date::new(2026, 11, 18).expect("a real date"),
+            language: Language::default(),
         };
 
         let enrichment = organize(&model, None::<&Provider>, &input)

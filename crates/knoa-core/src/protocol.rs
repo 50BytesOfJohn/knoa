@@ -10,8 +10,8 @@ mod rows;
 mod sync;
 
 pub use account::{
-    Account, AccountUsage, Billing, BillingStatus, ErrorResponse, ImageResponse, Limits,
-    OrganizeRequest, OrganizeResponse, OrganizeScope, Organizer, Plan, ServerMessage,
+    Account, AccountUsage, Billing, BillingStatus, ErrorResponse, ImageResponse, LanguageRequest,
+    Limits, OrganizeRequest, OrganizeResponse, OrganizeScope, Organizer, Plan, ServerMessage,
 };
 pub use mcp::{McpAccess, McpSettings, McpSettingsResponse};
 pub use rows::{
