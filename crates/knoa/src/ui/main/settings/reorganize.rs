@@ -101,12 +101,14 @@ impl Reorganize {
         library: Entity<Library>,
         cx: &mut Context<'_, Reorganize>,
     ) -> Reorganize {
-        let mut note = Reorganize::offering(Offer::NewLanguage, Scope::AllWorkspaces, library);
-        note._watching = vec![
+        let watching = vec![
             cx.observe(&Cloud::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_global::<SettingsFile>(|_, cx| cx.notify()),
         ];
-        note
+        Reorganize {
+            _watching: watching,
+            ..Reorganize::offering(Offer::NewLanguage, Scope::AllWorkspaces, library)
+        }
     }
 
     fn offering(offer: Offer, scope: Scope, library: Entity<Library>) -> Reorganize {

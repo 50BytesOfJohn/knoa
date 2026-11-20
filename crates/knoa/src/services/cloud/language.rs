@@ -11,14 +11,18 @@ use knoa_core::{
 };
 
 use super::{Cloud, Phase};
-use crate::{i18n, services::network::Network, state::settings::SettingsFile};
+use crate::{
+    i18n,
+    services::network::Network,
+    state::settings::{Delivery, SettingsFile},
+};
 
 /// This Mac's side of the language when a decision is due.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Here {
     language: Language,
-    /// The user picked `language` here and the account doesn't have it yet.
-    unsent: bool,
+    /// Unsent when the user picked `language` here and the account doesn't have it yet.
+    delivery: Delivery,
     /// A request to set the account's language is on its way.
     sending: bool,
 }
@@ -36,7 +40,7 @@ enum Step {
 /// What follows the server answering a request to set `sent`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Answered {
-    unsent: bool,
+    delivery: Delivery,
     /// A newer pick made while `sent` was on its way, to send now.
     resend: Option<Language>,
 }
@@ -48,7 +52,7 @@ fn decide(here: Here, account: Option<Language>) -> Step {
         return Step::Wait;
     }
     match account {
-        _ if here.unsent => Step::Send(here.language),
+        _ if here.delivery == Delivery::Unsent => Step::Send(here.language),
         None => Step::Send(here.language),
         Some(language) if language != here.language => Step::Adopt(language),
         Some(_) => Step::Wait,
@@ -58,10 +62,15 @@ fn decide(here: Here, account: Option<Language>) -> Step {
 /// A failed request leaves the pick unsent for the next account fetch to retry, rather
 /// than retrying at once in a loop. Only a newer pick is sent straight away.
 fn answered(sent: Language, delivered: bool, here: Here) -> Answered {
-    let newer = here.unsent && sent != here.language;
+    let unsent = here.delivery == Delivery::Unsent;
+    let arrived = delivered && sent == here.language;
     Answered {
-        unsent: here.unsent && !(delivered && sent == here.language),
-        resend: newer.then_some(here.language),
+        delivery: if unsent && !arrived {
+            Delivery::Unsent
+        } else {
+            Delivery::Sent
+        },
+        resend: (unsent && sent != here.language).then_some(here.language),
     }
 }
 
@@ -74,7 +83,7 @@ impl Cloud {
             if cloud.account().is_none() {
                 return;
             }
-            set_unsent(true, cx);
+            set_delivery(Delivery::Unsent, cx);
             let account = cloud.account().and_then(|account| account.language);
             cloud.follow(account, cx);
         });
@@ -87,7 +96,7 @@ impl Cloud {
         let cloud_organizes = self
             .account()
             .is_some_and(|account| account.organizer == Who::Cloud);
-        cloud_organizes && SettingsFile::get(cx).language_unsent
+        cloud_organizes && SettingsFile::get(cx).language_delivery == Delivery::Unsent
     }
 
     /// Acts on the language of an account the server just answered with.
@@ -115,7 +124,7 @@ impl Cloud {
         );
         Here {
             language: settings.language,
-            unsent: settings.language_unsent,
+            delivery: settings.language_delivery,
             sending,
         }
     }
@@ -155,7 +164,7 @@ impl Cloud {
             tracing::warn!("can't set the account's language: {err}");
         }
         let next = answered(sent, result.is_ok(), self.here(cx));
-        set_unsent(next.unsent, cx);
+        set_delivery(next.delivery, cx);
         if let Some(language) = next.resend {
             self.send_language(language, cx);
         }
@@ -166,9 +175,9 @@ impl Cloud {
 }
 
 /// Saved only on a change: settings are written to disk on every update.
-pub(super) fn set_unsent(unsent: bool, cx: &mut App) {
-    if SettingsFile::get(cx).language_unsent != unsent {
-        SettingsFile::update(cx, |s| s.language_unsent = unsent);
+pub(super) fn set_delivery(delivery: Delivery, cx: &mut App) {
+    if SettingsFile::get(cx).language_delivery != delivery {
+        SettingsFile::update(cx, |s| s.language_delivery = delivery);
     }
 }
 
@@ -176,17 +185,19 @@ pub(super) fn set_unsent(unsent: bool, cx: &mut App) {
 mod tests {
     use super::*;
 
-    fn here(language: Language, unsent: bool, sending: bool) -> Here {
+    use Delivery::{Sent, Unsent};
+
+    fn here(language: Language, delivery: Delivery, sending: bool) -> Here {
         Here {
             language,
-            unsent,
+            delivery,
             sending,
         }
     }
 
     #[test]
     fn an_account_language_is_adopted_and_a_missing_one_gets_this_macs() {
-        let settled = here(Language::En, false, false);
+        let settled = here(Language::En, Sent, false);
         assert_eq!(
             decide(settled, Some(Language::Pl)),
             Step::Adopt(Language::Pl)
@@ -197,21 +208,21 @@ mod tests {
 
     #[test]
     fn an_unsent_pick_beats_the_account_language() {
-        let picked = here(Language::Pl, true, false);
+        let picked = here(Language::Pl, Unsent, false);
         assert_eq!(decide(picked, Some(Language::En)), Step::Send(Language::Pl));
-        let on_its_way = here(Language::Pl, true, true);
+        let on_its_way = here(Language::Pl, Unsent, true);
         assert_eq!(decide(on_its_way, Some(Language::En)), Step::Wait);
     }
 
     #[test]
     fn picks_made_while_one_is_sent_coalesce_and_the_newest_wins() {
         // Picked German, then French and Polish while German was on its way.
-        let now = here(Language::Pl, true, false);
+        let now = here(Language::Pl, Unsent, false);
         let after_german = answered(Language::De, true, now);
         assert_eq!(
             after_german,
             Answered {
-                unsent: true,
+                delivery: Unsent,
                 resend: Some(Language::Pl)
             }
         );
@@ -219,7 +230,7 @@ mod tests {
         assert_eq!(
             after_polish,
             Answered {
-                unsent: false,
+                delivery: Sent,
                 resend: None
             }
         );
@@ -227,11 +238,11 @@ mod tests {
 
     #[test]
     fn a_failed_request_keeps_the_pick_unsent_without_retrying_at_once() {
-        let now = here(Language::Pl, true, false);
+        let now = here(Language::Pl, Unsent, false);
         assert_eq!(
             answered(Language::Pl, false, now),
             Answered {
-                unsent: true,
+                delivery: Unsent,
                 resend: None
             }
         );

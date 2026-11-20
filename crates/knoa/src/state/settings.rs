@@ -24,9 +24,9 @@ pub struct Settings {
     /// The UI's language and the AI's. Signed in, the account's language wins.
     #[serde(deserialize_with = "unknown_language_as_default")]
     pub language: Language,
-    /// The user picked `language` here while signed in, and the account doesn't have it
-    /// yet. Until it does, the account's language doesn't replace it.
-    pub language_unsent: bool,
+    /// Whether the account has the language the user picked here while signed in. Until
+    /// it does, the account's language doesn't replace it.
+    pub language_delivery: Delivery,
     pub show_up_next: bool,
     pub show_summaries: bool,
     /// How the Events place shows events on this Mac.
@@ -62,6 +62,15 @@ impl Legacy {
     }
 }
 
+/// Whether a change made here has reached the account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Delivery {
+    #[default]
+    Sent,
+    Unsent,
+}
+
 /// How the Events place lays out its events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -89,7 +98,7 @@ impl Default for Settings {
             ai: None,
             theme: crate::ui::theme::DEFAULT_THEME.into(),
             language: Language::default(),
-            language_unsent: false,
+            language_delivery: Delivery::default(),
             show_up_next: true,
             show_summaries: true,
             events_view: EventsView::default(),
