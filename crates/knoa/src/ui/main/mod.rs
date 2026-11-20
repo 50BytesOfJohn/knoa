@@ -36,7 +36,7 @@ use gpui::{
     prelude::FluentBuilder as _,
 };
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{BookmarkId, Language, Place, WorkspaceId};
+use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
     i18n::{self, t},
@@ -65,8 +65,6 @@ pub struct MainView {
     library: Entity<Library>,
     sidebar: Entity<SidebarView>,
     search: Entity<InputState>,
-    /// The language the search placeholder is in, to set it again when that changes.
-    search_language: Language,
     cards_focus: FocusHandle,
     /// Held by the image viewer while it is open, so its keys replace the grid's.
     viewer_focus: FocusHandle,
@@ -114,6 +112,7 @@ impl MainView {
             cx.subscribe_in(&sidebar, window, Self::on_sidebar_event),
             cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
+            i18n::on_change(window, cx, Self::translate),
         ];
         let cards_focus = cx.focus_handle();
         cards_focus.focus(window, cx);
@@ -121,7 +120,6 @@ impl MainView {
             library,
             sidebar,
             search,
-            search_language: i18n::language(),
             cards_focus,
             viewer_focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),

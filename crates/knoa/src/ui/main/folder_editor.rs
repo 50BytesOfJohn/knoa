@@ -24,7 +24,7 @@ use knoa_core::{
 
 use super::MainView;
 use crate::{
-    i18n::t,
+    i18n::{self, t},
     state::library::{Library, LibraryChanged},
     ui::{
         components::{Tone, button, over_limit, problem},
@@ -59,11 +59,8 @@ impl FolderEditor {
         window: &mut Window,
         cx: &mut Context<'_, FolderEditor>,
     ) -> FolderEditor {
-        let name = cx
-            .new(|cx| InputState::new(window, cx).placeholder(t!("main-folder-name-placeholder")));
-        let description = cx.new(|cx| {
-            TextareaState::new(window, cx).placeholder(t!("main-folder-description-placeholder"))
-        });
+        let name = cx.new(|cx| InputState::new(window, cx));
+        let description = cx.new(|cx| TextareaState::new(window, cx));
         if let Some(folder) = &existing {
             name.update(cx, |input, cx| {
                 input.set_value(folder.name.clone(), window, cx);
@@ -78,7 +75,7 @@ impl FolderEditor {
         let hue = color_picker::hue_state(color, cx);
         let icon = existing.as_ref().and_then(|f| f.icon.clone());
         let emoji = emoji_picker::emoji_state(icon.as_ref(), window, cx);
-        FolderEditor {
+        let editor = FolderEditor {
             auto_assign: existing.as_ref().is_none_or(|f| f.auto_assign),
             color,
             icon,
@@ -94,6 +91,9 @@ impl FolderEditor {
                 ),
                 cx.observe(&name, |_, _, cx| cx.notify()),
                 cx.observe(&description, |_, _, cx| cx.notify()),
+                i18n::on_change(window, cx, |this, window, cx| {
+                    this.set_placeholders(window, cx);
+                }),
             ],
             hue,
             emoji,
@@ -102,7 +102,22 @@ impl FolderEditor {
             description,
             library,
             main,
-        }
+        };
+        editor.set_placeholders(window, cx);
+        editor
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
+        self.name.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-folder-name-placeholder"), window, cx);
+        });
+        self.description.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-folder-description-placeholder"), window, cx);
+        });
+        self.emoji.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-folder-emoji-placeholder"), window, cx);
+        });
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {

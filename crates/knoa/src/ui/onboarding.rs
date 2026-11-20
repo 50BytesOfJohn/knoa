@@ -6,8 +6,8 @@ mod steps;
 use gpui::{
     Animation, AnimationExt as _, AppContext as _, Context, Entity, FocusHandle, FontWeight,
     InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Task, TaskExt as _, Window, div, ease_out_quint,
-    prelude::FluentBuilder as _, px,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, TaskExt as _, Window, div,
+    ease_out_quint, prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::{InputState, TextareaState};
 use knoa_ai::ProviderKind;
@@ -15,7 +15,7 @@ use knoa_browser::{Browser, Profile};
 use knoa_core::Ink;
 
 use crate::{
-    i18n::t,
+    i18n::{self, t},
     services::ai,
     state::{library::Library, settings::SettingsFile},
     ui::theme::Theme,
@@ -55,8 +55,27 @@ enum KeyCheck {
     Idle,
     /// Holds the running check; dropping it cancels the check.
     Checking(#[allow(dead_code)] Task<()>),
-    Failed(String),
+    Failed(KeyProblem),
     Passed,
+}
+
+/// Why the key didn't pass, kept as data so it shows in the language of the moment.
+enum KeyProblem {
+    Missing,
+    Unknown,
+    CheckFailed(String),
+}
+
+impl KeyProblem {
+    fn message(&self) -> String {
+        match self {
+            KeyProblem::Missing => t!("onboarding-ai-key-missing"),
+            KeyProblem::Unknown => t!("onboarding-ai-key-unknown"),
+            KeyProblem::CheckFailed(error) => {
+                t!("onboarding-ai-key-check-failed", error = error.as_str())
+            }
+        }
+    }
 }
 
 pub struct Onboarding {
@@ -75,6 +94,7 @@ pub struct Onboarding {
     sign_in: FocusHandle,
     /// Setup was skipped to sign in, so the main screen opens on the Account page.
     wants_account: bool,
+    _language: Subscription,
 }
 
 impl Onboarding {
@@ -111,7 +131,10 @@ impl Onboarding {
         }
         let focus = cx.focus_handle();
         focus.focus(window, cx);
-        Onboarding {
+        let language = i18n::on_change(window, cx, |this, window, cx| {
+            this.set_placeholders(window, cx);
+        });
+        let onboarding = Onboarding {
             library,
             step: Step::Hello,
             profiles,
@@ -125,7 +148,24 @@ impl Onboarding {
             focus,
             sign_in: cx.focus_handle().tab_stop(true),
             wants_account: false,
-        }
+            _language: language,
+        };
+        onboarding.set_placeholders(window, cx);
+        onboarding
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
+        self.key.update(cx, |input, cx| {
+            input.set_placeholder(t!("onboarding-ai-key-placeholder"), window, cx);
+        });
+        self.instructions.update(cx, |input, cx| {
+            let placeholder = t!("onboarding-library-instructions-placeholder");
+            input.set_placeholder(placeholder, window, cx);
+        });
+        self.name.update(cx, |input, cx| {
+            input.set_placeholder(t!("onboarding-library-default-name"), window, cx);
+        });
     }
 
     /// Whether setup was skipped to sign in to an existing account.
@@ -135,22 +175,9 @@ impl Onboarding {
 
     fn go(&mut self, step: Step, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
         self.step = step;
-        // Set as each step opens, since the language may have changed on the first one.
         match step {
-            Step::Ai => self.key.update(cx, |input, cx| {
-                input.set_placeholder(t!("onboarding-ai-key-placeholder"), window, cx);
-                input.focus(window, cx);
-            }),
-            Step::Library => {
-                self.instructions.update(cx, |input, cx| {
-                    let placeholder = t!("onboarding-library-instructions-placeholder");
-                    input.set_placeholder(placeholder, window, cx);
-                });
-                self.name.update(cx, |input, cx| {
-                    input.set_placeholder(t!("onboarding-library-default-name"), window, cx);
-                    input.focus(window, cx);
-                });
-            }
+            Step::Ai => self.key.update(cx, |input, cx| input.focus(window, cx)),
+            Step::Library => self.name.update(cx, |input, cx| input.focus(window, cx)),
             Step::Done => self.apply(cx),
             _ => {}
         }
@@ -161,7 +188,7 @@ impl Onboarding {
     fn check_key(&mut self, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
         let key = self.key.read(cx).value().trim().to_owned();
         if key.is_empty() {
-            self.key_check = KeyCheck::Failed(t!("onboarding-ai-key-missing"));
+            self.key_check = KeyCheck::Failed(KeyProblem::Missing);
             cx.notify();
             return;
         }
@@ -177,10 +204,8 @@ impl Onboarding {
                     }
                     Err(err) => {
                         this.key_check = KeyCheck::Failed(match err {
-                            knoa_ai::Error::Unauthorized => t!("onboarding-ai-key-unknown"),
-                            other => {
-                                t!("onboarding-ai-key-check-failed", error = other.to_string())
-                            }
+                            knoa_ai::Error::Unauthorized => KeyProblem::Unknown,
+                            other => KeyProblem::CheckFailed(other.to_string()),
                         });
                         cx.notify();
                     }

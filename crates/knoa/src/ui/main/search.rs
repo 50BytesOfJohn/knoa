@@ -28,7 +28,6 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
-        self.translate_search_placeholder(window, cx);
         let theme = Theme::get(cx).clone();
         let (left, right) = super::content::content_span(window, show_detail);
         let width = (right - left - 40.).min(PILL_MAX_WIDTH);
@@ -125,19 +124,23 @@ impl MainView {
             .child(self.kind_chips(cx))
     }
 
-    /// An input keeps the placeholder it was made with, so a language switch sets it again.
-    fn translate_search_placeholder(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        let language = i18n::language();
-        if self.search_language == language {
-            return;
+    /// After a language switch, what inputs keep rather than draw: their placeholders, and
+    /// the search's `kind:` filters, in the new language's names.
+    pub(super) fn translate(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.translate_search(window, cx);
+        if let Some(edits) = &self.tag_edits {
+            edits.translate(window, cx);
         }
-        self.search_language = language;
+    }
+
+    /// The search itself doesn't change: its kinds are kept as slugs.
+    fn translate_search(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let search = self.library.read(cx).search().to_owned();
         self.search.update(cx, |input, cx| {
             input.set_placeholder(t!("main-search-placeholder"), window, cx);
+            if i18n::with_kind_slugs(&input.value()) != search {
+                input.set_value(i18n::with_kind_names(&search), window, cx);
+            }
         });
     }
 

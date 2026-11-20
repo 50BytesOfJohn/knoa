@@ -9,8 +9,9 @@ use knoa_core::protocol::Organizer as Who;
 use knoa_paths::Channel;
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
-use super::{Backend, Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
-use crate::i18n::t;
+use super::{
+    Backend, Cloud, Connection, Phase, Problem, SyncStatus, Wake, engine, set_cloud_organizes,
+};
 use crate::services::{credentials::Credentials, generation::Ticket, network::Network};
 
 impl Cloud {
@@ -138,7 +139,7 @@ impl Cloud {
             }
             Err(problem) => {
                 tracing::warn!("signing in failed: {problem}");
-                self.problem = Some(problem);
+                self.problem = Some(Problem::SignInFailed(problem));
             }
         }
         cx.notify();
@@ -294,7 +295,7 @@ async fn on_session_events(
                     tracing::warn!("the cloud sign-in was refused; signed out");
                     this.forget_account(cx);
                     this.phase = Phase::SignedOut;
-                    this.problem = Some(t!("error-signed-out"));
+                    this.problem = Some(Problem::SignedOut);
                     cx.notify();
                 }
             }

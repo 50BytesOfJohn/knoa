@@ -28,7 +28,7 @@ use super::{
     reorganize::{Reorganize, Scope},
 };
 use crate::{
-    i18n::t,
+    i18n::{self, t},
     services::organizer::Organizer,
     state::library::Library,
     ui::{
@@ -82,20 +82,17 @@ impl WorkspacePage {
         let next_color = Ink::nth(library.read(cx).workspaces().len());
         let workspace = existing.unwrap_or_else(|| blank_workspace(next_color));
         let name = cx.new(|cx| {
-            let mut input =
-                InputState::new(window, cx).placeholder(t!("settings-workspace-name-placeholder"));
+            let mut input = InputState::new(window, cx);
             input.set_value(workspace.name.clone(), window, cx);
             input
         });
         let instructions = cx.new(|cx| {
-            let mut input = TextareaState::new(window, cx)
-                .placeholder(t!("settings-workspace-instructions-placeholder"));
+            let mut input = TextareaState::new(window, cx);
             input.set_value(workspace.instructions.clone(), window, cx);
             input
         });
         let guideline = cx.new(|cx| {
-            let mut input = TextareaState::new(window, cx)
-                .placeholder(t!("settings-workspace-guideline-placeholder"));
+            let mut input = TextareaState::new(window, cx);
             input.set_value(workspace.screening.guideline.clone(), window, cx);
             input
         });
@@ -118,6 +115,9 @@ impl WorkspacePage {
             cx.observe(&guideline, |_, _, cx| cx.notify()),
             // Organizing again is offered only while AI is on.
             cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify()),
+            i18n::on_change(window, cx, |this, window, cx| {
+                this.set_placeholders(window, cx);
+            }),
         ];
         cx.on_release(|this: &mut WorkspacePage, _| {
             if let Some(saves) = this.saves.take() {
@@ -126,7 +126,7 @@ impl WorkspacePage {
         })
         .detach();
         let reorganize = (!is_new).then(|| new_reorganize(workspace.id, &library, cx));
-        WorkspacePage {
+        let page = WorkspacePage {
             existing: (!is_new).then_some(workspace.id),
             baseline: workspace.clone().normalized(),
             saves: None,
@@ -146,7 +146,24 @@ impl WorkspacePage {
             reorganize,
             library,
             _subscriptions: subscriptions,
-        }
+        };
+        page.set_placeholders(window, cx);
+        page
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, WorkspacePage>) {
+        self.name.update(cx, |input, cx| {
+            input.set_placeholder(t!("settings-workspace-name-placeholder"), window, cx);
+        });
+        self.instructions.update(cx, |input, cx| {
+            let placeholder = t!("settings-workspace-instructions-placeholder");
+            input.set_placeholder(placeholder, window, cx);
+        });
+        self.guideline.update(cx, |input, cx| {
+            let placeholder = t!("settings-workspace-guideline-placeholder");
+            input.set_placeholder(placeholder, window, cx);
+        });
     }
 
     fn save_on_blur(

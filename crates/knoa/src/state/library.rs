@@ -37,6 +37,7 @@ pub struct Library {
     workspaces: Vec<Workspace>,
     workspace_sync_ids: BTreeMap<WorkspaceId, String>,
     place: Place,
+    /// The search with `kind:` filters as slugs, whatever language they were typed in.
     search: String,
     kind: Option<Kind>,
     results: Arc<Vec<Bookmark>>,
@@ -203,9 +204,12 @@ impl Library {
         }
     }
 
+    /// Kind names are read in the language of the moment and kept as slugs, so the
+    /// search means the same after a language switch.
     pub fn set_search(&mut self, text: &str, cx: &mut Context<'_, Library>) {
-        if self.search != text {
-            text.clone_into(&mut self.search);
+        let search = i18n::with_kind_slugs(text);
+        if self.search != search {
+            self.search = search;
             self.refresh(cx);
         }
     }
@@ -218,8 +222,7 @@ impl Library {
     }
 
     fn query(&self) -> Query {
-        let search = i18n::with_kind_slugs(&self.search);
-        let mut query = Query::parse(&search, Some(self.workspace), self.place);
+        let mut query = Query::parse(&self.search, Some(self.workspace), self.place);
         if self.kind.is_some() {
             query.kind = self.kind;
         }

@@ -207,13 +207,6 @@ pub fn over_limit(text: &str, max: usize) -> Option<String> {
     (!fits(text, max)).then(|| grouped(max as u64))
 }
 
-/// Why `text` can't be saved when it's past the server's `max` characters for its field,
-/// which would keep the change on this Mac only: "Instructions can be at most 10,000
-/// characters."
-pub fn too_long(what: &str, text: &str, max: usize) -> Option<String> {
-    (!fits(text, max)).then(|| format!("{what} can be at most {} characters.", grouped(max as u64)))
-}
-
 /// The site's first letter on a colored disc: a stand-in for favicons, which would mean
 /// asking a third party about every bookmarked site.
 pub fn site_mark(site: &str, size: Pixels, cx: &App) -> AnyElement {

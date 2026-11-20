@@ -13,7 +13,7 @@ use jiff::Zoned;
 use super::{form, updates::When};
 use crate::{
     i18n::t,
-    services::cloud::{Cloud, Notice, Phase, Rejection, SyncStatus},
+    services::cloud::{Cloud, Notice, Phase, Problem, Rejection, SyncError, SyncStatus},
     state::library::Library,
     ui::{
         components::{Tone, button},
@@ -85,7 +85,7 @@ impl AccountPage {
             form::note(t!("settings-account-privacy"), theme.muted),
         ];
         if let Some(problem) = cloud.problem() {
-            rows.push(form::problem_note(problem.to_owned(), theme));
+            rows.push(form::problem_note(problem_text(problem), theme));
         }
         rows.push(if waiting {
             form::row(
@@ -174,7 +174,12 @@ impl AccountPage {
             SyncStatus::UpToDate => t!("settings-account-up-to-date"),
             SyncStatus::Syncing(changes) => t!("settings-account-syncing", count = (*changes)),
             SyncStatus::Offline => t!("settings-account-offline"),
-            SyncStatus::Error(err) => t!("settings-account-sync-stopped", error = err),
+            SyncStatus::Error(err) => {
+                t!(
+                    "settings-account-sync-stopped",
+                    error = (sync_error_text(err))
+                )
+            }
         };
         let last = match cloud.last_synced().map(|at| When::of(at, &Zoned::now())) {
             Some(When::Today(time)) => t!("settings-account-synced-today", time = time),
@@ -206,6 +211,21 @@ impl AccountPage {
             .read(cx)
             .account()
             .and_then(|account| account.email.clone())
+    }
+}
+
+fn problem_text(problem: &Problem) -> String {
+    match problem {
+        Problem::SignInFailed(problem) => problem.clone(),
+        Problem::SignedOut => t!("error-signed-out"),
+        Problem::UnlinkFailed(error) => t!("error-unlink-library", error = error.as_str()),
+    }
+}
+
+fn sync_error_text(error: &SyncError) -> String {
+    match error {
+        SyncError::Unanswered => t!("error-sync-unanswered"),
+        SyncError::Failed(error) => error.clone(),
     }
 }
 

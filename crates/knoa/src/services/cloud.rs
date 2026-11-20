@@ -26,7 +26,7 @@ use knoa_sync::Api;
 
 pub use self::config::CloudConfig;
 pub use self::mcp::McpState;
-pub use self::notice::{Notice, Rejection};
+pub use self::notice::{Notice, Problem, Rejection, SyncError};
 use crate::{
     services::{generation::Generation, organizer::Organizer},
     state::{
@@ -50,7 +50,7 @@ pub struct Cloud {
     /// changes it refused.
     push_notices: Vec<Notice>,
     /// Why the last sign-in didn't work, until the next one starts.
-    problem: Option<String>,
+    problem: Option<Problem>,
     /// Stores refresh tokens Clerk rotates, for as long as the session lasts.
     session_events: Option<Task<()>>,
     waiting: waiting::Waiting,
@@ -123,7 +123,7 @@ pub enum SyncStatus {
     UpToDate,
     Syncing(usize),
     Offline,
-    Error(String),
+    Error(SyncError),
 }
 
 struct CloudGlobal(Entity<Cloud>);
@@ -227,8 +227,8 @@ impl Cloud {
         })
     }
 
-    pub fn problem(&self) -> Option<&str> {
-        self.problem.as_deref()
+    pub fn problem(&self) -> Option<&Problem> {
+        self.problem.as_ref()
     }
 
     fn wake(&self, wake: Wake) {

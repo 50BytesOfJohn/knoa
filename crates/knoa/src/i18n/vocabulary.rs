@@ -24,13 +24,29 @@ pub fn ink_label(ink: Ink) -> String {
 }
 
 /// Search input with `kind:` filters in the current language ("kind:filmy") turned into
-/// the slugs the query parser reads ("kind:movie").
+/// the slugs the query parser reads ("kind:movie"), so the search keeps meaning the same
+/// after a language switch.
 pub fn with_kind_slugs(input: &str) -> String {
+    map_kinds(input, |value| {
+        kind_named(value).map(Kind::slug).map(str::to_owned)
+    })
+}
+
+/// The reverse of [`with_kind_slugs`]: a search's `kind:` filters in the current language,
+/// to show it again after a switch.
+pub fn with_kind_names(search: &str) -> String {
+    map_kinds(search, |value| {
+        Kind::parse(value).map(|kind| kind_label(kind).to_lowercase())
+    })
+}
+
+/// Rewrites the value of each `kind:` token that `rename` knows, leaving the rest as is.
+fn map_kinds(input: &str, rename: impl Fn(&str) -> Option<String>) -> String {
     let tokens: Vec<String> = input
         .split_whitespace()
         .map(|token| match token.split_once(':') {
             Some((name, value)) if name.eq_ignore_ascii_case("kind") => {
-                kind_named(value).map_or_else(|| token.to_owned(), |k| format!("kind:{}", k.slug()))
+                rename(value).map_or_else(|| token.to_owned(), |value| format!("kind:{value}"))
             }
             _ => token.to_owned(),
         })

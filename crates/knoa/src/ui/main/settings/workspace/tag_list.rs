@@ -16,7 +16,7 @@ use knoa_core::{
 };
 
 use super::form;
-use crate::i18n::t;
+use crate::i18n::{self, t};
 use crate::ui::{
     components::{icon, tip},
     theme::Theme,
@@ -32,6 +32,7 @@ pub struct TagListEditor {
     only_these: bool,
     new_tag: Entity<InputState>,
     _new_tag_events: Subscription,
+    _language: Subscription,
 }
 
 struct TagRow {
@@ -42,19 +43,35 @@ struct TagRow {
 
 impl TagListEditor {
     pub fn new(list: &TagList, window: &mut Window, cx: &mut Context<'_, TagListEditor>) -> Self {
-        let new_tag = cx
-            .new(|cx| InputState::new(window, cx).placeholder(t!("settings-tags-add-placeholder")));
+        let new_tag = cx.new(|cx| InputState::new(window, cx));
         let new_tag_events = cx.subscribe_in(&new_tag, window, Self::on_new_tag_event);
+        let language = i18n::on_change(window, cx, |this, window, cx| {
+            this.set_placeholders(window, cx);
+        });
         let mut editor = TagListEditor {
             rows: Vec::new(),
             only_these: list.only_these,
             new_tag,
             _new_tag_events: new_tag_events,
+            _language: language,
         };
         for tag in &list.tags {
             editor.insert_row(tag, window, cx);
         }
+        editor.set_placeholders(window, cx);
         editor
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, TagListEditor>) {
+        self.new_tag.update(cx, |input, cx| {
+            input.set_placeholder(t!("settings-tags-add-placeholder"), window, cx);
+        });
+        for row in &self.rows {
+            row.description.update(cx, |input, cx| {
+                input.set_placeholder(t!("settings-tags-hint-placeholder"), window, cx);
+            });
+        }
     }
 
     pub fn tag_list(&self, cx: &App) -> TagList {

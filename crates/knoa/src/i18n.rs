@@ -6,7 +6,7 @@ mod vocabulary;
 
 use std::sync::LazyLock;
 
-use gpui::App;
+use gpui::{App, Context, Global, Subscription, Window};
 use i18n_embed::{
     LanguageLoader as _, fluent::FluentLanguageLoader, unic_langid::LanguageIdentifier,
 };
@@ -14,7 +14,9 @@ use knoa_core::Language;
 use objc2_foundation::NSLocale;
 use rust_embed::RustEmbed;
 
-pub use vocabulary::{field_label, ink_label, kind_label, kind_plural, with_kind_slugs};
+pub use vocabulary::{
+    field_label, ink_label, kind_label, kind_plural, with_kind_names, with_kind_slugs,
+};
 
 use crate::state::settings::SettingsFile;
 
@@ -52,6 +54,21 @@ pub fn system_language() -> Language {
         .unwrap_or_default()
 }
 
+/// Set again on every language switch, which tells its observers. See [`on_change`].
+struct LanguageChanged;
+
+impl Global for LanguageChanged {}
+
+/// Calls `translate` whenever the language changes, for text a view keeps rather than
+/// draws each frame, like an input's placeholder.
+pub fn on_change<T: 'static>(
+    window: &Window,
+    cx: &mut Context<'_, T>,
+    translate: impl FnMut(&mut T, &mut Window, &mut Context<'_, T>) + 'static,
+) -> Subscription {
+    cx.observe_global_in::<LanguageChanged>(window, translate)
+}
+
 /// Sets the language at launch, before any window or menu exists.
 pub fn init(language: Language) {
     load(&LOADER, language);
@@ -71,6 +88,7 @@ pub fn set_language(language: Language, cx: &mut App) {
     tracing::info!(language = language.code(), "switching language");
     init(language);
     crate::menus::set(cx);
+    cx.set_global(LanguageChanged);
     cx.refresh_windows();
 }
 

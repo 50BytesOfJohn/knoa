@@ -35,8 +35,7 @@ pub(super) fn emoji_state(
 ) -> Entity<InputState> {
     let current = emoji_of(icon).unwrap_or_default();
     cx.new(|cx| {
-        let mut state =
-            InputState::new(window, cx).placeholder(t!("main-folder-emoji-placeholder"));
+        let mut state = InputState::new(window, cx);
         state.set_value(current, window, cx);
         state
     })

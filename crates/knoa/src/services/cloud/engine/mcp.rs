@@ -6,9 +6,11 @@ use knoa_core::{
     protocol::{McpAccess, McpSettings, Plan},
 };
 
-use crate::i18n::t;
 use crate::services::{
-    cloud::{Cloud, McpState, Phase, Wake, mcp::Change},
+    cloud::{
+        Cloud, McpState, Phase, Wake,
+        mcp::{Change, McpError},
+    },
     network::Network,
 };
 
@@ -48,7 +50,7 @@ impl Cloud {
     pub fn ensure_mcp_settings(&mut self, cx: &mut Context<'_, Cloud>) {
         if self
             .mcp()
-            .is_some_and(|state| state.settings().is_none() && state.problem().is_none())
+            .is_some_and(|state| state.settings().is_none() && !state.has_problem())
         {
             self.load_mcp_settings(cx);
         }
@@ -108,9 +110,12 @@ impl Cloud {
             let (result, refresh_account) = match task.await {
                 Ok(Err(knoa_sync::Error::Server {
                     status: 403, code, ..
-                })) if code == "subscription_required" => (Err(t!("error-mcp-needs-pro")), true),
-                Ok(result) => (result.map_err(|err| err.to_string()), false),
-                Err(err) => (Err(err.to_string()), false),
+                })) if code == "subscription_required" => (Err(McpError::NeedsPro), true),
+                Ok(result) => (
+                    result.map_err(|err| McpError::Failed(err.to_string())),
+                    false,
+                ),
+                Err(err) => (Err(McpError::Failed(err.to_string())), false),
             };
             let _ = this.update(cx, |this, cx| {
                 if generation.if_current(|| ()).is_none() {
@@ -118,7 +123,7 @@ impl Cloud {
                 }
                 if let Phase::SignedIn(connection) = &mut this.phase {
                     if let Err(problem) = &result {
-                        tracing::warn!("AI access settings failed: {problem}");
+                        tracing::warn!("AI access settings failed: {problem:?}");
                     }
                     connection.mcp.finish(result);
                     connection.mcp_task = None;

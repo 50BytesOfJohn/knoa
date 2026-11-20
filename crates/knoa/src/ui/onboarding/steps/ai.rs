@@ -31,7 +31,7 @@ impl Onboarding {
         match &self.key_check {
             KeyCheck::Idle => None,
             KeyCheck::Checking(_) => Some(note().child(t!("onboarding-ai-checking"))),
-            KeyCheck::Failed(message) => Some(problem(message.clone(), theme)),
+            KeyCheck::Failed(why) => Some(problem(why.message(), theme)),
             KeyCheck::Passed => Some(
                 note()
                     .child(mascot(
