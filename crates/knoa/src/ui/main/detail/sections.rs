@@ -8,11 +8,15 @@ use jiff::{Timestamp, tz::TimeZone};
 use knoa_core::{Bookmark, Status};
 
 use super::MainView;
-use crate::ui::{
-    components::{Tone, button, icon},
-    main::field_display,
-    mascot::{Mood, ai_mark, mascot},
-    theme::{CARD_RADIUS, Theme},
+use crate::{
+    format,
+    i18n::{self, t},
+    ui::{
+        components::{Tone, button, icon},
+        main::field_display,
+        mascot::{Mood, ai_mark, mascot},
+        theme::{CARD_RADIUS, Theme},
+    },
 };
 
 /// The AI's dot as a character, for the end of a line of text it wrote.
@@ -153,7 +157,7 @@ pub(super) fn fields(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
         .iter()
         .filter_map(|def| {
             let shown = field_display::display(def, bookmark.fields.get(&def.name)?);
-            Some((def.label(), shown))
+            Some((i18n::field_label(def), shown))
         })
         .filter(|(_, v)| !v.is_empty())
         .collect();
@@ -179,7 +183,7 @@ pub(super) fn fields(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
                 .child(div().flex_1().min_w_0().text_color(theme.text).child(value)),
         );
     }
-    Some(section("Details", theme).child(grid))
+    Some(section(&t!("detail-details"), theme).child(grid))
 }
 
 /// Where the bookmark came from, when it was saved and which model organized it: the
@@ -191,10 +195,7 @@ pub(super) fn provenance(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
         lines.push((glyph("folder"), folder.replace('/', " › ")));
     }
     if bookmark.removed_from_browser {
-        lines.push((
-            glyph("unlink"),
-            "Removed from the browser, kept here".to_owned(),
-        ));
+        lines.push((glyph("unlink"), t!("detail-removed-from-browser")));
     }
     if let Some(saved) = saved_on(bookmark.added_at) {
         lines.push((glyph("calendar"), saved));
@@ -203,7 +204,7 @@ pub(super) fn provenance(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
         let name = model.rsplit('/').next().unwrap_or(model);
         lines.push((
             ai_mark(px(12.), theme.ai).into_any_element(),
-            format!("Marks what {name} chose"),
+            t!("detail-chosen-by", model = name),
         ));
     }
     if lines.is_empty() {
@@ -233,14 +234,14 @@ pub(super) fn provenance(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
 
 fn saved_on(added_at: i64) -> Option<String> {
     let tz = TimeZone::system();
-    let added = Timestamp::from_second(added_at).ok()?.to_zoned(tz.clone());
-    let this_year = Timestamp::now().to_zoned(tz).year();
-    let format = if added.year() == this_year {
-        "%-d %B"
+    let added = Timestamp::from_second(added_at).ok()?;
+    let this_year = Timestamp::now().to_zoned(tz.clone()).year();
+    let skeleton = if added.to_zoned(tz).year() == this_year {
+        format::DAY_MONTH_LONG
     } else {
-        "%-d %B %Y"
+        format::DATE_LONG
     };
-    Some(format!("Saved {}", added.strftime(format)))
+    Some(t!("detail-saved", date = format::instant(added, skeleton)))
 }
 
 fn capitalize(text: &str) -> String {

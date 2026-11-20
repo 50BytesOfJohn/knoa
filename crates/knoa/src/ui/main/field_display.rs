@@ -1,43 +1,55 @@
-//! Field values as the user reads them: `knoa_core`'s display, but a time with an offset
-//! shows in this Mac's time zone, where the Events page places it.
+//! Field values as the user reads them: `knoa_core`'s display, but dates and times in the
+//! app's language, and a time with an offset in this Mac's time zone, where the Events
+//! page places it.
 
-use jiff::tz::TimeZone;
-use knoa_core::{Bookmark, Date, EventTime, FieldDef, FieldType, TimeOfDay};
+use jiff::{civil, tz::TimeZone};
+use knoa_core::{Bookmark, EventTime, FieldDef, FieldType};
 use serde_json::Value;
 
 use super::events::local_time;
+use crate::format;
 
 pub(super) fn display(def: &FieldDef, value: &Value) -> String {
-    match local_event_time(def, value) {
-        Some(time) => time.display(),
-        None => def.display(value),
-    }
+    let shown = match def.ty {
+        FieldType::DateTime => value.as_str().and_then(event_time),
+        FieldType::Date => value.as_str().and_then(date),
+        _ => None,
+    };
+    shown.unwrap_or_else(|| def.display(value))
 }
 
 pub(super) fn key_facts(bookmark: &Bookmark) -> Vec<String> {
     bookmark.key_facts(display)
 }
 
-/// A datetime value with an offset as the same instant in local wall time. `None` for
-/// anything else, which shows as written.
-fn local_event_time(def: &FieldDef, value: &Value) -> Option<EventTime> {
-    if def.ty != FieldType::DateTime {
-        return None;
-    }
-    let time = EventTime::parse(value.as_str()?)?;
-    time.time?.offset_minutes?;
+/// "Sat 5 Dec 2026, 19:00", or the date alone. `None` for text that isn't one, which
+/// shows as written.
+fn event_time(text: &str) -> Option<String> {
+    let time = EventTime::parse(text)?;
     let local = local_time(&time, &TimeZone::system())?;
-    let date = Date::new(
-        u16::try_from(local.year()).ok()?,
-        u8::try_from(local.month()).ok()?,
-        u8::try_from(local.day()).ok()?,
-    )?;
-    Some(EventTime {
-        date,
-        time: Some(TimeOfDay {
-            hour: u8::try_from(local.hour()).ok()?,
-            minute: u8::try_from(local.minute()).ok()?,
-            offset_minutes: None,
-        }),
-    })
+    let skeleton = if time.time.is_some() {
+        format::WEEKDAY_DATE_YEAR_TIME
+    } else {
+        format::WEEKDAY_DATE_YEAR
+    };
+    Some(format::floating(local, skeleton))
+}
+
+/// A `YYYY-MM-DD` date, or only its month or year when that's all that is known.
+fn date(text: &str) -> Option<String> {
+    let mut parts = text.split('-').map(str::parse::<i8>);
+    let year: i16 = text.get(..4)?.parse().ok()?;
+    parts.next();
+    match (parts.next(), parts.next()) {
+        (None, _) => Some(year.to_string()),
+        (Some(Ok(month)), None) => {
+            let day = civil::Date::new(year, month, 1).ok()?;
+            Some(format::day(day, format::MONTH_YEAR_SHORT))
+        }
+        (Some(Ok(month)), Some(Ok(day))) => {
+            let day = civil::Date::new(year, month, day).ok()?;
+            Some(format::day(day, format::DATE))
+        }
+        _ => None,
+    }
 }

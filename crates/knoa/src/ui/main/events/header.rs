@@ -10,6 +10,7 @@ use jiff::Zoned;
 
 use super::{NextMonth, PreviousMonth, ShowToday, labels, set_events_view};
 use crate::{
+    i18n::t,
     state::settings::EventsView,
     ui::{
         components::{Tone, button, icon},
@@ -24,10 +25,14 @@ pub const HEIGHT: f32 = 52.;
 /// out its title and Today (still on Cmd-T) and shortens the month, so the switch fits.
 const FULL_WIDTH: f32 = 520.;
 
-const VIEWS: [(EventsView, &str); 2] = [
-    (EventsView::Calendar, "Calendar"),
-    (EventsView::List, "List"),
-];
+const VIEWS: [EventsView; 2] = [EventsView::Calendar, EventsView::List];
+
+fn view_label(view: EventsView) -> String {
+    match view {
+        EventsView::Calendar => t!("events-view-calendar"),
+        EventsView::List => t!("events-view-list"),
+    }
+}
 
 /// The two-way switch between the calendar and the list. It saves the choice.
 pub fn view_switch(id: &'static str, current: EventsView, theme: &Theme) -> Div {
@@ -37,7 +42,7 @@ pub fn view_switch(id: &'static str, current: EventsView, theme: &Theme) -> Div 
         .gap(px(2.))
         .rounded_full()
         .bg(theme.soft);
-    for (index, (view, label)) in VIEWS.into_iter().enumerate() {
+    for (index, view) in VIEWS.into_iter().enumerate() {
         let (text, hover) = (theme.text, theme.hover);
         let segment = div()
             .id((id, index))
@@ -57,7 +62,7 @@ pub fn view_switch(id: &'static str, current: EventsView, theme: &Theme) -> Div 
                         .hover(move |s| s.bg(hover).text_color(text))
                 }
             })
-            .child(label)
+            .child(view_label(view))
             .on_click(move |_, _, cx| {
                 if view != current {
                     set_events_view(view, cx);
@@ -91,7 +96,7 @@ impl MainView {
                         .font_family(SERIF)
                         .text_2xl()
                         .font_weight(FontWeight::SEMIBOLD)
-                        .child("Events"),
+                        .child(t!("events-title")),
                 )
             })
             .when(view == EventsView::Calendar, |row| {
@@ -132,19 +137,29 @@ impl MainView {
                     .child(labels::short_month_heading(page_month, Zoned::now().date()))
             }
         });
-        let previous = month_button("previous-month", "chevron-left", "Previous month", theme)
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.previous_month(&PreviousMonth, window, cx);
-            }));
-        let next = month_button("next-month", "chevron-right", "Next month", theme)
-            .on_click(cx.listener(|this, _, window, cx| this.next_month(&NextMonth, window, cx)));
+        let previous = month_button(
+            "previous-month",
+            "chevron-left",
+            t!("events-previous-month"),
+            theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.previous_month(&PreviousMonth, window, cx);
+        }));
+        let next = month_button(
+            "next-month",
+            "chevron-right",
+            t!("events-next-month"),
+            theme,
+        )
+        .on_click(cx.listener(|this, _, window, cx| this.next_month(&NextMonth, window, cx)));
         let mut controls = vec![
             month.into_any_element(),
             previous.into_any_element(),
             next.into_any_element(),
         ];
         if full {
-            let today = button("events-today", "Today", Tone::Soft, cx)
+            let today = button("events-today", t!("events-today"), Tone::Soft, cx)
                 .h(px(28.))
                 .px_3()
                 .on_click(cx.listener(|this, _, window, cx| {
@@ -159,7 +174,7 @@ impl MainView {
 fn month_button(
     id: &'static str,
     glyph: &'static str,
-    tip: &'static str,
+    tip: String,
     theme: &Theme,
 ) -> gpui::Stateful<Div> {
     let (bg, fg, border, hover) = (theme.panel, theme.text, theme.hairline, theme.hover);
@@ -175,7 +190,7 @@ fn month_button(
         .hover(move |s| s.bg(hover))
         .child(icon(glyph, px(16.), theme.muted))
         .tooltip(move |window, cx| {
-            Tooltip::new(tip)
+            Tooltip::new(tip.clone())
                 .bg(bg)
                 .text_color(fg)
                 .border_color(border)

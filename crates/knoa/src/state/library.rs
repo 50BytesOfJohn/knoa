@@ -14,7 +14,10 @@ use knoa_core::{
 };
 use knoa_store::{AddedLink, Counts, NewLink, Store};
 
-use crate::state::{batch::Batch, database::Database, settings::SettingsFile};
+use crate::{
+    i18n,
+    state::{batch::Batch, database::Database, settings::SettingsFile},
+};
 
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
@@ -215,7 +218,8 @@ impl Library {
     }
 
     fn query(&self) -> Query {
-        let mut query = Query::parse(&self.search, Some(self.workspace), self.place);
+        let search = i18n::with_kind_slugs(&self.search);
+        let mut query = Query::parse(&search, Some(self.workspace), self.place);
         if self.kind.is_some() {
             query.kind = self.kind;
         }

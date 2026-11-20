@@ -14,7 +14,7 @@ mod folder_editor;
 mod groups;
 mod keys;
 mod masonry;
-mod menu_trigger;
+pub(super) mod menu_trigger;
 mod navigation;
 mod opening;
 mod overlay;

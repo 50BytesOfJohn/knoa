@@ -10,8 +10,9 @@ use gpui::{
 };
 use jiff::Zoned;
 
-use super::{form, updates::when};
+use super::{form, updates::When};
 use crate::{
+    i18n::t,
     services::cloud::{Cloud, Notice, Phase, SyncStatus},
     state::library::Library,
     ui::{
@@ -165,9 +166,11 @@ impl AccountPage {
             SyncStatus::Offline => "Offline. Changes sync when Knoa can reach the server.".into(),
             SyncStatus::Error(err) => format!("Sync stopped: {err}"),
         };
-        let last = match cloud.last_synced() {
-            Some(at) => format!("Last synced {}", when(at, &Zoned::now())),
-            None => "Not synced yet".to_owned(),
+        let last = match cloud.last_synced().map(|at| When::of(at, &Zoned::now())) {
+            Some(When::Today(time)) => t!("settings-account-synced-today", time = time),
+            Some(When::Yesterday(time)) => t!("settings-account-synced-yesterday", time = time),
+            Some(When::On(date)) => t!("settings-account-synced-on", date = date),
+            None => t!("settings-account-not-synced"),
         };
         let mut rows = vec![form::row(&status, Some(&last), gpui::Empty, theme)];
         let notices = cloud.notices();

@@ -49,6 +49,8 @@ pub struct SettingsView {
     account: Entity<AccountPage>,
     /// The page of the workspace shown, while one is.
     workspace: Option<Entity<WorkspacePage>>,
+    /// Shown under the language once the user changes it here.
+    language_note: Option<Entity<reorganize::Reorganize>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -81,6 +83,7 @@ impl SettingsView {
             ai,
             account,
             workspace: None,
+            language_note: None,
             _subscriptions: subscriptions,
         };
         view.show(page, window, cx);
@@ -205,7 +208,7 @@ impl Render for SettingsView {
 impl SettingsView {
     fn page_body(&self, cx: &mut Context<'_, SettingsView>) -> gpui::AnyElement {
         match (self.page, &self.workspace) {
-            (Page::General, _) => general::page(cx).into_any_element(),
+            (Page::General, _) => general::page(self, cx).into_any_element(),
             (Page::Appearance, _) => appearance::page(cx).into_any_element(),
             (Page::Ai, _) => self.ai.clone().into_any_element(),
             (Page::Account, _) => self.account.clone().into_any_element(),

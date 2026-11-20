@@ -4,14 +4,17 @@ use std::sync::Arc;
 
 use gpui::Context;
 use jiff::{Zoned, civil::Date};
-use knoa_core::{Bookmark, Place};
+use knoa_core::{Bookmark, Language, Place};
 
 use super::GAP;
-use crate::ui::main::{
-    MainView, cards,
-    groups::{self, Group},
-    masonry::{Layout, Spec},
-    tiles,
+use crate::{
+    i18n,
+    ui::main::{
+        MainView, cards,
+        groups::{self, Group},
+        masonry::{Layout, Spec},
+        tiles,
+    },
 };
 
 const HEADER_HEIGHT: f32 = 38.;
@@ -53,6 +56,8 @@ struct LayoutKey {
     /// The local date when grouping by date, so the first frame of a new day moves
     /// yesterday's "Today" along. `None` for relevance order, which has no dates.
     today: Option<Date>,
+    /// Group labels and card text change with the language.
+    language: Language,
 }
 
 impl Arrangement {
@@ -113,6 +118,7 @@ impl MainView {
             show_summaries,
             top: top.to_bits(),
             today: now.as_ref().map(Zoned::date),
+            language: i18n::language(),
         };
         if self.layout.key.as_ref() == Some(&key) {
             return;
