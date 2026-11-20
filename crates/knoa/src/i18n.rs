@@ -12,7 +12,6 @@ use i18n_embed::{
     LanguageLoader as _, fluent::FluentLanguageLoader, unic_langid::LanguageIdentifier,
 };
 use knoa_core::Language;
-use objc2_foundation::NSLocale;
 use rust_embed::RustEmbed;
 
 pub use vocabulary::{
@@ -47,12 +46,9 @@ pub fn language() -> Language {
     Language::parse(LOADER.current_language().language.as_str()).unwrap_or_default()
 }
 
-/// The Mac's first preferred language when Knoa speaks it, else English.
+/// The first of the Mac's preferred languages that Knoa speaks, else English.
 pub fn system_language() -> Language {
-    NSLocale::preferredLanguages()
-        .firstObject()
-        .and_then(|code| Language::parse(&code.to_string()))
-        .unwrap_or_default()
+    Language::first_spoken(apple_languages::system())
 }
 
 /// Set again on every language switch, which tells its observers. See [`on_change`].
