@@ -164,6 +164,72 @@ settings-account-organized-in-cloud = { -knoa } organizes your bookmarks in the 
 
 ## Sidebar
 
+sidebar-status-ai-needs-attention = AI needs attention
+sidebar-status-fix = Fix
+sidebar-sync-stopped = Sync stopped
+sidebar-retry = Retry
+sidebar-sync-paused = Sync paused
+sidebar-status-changes-not-synced = Changes didn't sync
+sidebar-status-view = View
+sidebar-status-plan-limit = Plan limit reached
+sidebar-status-upgrade = Upgrade
+sidebar-status-organizing = Organizing { $current } of { $total }…
+sidebar-status-ai-off = AI is off
+sidebar-status-turn-on = Turn on
+sidebar-status-offline = Offline. Changes sync later.
+sidebar-syncing = Syncing…
+sidebar-sync-offline =
+    { $count ->
+        [0] Offline
+        [one] Offline · { $count } change waiting
+       *[other] Offline · { $count } changes waiting
+    }
+sidebar-synced-just-now = Synced just now
+sidebar-synced-minutes-ago =
+    { $minutes ->
+        [one] Synced { $minutes } min ago
+       *[other] Synced { $minutes } min ago
+    }
+sidebar-synced-hours-ago =
+    { $hours ->
+        [one] Synced { $hours } hr ago
+       *[other] Synced { $hours } hr ago
+    }
+sidebar-account-settings = Account settings…
+sidebar-open-web = Open { -knoa } on the web
+sidebar-sign-out = Sign out
+sidebar-sign-in = Sign in…
+sidebar-finish-in-browser = Finish in browser
+sidebar-cancel = Cancel
+sidebar-plan-pro = { -knoa } Pro
+sidebar-plan-free = Free plan
+sidebar-signed-in = Signed in
+sidebar-manage-plan = Manage plan…
+sidebar-upgrade-to-pro = Upgrade to Pro
+sidebar-this-mac = This Mac
+sidebar-knoa-account = { -knoa } account
+sidebar-place-everything = Everything
+sidebar-place-gallery = Gallery
+sidebar-place-events = Events
+sidebar-place-up-next = Up next
+sidebar-place-unsorted = Unsorted
+sidebar-place-not-organized = Not organized
+sidebar-place-set-aside = Set aside
+sidebar-place-trash = Trash
+sidebar-settings = Settings
+sidebar-folders = Folders
+sidebar-new-folder = New folder
+sidebar-folder-new-subfolder = New subfolder
+sidebar-folder-edit = Edit folder…
+sidebar-folder-delete = Delete…
+sidebar-folder-move-to = Move to
+sidebar-folder-top-level = Top level
+sidebar-add-link = Add link
+sidebar-workspaces-title = Workspaces
+sidebar-workspaces-new = New workspace
+sidebar-workspaces-by-hand = Links added by hand
+sidebar-workspaces-from = From { $browsers }
+
 ## Main
 
 ## Detail

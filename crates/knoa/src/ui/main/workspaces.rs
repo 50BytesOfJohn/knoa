@@ -9,6 +9,7 @@ use gpui::{
 use knoa_core::Workspace;
 
 use super::MainView;
+use crate::i18n::t;
 use crate::ui::{
     components::{icon, workspace_mark},
     theme::{ROW_RADIUS, Theme},
@@ -39,7 +40,7 @@ impl MainView {
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.faint)
-                    .child("Workspaces"),
+                    .child(t!("sidebar-workspaces-title")),
             )
             .child(list)
             .child(
@@ -56,7 +57,7 @@ impl MainView {
                     .cursor_pointer()
                     .hover(|s| s.bg(theme.hover))
                     .child(icon("plus", px(15.), theme.muted))
-                    .child("New workspace")
+                    .child(t!("sidebar-workspaces-new"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.edit_workspace(None, window, cx);
                     })),
@@ -139,8 +140,8 @@ fn synced_from(browsers: &[String]) -> String {
         .collect();
     names.dedup();
     if names.is_empty() {
-        "Links added by hand".to_owned()
+        t!("sidebar-workspaces-by-hand")
     } else {
-        format!("From {}", names.join(", "))
+        t!("sidebar-workspaces-from", browsers = (names.join(", ")))
     }
 }

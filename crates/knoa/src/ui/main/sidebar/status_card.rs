@@ -12,8 +12,11 @@ use super::{
     INSET, SidebarEvent, SidebarView,
     status::{CloudState, Status},
 };
+use knoa_core::Language;
+
 use crate::{
     assets::line_icon,
+    i18n::{self, t},
     services::cloud::{Cloud, Phase},
     ui::{
         components::svg_icon,
@@ -31,7 +34,8 @@ const BAR_HEIGHT: Pixels = px(3.);
 /// The card's message, worked out when the status changes rather than on every frame.
 #[derive(Default)]
 pub(super) struct StatusCard {
-    shown: Option<(Status, Message)>,
+    /// The message in the language it was written in, so a switch writes it again.
+    shown: Option<(Status, Language, Message)>,
     /// Goes up each time the card appears, which replays its fade.
     appearances: usize,
     bar: Bar,
@@ -49,7 +53,7 @@ struct Message {
     text: SharedString,
     tone: Tone,
     mark: Mark,
-    action: Option<(&'static str, CardAction)>,
+    action: Option<(SharedString, CardAction)>,
 }
 
 #[derive(Clone, Copy)]
@@ -81,7 +85,9 @@ impl StatusCard {
             self.bar = Bar::default();
             return None;
         };
-        if self.shown.as_ref().map(|(shown, _)| *shown) != Some(status) {
+        let language = i18n::language();
+        let key = self.shown.as_ref().map(|(shown, lang, _)| (*shown, *lang));
+        if key != Some((status, language)) {
             if self.shown.is_none() {
                 self.appearances += 1;
             }
@@ -92,72 +98,77 @@ impl StatusCard {
                     moves: self.bar.moves + 1,
                 };
             }
-            self.shown = Some((status, Message::of(status)));
+            self.shown = Some((status, language, Message::of(status)));
         }
-        self.shown.as_ref().map(|(_, message)| message)
+        self.shown.as_ref().map(|(_, _, message)| message)
     }
 }
 
 impl Message {
     fn of(status: Status) -> Message {
-        let message = |text: &'static str, tone, mark, action| Message {
-            text: SharedString::new_static(text),
+        let message = |text: String, tone, mark, action: Option<(String, CardAction)>| Message {
+            text: text.into(),
             tone,
             mark,
-            action,
+            action: action.map(|(label, action)| (label.into(), action)),
         };
         match status {
             Status::AiNeedsAttention => message(
-                "AI needs attention",
+                t!("sidebar-status-ai-needs-attention"),
                 Tone::Danger,
                 Mark::Mascot(Mood::Worried),
-                Some(("Fix", CardAction::OpenAiSettings)),
+                Some((t!("sidebar-status-fix"), CardAction::OpenAiSettings)),
             ),
             Status::AllowanceUsedUp => message(
-                "AI needs attention",
+                t!("sidebar-status-ai-needs-attention"),
                 Tone::Danger,
                 Mark::Mascot(Mood::Worried),
-                Some(("Fix", CardAction::OpenAccountSettings)),
+                Some((t!("sidebar-status-fix"), CardAction::OpenAccountSettings)),
             ),
             Status::SyncStopped => message(
-                "Sync stopped",
+                t!("sidebar-sync-stopped"),
                 Tone::Danger,
                 Mark::CloudAlert,
-                Some(("Retry", CardAction::RetrySync)),
+                Some((t!("sidebar-retry"), CardAction::RetrySync)),
             ),
             Status::SyncPaused => message(
-                "Sync paused",
+                t!("sidebar-sync-paused"),
                 Tone::Danger,
                 Mark::CloudAlert,
-                Some(("Fix", CardAction::OpenAccountSettings)),
+                Some((t!("sidebar-status-fix"), CardAction::OpenAccountSettings)),
             ),
             Status::ChangesNotSynced => message(
-                "Changes didn't sync",
+                t!("sidebar-status-changes-not-synced"),
                 Tone::Plain,
                 Mark::CloudAlert,
-                Some(("View", CardAction::OpenAccountSettings)),
+                Some((t!("sidebar-status-view"), CardAction::OpenAccountSettings)),
             ),
             Status::PlanLimit => message(
-                "Plan limit reached",
+                t!("sidebar-status-plan-limit"),
                 Tone::Plain,
                 Mark::CloudAlert,
-                Some(("Upgrade", CardAction::Upgrade)),
+                Some((t!("sidebar-status-upgrade"), CardAction::Upgrade)),
             ),
             Status::Organizing(progress) => Message {
-                text: format!("Organizing {} of {}…", progress.current, progress.total).into(),
+                text: t!(
+                    "sidebar-status-organizing",
+                    current = (progress.current),
+                    total = (progress.total)
+                )
+                .into(),
                 tone: Tone::Ai,
                 mark: Mark::Mascot(Mood::Organizing),
                 action: None,
             },
             Status::AiOff => message(
-                "AI is off",
+                t!("sidebar-status-ai-off"),
                 Tone::Plain,
                 Mark::Mascot(Mood::Asleep),
                 // AI is off only while no provider is set up, so setting one up turns it on.
-                Some(("Turn on", CardAction::OpenAiSettings)),
+                Some((t!("sidebar-status-turn-on"), CardAction::OpenAiSettings)),
             ),
             Status::Offline => message(
-                "Offline. Changes sync later.",
+                t!("sidebar-status-offline"),
                 Tone::Plain,
                 Mark::CloudOff,
                 None,
@@ -175,7 +186,7 @@ impl SidebarView {
             message.text.clone(),
             message.tone,
             message.mark,
-            message.action,
+            message.action.clone(),
         );
         let theme = Theme::get(cx);
         let row =
@@ -195,7 +206,7 @@ impl SidebarView {
                         .child(text),
                 )
                 .when_some(action, |s, (label, action)| {
-                    s.child(text_button(label, theme).on_click(
+                    s.child(text_button("status-card-action", label, theme).on_click(
                         cx.listener(move |this, _, _, cx| this.run_card_action(action, cx)),
                     ))
                 });
@@ -310,10 +321,14 @@ fn tone_color(tone: Tone, theme: &Theme) -> Hsla {
 }
 
 /// A small accent-coloured text button, for the card's action and the account menu's.
-pub(super) fn text_button(label: &'static str, theme: &Theme) -> gpui::Stateful<gpui::Div> {
+pub(super) fn text_button(
+    id: &'static str,
+    label: impl Into<SharedString>,
+    theme: &Theme,
+) -> gpui::Stateful<gpui::Div> {
     let hover = theme.hover;
     div()
-        .id(label)
+        .id(id)
         .flex_none()
         .h(px(24.))
         .px(px(6.))
@@ -325,5 +340,5 @@ pub(super) fn text_button(label: &'static str, theme: &Theme) -> gpui::Stateful<
         .text_color(theme.accent)
         .cursor_pointer()
         .hover(move |s| s.bg(hover))
-        .child(label)
+        .child(label.into())
 }

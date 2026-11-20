@@ -15,6 +15,7 @@ use super::{
 };
 use crate::{
     assets::line_icon,
+    i18n::t,
     ui::{components::tip, main::NewFolder, theme::Theme},
 };
 
@@ -42,7 +43,7 @@ impl SidebarView {
         // Visibility, not display, as `row_button` says.
         .invisible()
         .group_hover(SIDEBAR_GROUP, gpui::Styled::visible)
-        .tooltip(tip("New folder", Some(&NewFolder), theme))
+        .tooltip(tip(t!("sidebar-new-folder"), Some(&NewFolder), theme))
         .on_click(cx.listener(|_, _, _, cx| cx.emit(SidebarEvent::NewFolder(None))));
         div()
             .mt(HEADER_SPACE)
@@ -54,7 +55,7 @@ impl SidebarView {
             .text_size(px(11.5))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(theme.muted)
-            .child(div().flex_1().child("Folders"))
+            .child(div().flex_1().child(t!("sidebar-folders")))
             .child(add)
     }
 

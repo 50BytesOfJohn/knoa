@@ -5,6 +5,7 @@ use gpui_component::menu::{PopupMenu, PopupMenuItem};
 use knoa_core::{FolderId, FolderTree};
 
 use super::{SidebarEvent, SidebarView};
+use crate::i18n::t;
 use crate::ui::components::icon_asset;
 
 /// Where a folder can move, read once when its menu opens.
@@ -51,21 +52,36 @@ pub(super) fn folder_menu(
     let can_nest = tree.check_new_child(Some(id)).is_ok();
     let targets = MoveTargets::of(&tree, id);
     let menu = if can_nest {
-        menu.item(item(view, "New subfolder", "folder-plus", move |_, cx| {
-            cx.emit(SidebarEvent::NewFolder(Some(id)));
-        }))
+        menu.item(item(
+            view,
+            t!("sidebar-folder-new-subfolder"),
+            "folder-plus",
+            move |_, cx| {
+                cx.emit(SidebarEvent::NewFolder(Some(id)));
+            },
+        ))
     } else {
         menu
     };
-    let menu = menu.item(item(view, "Edit folder…", "pencil", move |_, cx| {
-        cx.emit(SidebarEvent::EditFolder(id));
-    }));
+    let menu = menu.item(item(
+        view,
+        t!("sidebar-folder-edit"),
+        "pencil",
+        move |_, cx| {
+            cx.emit(SidebarEvent::EditFolder(id));
+        },
+    ));
     let menu = move_submenu(menu, view, id, targets, window, cx);
-    menu.item(item(view, "Delete…", "trash", move |_, cx| {
-        cx.emit(SidebarEvent::DeleteFolder(id));
-    }))
+    menu.item(item(
+        view,
+        t!("sidebar-folder-delete"),
+        "trash",
+        move |_, cx| {
+            cx.emit(SidebarEvent::DeleteFolder(id));
+        },
+    ))
     .separator()
-    .item(item(view, "New folder", "plus", |_, cx| {
+    .item(item(view, t!("sidebar-new-folder"), "plus", |_, cx| {
         cx.emit(SidebarEvent::NewFolder(None));
     }))
 }
@@ -85,7 +101,7 @@ fn move_submenu(
 ) -> PopupMenu {
     if targets.is_empty() {
         return menu.item(
-            PopupMenuItem::new("Move to")
+            PopupMenuItem::new(t!("sidebar-folder-move-to"))
                 .icon(icon_asset("folder-input"))
                 .disabled(true),
         );
@@ -93,14 +109,19 @@ fn move_submenu(
     let view = view.clone();
     menu.submenu_with_icon(
         Some(icon_asset("folder-input")),
-        "Move to",
+        t!("sidebar-folder-move-to"),
         window,
         cx,
         move |menu, _, _| {
             let menu = if targets.top_level {
-                let top = item(&view, "Top level", "folder-up", move |this, cx| {
-                    this.move_folder(id, None, cx);
-                });
+                let top = item(
+                    &view,
+                    t!("sidebar-folder-top-level"),
+                    "folder-up",
+                    move |this, cx| {
+                        this.move_folder(id, None, cx);
+                    },
+                );
                 let menu = menu.item(top);
                 if targets.parents.is_empty() {
                     menu
