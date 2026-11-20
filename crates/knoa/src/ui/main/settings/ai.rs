@@ -1,15 +1,15 @@
 //! The AI page: connecting OpenRouter, the models in use, organizing the bookmarks that
 //! came in before AI was on, and what AI has cost.
 
+mod key;
 mod pro;
 mod usage;
 
 use gpui::{
-    AnyElement, AppContext as _, Context, Div, Entity, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Task, TaskExt as _, Window, div, px,
+    AppContext as _, Context, Div, Entity, IntoElement, ParentElement as _, Render,
+    StatefulInteractiveElement as _, Styled as _, Task, Window, div, px,
 };
-use gpui_component::input::{Input, InputState};
-use knoa_ai::ProviderKind;
+use gpui_component::input::InputState;
 
 use super::{
     form,
@@ -34,6 +34,7 @@ use crate::{
         theme::Theme,
     },
 };
+use key::KeyCheck;
 
 /// About $0.17 per 1,000 bookmarks with the default models (enrichment research).
 const DOLLARS_PER_BOOKMARK: f64 = 0.000_17;
@@ -48,12 +49,6 @@ pub struct AiPage {
     /// `None` until the first load, so the page doesn't flash "no requests".
     usage: Option<UsageReport>,
     loading_usage: Option<Task<()>>,
-}
-
-enum KeyCheck {
-    Checking,
-    Connected,
-    Failed(String),
 }
 
 impl AiPage {
@@ -103,29 +98,6 @@ impl AiPage {
                 Err(err) => tracing::error!("can't load AI usage: {err}"),
             });
         }));
-    }
-
-    fn connect(&mut self, cx: &mut Context<'_, AiPage>) {
-        let key = self.key.read(cx).value().trim().to_owned();
-        if key.is_empty() {
-            return;
-        }
-        self.key_check = Some(KeyCheck::Checking);
-        let check = ai::check_key(ProviderKind::OpenRouter, key.clone(), cx);
-        self.checking = Some(cx.spawn(async move |this, cx| {
-            let result = check.await;
-            let _ = this.update(cx, |this, cx| {
-                this.key_check = Some(match result {
-                    Ok(()) => {
-                        ai::enable(ProviderKind::OpenRouter, &key, cx).detach_and_log_err(cx);
-                        KeyCheck::Connected
-                    }
-                    Err(err) => KeyCheck::Failed(err.to_string()),
-                });
-                cx.notify();
-            });
-        }));
-        cx.notify();
     }
 
     fn organize_existing(&mut self, cx: &mut Context<'_, AiPage>) {
@@ -189,32 +161,6 @@ impl Render for AiPage {
 }
 
 impl AiPage {
-    fn connect_group(&self, theme: &Theme, cx: &mut Context<'_, AiPage>) -> Div {
-        let field = div()
-            .flex()
-            .gap_2()
-            .child(div().flex_1().child(Input::new(&self.key)))
-            .child(
-                button("connect-ai", t!("settings-ai-connect"), Tone::Primary, cx)
-                    .on_click(cx.listener(|this, _, _, cx| this.connect(cx))),
-            );
-        let mut rows = vec![form::stacked(
-            &t!("settings-ai-key"),
-            Some(&t!("settings-ai-key-about")),
-            field,
-            theme,
-        )];
-        rows.extend(self.message_row(theme));
-        rows.push(form::row(
-            &t!("settings-ai-no-key"),
-            Some(&t!("settings-ai-no-key-about")),
-            button("get-key", t!("settings-ai-get-key"), Tone::Soft, cx)
-                .on_click(|_, _, cx| cx.open_url(ProviderKind::OpenRouter.keys_url())),
-            theme,
-        ));
-        form::group(&t!("settings-ai-provider"), rows, theme)
-    }
-
     fn provider_group(
         &self,
         status: &AiStatus,
@@ -298,15 +244,5 @@ impl AiPage {
             rows.push(self.reorganize.clone().into_any_element());
         }
         form::group(&t!("settings-ai-existing"), rows, theme)
-    }
-
-    fn message_row(&self, theme: &Theme) -> Option<AnyElement> {
-        Some(match self.key_check.as_ref()? {
-            KeyCheck::Checking => form::note(t!("settings-ai-checking"), theme.muted),
-            KeyCheck::Connected => form::note(t!("settings-ai-key-connected"), theme.muted),
-            KeyCheck::Failed(err) => {
-                form::problem_note(t!("settings-ai-key-failed", error = err), theme)
-            }
-        })
     }
 }

@@ -1,12 +1,13 @@
 //! First-run setup: pick a browser, optionally connect AI, name the library. Every step
 //! can be skipped, and one click skips the whole thing with defaults.
 
+mod key_check;
 mod steps;
 
 use gpui::{
     Animation, AnimationExt as _, AppContext as _, Context, Entity, FocusHandle, FontWeight,
     InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Task, TaskExt as _, Window, div,
+    StatefulInteractiveElement as _, Styled as _, Subscription, TaskExt as _, Window, div,
     ease_out_quint, prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::{InputState, TextareaState};
@@ -20,6 +21,7 @@ use crate::{
     state::{library::Library, settings::SettingsFile},
     ui::theme::Theme,
 };
+use key_check::KeyCheck;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Step {
@@ -47,34 +49,6 @@ impl Step {
     fn back(self) -> Step {
         let at = Step::ORDER.iter().position(|s| *s == self).unwrap_or(0);
         Step::ORDER[at.saturating_sub(1)]
-    }
-}
-
-/// Where the key check stands.
-enum KeyCheck {
-    Idle,
-    /// Holds the running check; dropping it cancels the check.
-    Checking(#[allow(dead_code)] Task<()>),
-    Failed(KeyProblem),
-    Passed,
-}
-
-/// Why the key didn't pass, kept as data so it shows in the language of the moment.
-enum KeyProblem {
-    Missing,
-    Unknown,
-    CheckFailed(String),
-}
-
-impl KeyProblem {
-    fn message(&self) -> String {
-        match self {
-            KeyProblem::Missing => t!("onboarding-ai-key-missing"),
-            KeyProblem::Unknown => t!("onboarding-ai-key-unknown"),
-            KeyProblem::CheckFailed(error) => {
-                t!("onboarding-ai-key-check-failed", error = error.as_str())
-            }
-        }
     }
 }
 
@@ -181,37 +155,6 @@ impl Onboarding {
             Step::Done => self.apply(cx),
             _ => {}
         }
-        cx.notify();
-    }
-
-    /// Checks the pasted key, then moves on.
-    fn check_key(&mut self, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
-        let key = self.key.read(cx).value().trim().to_owned();
-        if key.is_empty() {
-            self.key_check = KeyCheck::Failed(KeyProblem::Missing);
-            cx.notify();
-            return;
-        }
-        let check = ai::check_key(ProviderKind::OpenRouter, key, cx);
-        let window_handle = window.window_handle();
-        self.key_check = KeyCheck::Checking(cx.spawn(async move |this, cx| {
-            let result = check.await;
-            let _ = cx.update_window(window_handle, |_, window, cx| {
-                let _ = this.update(cx, |this, cx| match result {
-                    Ok(()) => {
-                        this.key_check = KeyCheck::Passed;
-                        this.go(Step::Library, window, cx);
-                    }
-                    Err(err) => {
-                        this.key_check = KeyCheck::Failed(match err {
-                            knoa_ai::Error::Unauthorized => KeyProblem::Unknown,
-                            other => KeyProblem::CheckFailed(other.to_string()),
-                        });
-                        cx.notify();
-                    }
-                });
-            });
-        }));
         cx.notify();
     }
 
