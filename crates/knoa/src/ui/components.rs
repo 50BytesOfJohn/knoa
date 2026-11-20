@@ -11,6 +11,8 @@ use knoa_core::{FolderGlyph, FolderIcon, Ink, Kind, protocol::max_chars::fits};
 
 use crate::{
     assets::knoa_icon,
+    format,
+    i18n::t,
     ui::theme::{CARD_RADIUS, Theme},
 };
 
@@ -199,6 +201,12 @@ pub fn grouped(n: u64) -> String {
     out
 }
 
+/// The limit, written out, when `text` is past the server's `max` characters for its
+/// field, which would keep the change on this Mac only. The caller says it in a sentence.
+pub fn over_limit(text: &str, max: usize) -> Option<String> {
+    (!fits(text, max)).then(|| grouped(max as u64))
+}
+
 /// Why `text` can't be saved when it's past the server's `max` characters for its field,
 /// which would keep the change on this Mac only: "Instructions can be at most 10,000
 /// characters."
@@ -240,9 +248,10 @@ pub fn blocked_browsers_notice(blocked: &[Browser], cx: &App) -> Option<Div> {
     }
     let theme = Theme::get(cx);
     let names: Vec<&str> = blocked.iter().map(|b| b.name()).collect();
-    let text = format!(
-        "{} is installed, but macOS keeps its bookmarks private. Give Knoa Full Disk Access, then restart Knoa.",
-        names.join(" and ")
+    let text = t!(
+        "main-blocked-browsers",
+        count = (names.len()),
+        browsers = (format::list(&names))
     );
     Some(
         div()
@@ -257,8 +266,13 @@ pub fn blocked_browsers_notice(blocked: &[Browser], cx: &App) -> Option<Div> {
             .text_color(theme.muted)
             .child(text)
             .child(
-                button("full-disk-access", "Open Privacy settings", Tone::Soft, cx)
-                    .on_click(|_, _, cx| cx.open_url(FULL_DISK_ACCESS_SETTINGS)),
+                button(
+                    "full-disk-access",
+                    t!("main-open-privacy-settings"),
+                    Tone::Soft,
+                    cx,
+                )
+                .on_click(|_, _, cx| cx.open_url(FULL_DISK_ACCESS_SETTINGS)),
             ),
     )
 }
@@ -289,7 +303,7 @@ pub fn workspace_mark(name: &str, color: Ink, size: Pixels, cx: &App) -> Div {
 /// A tooltip in the theme's panel colors, with the key that does the same from the card
 /// grid, if any.
 pub fn tip(
-    text: &'static str,
+    text: impl Into<SharedString>,
     action: Option<&'static dyn gpui::Action>,
     theme: &Theme,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
@@ -298,14 +312,15 @@ pub fn tip(
 
 /// A [`tip`] showing the key bound to `action` in key context `context`.
 pub fn tip_in(
-    text: &'static str,
+    text: impl Into<SharedString>,
     action: Option<&'static dyn gpui::Action>,
     context: &'static str,
     theme: &Theme,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let text: SharedString = text.into();
     let (bg, fg, border) = (theme.panel, theme.text, theme.hairline);
     move |window, cx| {
-        let tooltip = Tooltip::new(text);
+        let tooltip = Tooltip::new(text.clone());
         let tooltip = match action {
             Some(action) => tooltip.action(action, Some(context)),
             None => tooltip,

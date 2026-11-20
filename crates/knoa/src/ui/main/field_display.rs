@@ -1,18 +1,19 @@
-//! Field values as the user reads them: `knoa_core`'s display, but dates and times in the
-//! app's language, and a time with an offset in this Mac's time zone, where the Events
-//! page places it.
+//! Field values as the user reads them: `knoa_core`'s display, but dates, times and
+//! durations in the app's language, and a time with an offset in this Mac's time zone,
+//! where the Events page places it.
 
 use jiff::{civil, tz::TimeZone};
 use knoa_core::{Bookmark, EventTime, FieldDef, FieldType};
 use serde_json::Value;
 
 use super::events::local_time;
-use crate::format;
+use crate::{format, i18n::t};
 
 pub(super) fn display(def: &FieldDef, value: &Value) -> String {
     let shown = match def.ty {
         FieldType::DateTime => value.as_str().and_then(event_time),
         FieldType::Date => value.as_str().and_then(date),
+        FieldType::Duration => value.as_i64().map(duration),
         _ => None,
     };
     shown.unwrap_or_else(|| def.display(value))
@@ -33,6 +34,19 @@ fn event_time(text: &str) -> Option<String> {
         format::WEEKDAY_DATE_YEAR
     };
     Some(format::floating(local, skeleton))
+}
+
+/// `148` minutes as "2h 28m", `45` as "45 min".
+fn duration(minutes: i64) -> String {
+    match (minutes / 60, minutes % 60) {
+        (0, minutes) => t!("main-duration-minutes", minutes = minutes),
+        (hours, 0) => t!("main-duration-hours", hours = hours),
+        (hours, minutes) => t!(
+            "main-duration-hours-minutes",
+            hours = hours,
+            minutes = minutes
+        ),
+    }
 }
 
 /// A `YYYY-MM-DD` date, or only its month or year when that's all that is known.

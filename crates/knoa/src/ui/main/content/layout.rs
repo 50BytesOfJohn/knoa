@@ -9,6 +9,7 @@ use knoa_core::{Bookmark, Language, Place};
 use super::GAP;
 use crate::{
     i18n,
+    i18n::t,
     ui::main::{
         MainView, cards,
         groups::{self, Group},
@@ -85,7 +86,7 @@ impl Arrangement {
                 let added: Vec<i64> = results.iter().map(|b| b.added_at).collect();
                 groups::by_date(&added, now)
             }
-            (None, Arrangement::Cards) => groups::single("Best matches", results.len()),
+            (None, Arrangement::Cards) => groups::single(&t!("main-best-matches"), results.len()),
             (None, Arrangement::Pictures) => groups::single("", results.len()),
         }
     }

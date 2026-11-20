@@ -9,7 +9,7 @@ use knoa_core::{Kind, Place};
 
 use super::{MainView, Overlay};
 use crate::{
-    i18n,
+    i18n::{self, t},
     ui::{
         components::icon,
         theme::{MARGIN, Theme},
@@ -28,6 +28,7 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
+        self.translate_search_placeholder(window, cx);
         let theme = Theme::get(cx).clone();
         let (left, right) = super::content::content_span(window, show_detail);
         let width = (right - left - 40.).min(PILL_MAX_WIDTH);
@@ -35,13 +36,13 @@ impl MainView {
         let total = library.results().len();
         let scope = match library.place() {
             Place::Everything => None,
-            Place::Gallery => Some("Gallery".to_owned()),
-            Place::Events => Some("Events".to_owned()),
-            Place::UpNext => Some("Up next".to_owned()),
-            Place::Unsorted => Some("Unsorted".to_owned()),
-            Place::NotOrganized => Some("Not organized".to_owned()),
-            Place::SetAside => Some("Set aside".to_owned()),
-            Place::Trash => Some("Trash".to_owned()),
+            Place::Gallery => Some(t!("main-place-gallery")),
+            Place::Events => Some(t!("main-place-events")),
+            Place::UpNext => Some(t!("main-place-up-next")),
+            Place::Unsorted => Some(t!("main-place-unsorted")),
+            Place::NotOrganized => Some(t!("main-place-not-organized")),
+            Place::SetAside => Some(t!("main-place-set-aside")),
+            Place::Trash => Some(t!("main-place-trash")),
             Place::Folder(id) => {
                 let tree = library.folder_tree();
                 tree.get(id).map(|_| tree.path_name(id))
@@ -91,7 +92,7 @@ impl MainView {
                         .flex_none()
                         .text_xs()
                         .text_color(theme.muted)
-                        .child(format!("{total} found")),
+                        .child(t!("main-search-found", count = total)),
                 )
             })
             .child(
@@ -122,6 +123,22 @@ impl MainView {
             .gap_2()
             .child(pill)
             .child(self.kind_chips(cx))
+    }
+
+    /// An input keeps the placeholder it was made with, so a language switch sets it again.
+    fn translate_search_placeholder(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        let language = i18n::language();
+        if self.search_language == language {
+            return;
+        }
+        self.search_language = language;
+        self.search.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-search-placeholder"), window, cx);
+        });
     }
 
     fn kind_chips(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
@@ -155,17 +172,23 @@ impl MainView {
         // The Gallery holds media kinds only, so choosing among them says little.
         let in_gallery = library.place() == Place::Gallery;
         if !in_gallery && (counts.len() > 1 || current.is_some()) {
-            row = row.child(chip("kind-all", "All".into(), current.is_none()).on_click(
-                cx.listener(|this, _, _, cx| {
-                    this.library
-                        .update(cx, |library, cx| library.set_kind(None, cx));
-                }),
-            ));
+            row = row.child(
+                chip("kind-all", t!("main-kind-all"), current.is_none()).on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.library
+                            .update(cx, |library, cx| library.set_kind(None, cx));
+                    },
+                )),
+            );
             for (kind, count) in counts {
                 row = row.child(
                     chip(
                         kind.slug(),
-                        format!("{} {count}", i18n::kind_plural(kind)),
+                        t!(
+                            "main-kind-chip",
+                            kind = (i18n::kind_plural(kind)),
+                            count = count
+                        ),
                         current == Some(kind),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {

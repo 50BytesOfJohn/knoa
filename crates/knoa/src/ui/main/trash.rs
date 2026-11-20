@@ -7,9 +7,12 @@ use gpui::{
 use knoa_core::{Bookmark, BookmarkId, Place, TRASH_SECONDS};
 
 use super::{DeleteSelected, MainView};
-use crate::ui::{
-    components::{Tone, button, icon},
-    theme::{CARD_RADIUS, PANEL_RADIUS, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::{Tone, button, icon},
+        theme::{CARD_RADIUS, PANEL_RADIUS, Theme},
+    },
 };
 
 pub const TRASH_BAR_HEIGHT: f32 = 56.;
@@ -59,9 +62,9 @@ impl MainView {
         let theme = Theme::get(cx).clone();
         let count = self.library.read(cx).results().len();
         let label = if self.confirm_empty_trash {
-            format!("Delete {count} for good")
+            t!("main-trash-delete-count", count = count)
         } else {
-            "Empty Trash".to_owned()
+            t!("main-trash-empty")
         };
         let tone = if self.confirm_empty_trash {
             Tone::Primary
@@ -88,7 +91,7 @@ impl MainView {
                 div()
                     .flex_1()
                     .text_color(theme.muted)
-                    .child("Bookmarks in Trash are deleted for good after 30 days."),
+                    .child(t!("main-trash-about")),
             )
             .child(button("empty-trash", label, tone, cx).on_click(cx.listener(
                 |this, _, _, cx| {
@@ -128,11 +131,10 @@ impl MainView {
                 .bg(theme.soft)
                 .text_sm()
                 .child(icon("trash", px(14.), theme.muted))
-                .child(
-                    div()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(format!("In Trash. {}", days_left(deleted_at, now()))),
-                ),
+                .child(div().font_weight(FontWeight::MEDIUM).child(t!(
+                    "main-trash-days-left",
+                    days = (days_left(deleted_at, now()))
+                ))),
         )
     }
 
@@ -147,24 +149,22 @@ impl MainView {
             .border_t_1()
             .border_color(theme.hairline)
             .child(
-                button("restore", "Restore", Tone::Primary, cx)
+                button("restore", t!("main-restore"), Tone::Primary, cx)
                     .flex_1()
                     .on_click(cx.listener(move |this, _, _, cx| this.restore(id, cx))),
             )
             .child(
-                button("delete-for-good", "Delete now", Tone::Soft, cx)
+                button("delete-for-good", t!("main-delete-now"), Tone::Soft, cx)
                     .on_click(cx.listener(move |this, _, _, cx| this.delete_for_good(id, cx))),
             )
     }
 }
 
-fn days_left(deleted_at: i64, now: i64) -> String {
+/// Whole days until Trash deletes it for good, counting a part day as one.
+fn days_left(deleted_at: i64, now: i64) -> i64 {
     const DAY: i64 = 24 * 60 * 60;
     let left = deleted_at + TRASH_SECONDS - now;
-    match (left + DAY - 1) / DAY {
-        ..=1 => "Deleted for good within a day.".to_owned(),
-        days => format!("Deleted for good in {days} days."),
-    }
+    ((left + DAY - 1) / DAY).max(1)
 }
 
 fn now() -> i64 {

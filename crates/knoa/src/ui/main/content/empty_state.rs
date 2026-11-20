@@ -3,11 +3,14 @@
 use gpui::{Context, IntoElement, ParentElement as _, Styled as _, div, px};
 use knoa_core::Place;
 
-use crate::ui::{
-    components::icon,
-    main::MainView,
-    mascot::{Mood, mascot},
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        components::icon,
+        main::MainView,
+        mascot::{Mood, mascot},
+        theme::Theme,
+    },
 };
 
 impl MainView {
@@ -20,53 +23,42 @@ impl MainView {
         let caught_up = library.search().is_empty() && library.place() == Place::NotOrganized;
         let (title, body) = if !library.search().is_empty() && library.place() == Place::Events {
             (
-                "No events match",
-                "Try fewer words, or a date filter like starts>2026-12-01.".to_owned(),
+                t!("main-empty-no-events-match"),
+                t!("main-empty-no-events-match-body"),
             )
         } else if !library.search().is_empty() {
             (
-                "Nothing matches",
-                "Try fewer words, or filters like kind:movie, site:github.com or #tag.".to_owned(),
+                t!("main-empty-nothing-matches"),
+                t!("main-empty-nothing-matches-body"),
             )
         } else if library.place() == Place::Trash {
-            (
-                "Trash is empty",
-                "Bookmarks you delete wait here for 30 days.".to_owned(),
-            )
+            (t!("main-empty-trash"), t!("main-empty-trash-body"))
         } else if library.place() == Place::NotOrganized {
-            (
-                "All caught up",
-                "Every bookmark here has been organized.".to_owned(),
-            )
+            (t!("main-empty-caught-up"), t!("main-empty-caught-up-body"))
         } else if library.place() == Place::Gallery {
             (
-                "No pictures here",
-                "Links straight to an image file show up here.".to_owned(),
+                t!("main-empty-no-pictures"),
+                t!("main-empty-no-pictures-body"),
             )
         } else if library.place() == Place::Events {
-            (
-                "No events here",
-                "Pages for concerts, talks and meetups show up here by date.".to_owned(),
-            )
+            (t!("main-empty-no-events"), t!("main-empty-no-events-body"))
         } else if library.place() == Place::Everything {
             let synced = library.workspace().is_some_and(|w| !w.browsers.is_empty());
             if synced {
                 (
-                    "Nothing here yet",
-                    "Bookmark something in your browser and it lands here a moment later."
-                        .to_owned(),
+                    t!("main-empty-nothing-yet"),
+                    t!("main-empty-nothing-yet-synced-body"),
                 )
             } else {
                 (
-                    "Nothing here yet",
-                    "Add a link with ⌘N, or pick a browser for this workspace from the workspace menu."
-                        .to_owned(),
+                    t!("main-empty-nothing-yet"),
+                    t!("main-empty-nothing-yet-unsynced-body"),
                 )
             }
         } else {
             (
-                "Nothing here yet",
-                "Bookmarks show up here as you add them.".to_owned(),
+                t!("main-empty-nothing-yet"),
+                t!("main-empty-nothing-yet-body"),
             )
         };
         div()

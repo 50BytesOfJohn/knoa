@@ -21,6 +21,7 @@ use super::{
     ShowDetails, ToggleUpNext, picture::has_picture,
 };
 use crate::{
+    i18n::t,
     services::thumbnails::{Refresh, Thumbnails},
     ui::{
         components::{Finish, folder_mark, icon_asset},
@@ -124,7 +125,13 @@ pub(super) fn bookmark_menu(
         let menu = filing_items(menu, view, &target, window, cx).separator();
         let menu = refreshing_items(menu, view, &target).separator();
         menu.item(target.shortcut(
-            item(view, "Move to Trash", "trash", id, MainView::move_to_trash),
+            item(
+                view,
+                t!("main-move-to-trash"),
+                "trash",
+                id,
+                MainView::move_to_trash,
+            ),
             DeleteSelected,
         ))
     }
@@ -132,20 +139,32 @@ pub(super) fn bookmark_menu(
 
 fn opening_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) -> PopupMenu {
     let id = target.bookmark.id;
-    let open = item(view, "Open", "external-link", id, |this, id, cx| {
-        this.open_bookmark(id, Activation::Foreground, cx);
-    });
+    let open = item(
+        view,
+        t!("main-open"),
+        "external-link",
+        id,
+        |this, id, cx| {
+            this.open_bookmark(id, Activation::Foreground, cx);
+        },
+    );
     let open_behind = item(
         view,
-        "Open in background",
+        t!("main-open-in-background"),
         "app-window",
         id,
         |this, id, cx| {
             this.open_bookmark(id, Activation::Background, cx);
         },
     );
-    let copy = item(view, "Copy link", "link", id, MainView::copy_link_of);
-    let details = item(view, "Show details", "info", id, MainView::select);
+    let copy = item(
+        view,
+        t!("main-copy-link"),
+        "link",
+        id,
+        MainView::copy_link_of,
+    );
+    let details = item(view, t!("main-show-details"), "info", id, MainView::select);
     let menu = menu
         .item(target.shortcut(open, OpenSelected))
         .item(target.shortcut(open_behind, OpenSelectedInBackground))
@@ -163,7 +182,7 @@ fn picture_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) 
     let id = target.bookmark.id;
     let view_picture = {
         let view = view.clone();
-        PopupMenuItem::new("View picture")
+        PopupMenuItem::new(t!("main-view-picture"))
             .icon(icon_asset("maximize-2"))
             .on_click(move |_, window, cx| {
                 let _ = view.update(cx, |this, cx| this.open_viewer(id, window, cx));
@@ -173,14 +192,14 @@ fn picture_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) 
         .item(target.shortcut(view_picture, QuickLook))
         .item(item(
             view,
-            "Copy image",
+            t!("main-copy-image"),
             "copy",
             id,
             MainView::copy_image_of,
         ))
         .item(item(
             view,
-            "Save image…",
+            t!("main-save-image"),
             "download",
             id,
             MainView::save_image_of,
@@ -196,9 +215,9 @@ fn filing_items(
 ) -> PopupMenu {
     let id = target.bookmark.id;
     let (label, icon) = if target.bookmark.up_next {
-        ("Remove from Up next", "bookmark-minus")
+        (t!("main-remove-from-up-next"), "bookmark-minus")
     } else {
-        ("Add to Up next", "bookmark-plus")
+        (t!("main-add-to-up-next"), "bookmark-plus")
     };
     let up_next = item(view, label, icon, id, MainView::set_up_next);
     let menu = menu.item(target.shortcut(up_next, ToggleUpNext));
@@ -209,7 +228,10 @@ fn filing_items(
     let folder_id = folder.id;
     menu.item(item(
         view,
-        format!("Remove from {}", target.folders.path_name(folder_id)),
+        t!(
+            "main-remove-from-folder",
+            folder = (target.folders.path_name(folder_id))
+        ),
         "folder-minus",
         id,
         move |this, id, cx| this.set_in_folder(id, folder_id, false, cx),
@@ -226,7 +248,7 @@ fn folder_submenu(
 ) -> PopupMenu {
     if target.folders.is_empty() {
         return menu.item(
-            PopupMenuItem::new("Add to folder")
+            PopupMenuItem::new(t!("main-add-to-folder"))
                 .icon(icon_asset("folder-plus"))
                 .disabled(true),
         );
@@ -240,7 +262,7 @@ fn folder_submenu(
         .collect();
     menu.submenu_with_icon(
         Some(icon_asset("folder-plus")),
-        "Add to folder",
+        t!("main-add-to-folder"),
         window,
         cx,
         move |menu, _, cx| folder_items(menu, &view, id, &folders, cx),
@@ -305,17 +327,17 @@ fn refreshing_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Targe
     let id = target.bookmark.id;
     let refreshing = target.refresh == Some(Refresh::Running);
     let thumbnail = if refreshing {
-        "Refreshing thumbnail…"
+        t!("main-refreshing-thumbnail")
     } else {
-        "Refresh thumbnail"
+        t!("main-refresh-thumbnail")
     };
     let organizing = target.bookmark.status.is_waiting();
     let organize = if organizing {
-        "Organizing…"
+        t!("main-organizing")
     } else if target.bookmark.status.is_organized() {
-        "Organize again"
+        t!("main-organize-again")
     } else {
-        "Organize"
+        t!("main-organize")
     };
     menu.item(item(view, thumbnail, "image", id, MainView::refresh_thumbnail).disabled(refreshing))
         .item(item(view, organize, "sparkles", id, MainView::organize).disabled(organizing))
@@ -325,10 +347,16 @@ fn trash_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) ->
     let id = target.bookmark.id;
     opening_items(menu, view, target)
         .separator()
-        .item(item(view, "Restore", "undo-2", id, MainView::restore))
         .item(item(
             view,
-            "Delete now",
+            t!("main-restore"),
+            "undo-2",
+            id,
+            MainView::restore,
+        ))
+        .item(item(
+            view,
+            t!("main-delete-now"),
             "trash",
             id,
             MainView::delete_for_good,
