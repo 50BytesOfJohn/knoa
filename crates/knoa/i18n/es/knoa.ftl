@@ -2,708 +2,708 @@
 ## One word per concept, used everywhere in this language.
 
 -knoa = Knoa
--workspace = workspace
--bookmark = bookmark
--folder = folder
--tag = tag
--summary = summary
--organize = organize
+-workspace = espacio
+-bookmark = marcador
+-folder = carpeta
+-tag = etiqueta
+-summary = resumen
+-organize = organizar
 
 ## Menus
 
-menu-about = About { $name }
-menu-check-for-updates = Check for Updates…
-menu-settings = Settings…
-menu-services = Services
-menu-hide = Hide { $name }
-menu-hide-others = Hide Others
-menu-show-all = Show All
-menu-quit = Quit { $name }
-menu-help = Help
-menu-whats-new = What's New in { $name } { $version }
-menu-report-issue = Report an Issue…
+menu-about = Acerca de { $name }
+menu-check-for-updates = Buscar actualizaciones…
+menu-settings = Ajustes…
+menu-services = Servicios
+menu-hide = Ocultar { $name }
+menu-hide-others = Ocultar otros
+menu-show-all = Mostrar todo
+menu-quit = Salir de { $name }
+menu-help = Ayuda
+menu-whats-new = Novedades de { $name } { $version }
+menu-report-issue = Reportar un problema…
 
 ## Onboarding
 
-onboarding-skip-setup = Skip setup →
-onboarding-back = Back
-onboarding-next = Next
-onboarding-hello-title = Hi, I'm { -knoa }.
-onboarding-hello-lead = You keep bookmarking things like a squirrel stocking up for winter. I find them again. I read your browser's bookmarks, work out what each one is, and keep the lot tidy.
-onboarding-hello-questions = Three quick questions. Or none, if you're in a hurry.
-onboarding-hello-start = Let's go
-onboarding-hello-defaults = Use the defaults
-onboarding-hello-have-account = Already have a { -knoa } account?
-onboarding-hello-sign-in = Sign in
-onboarding-browser-title = Where do your bookmarks live?
-onboarding-browser-lead = Keep bookmarking the way you do. I'll notice new ones within a couple of seconds. I only read; I never touch your browser's bookmarks.
+onboarding-skip-setup = Omitir configuración →
+onboarding-back = Atrás
+onboarding-next = Siguiente
+onboarding-hello-title = Hola, soy { -knoa }.
+onboarding-hello-lead = Guardas cosas sin parar como una ardilla preparándose para el invierno. Yo las vuelvo a encontrar. Leo los marcadores de tu navegador, averiguo qué es cada uno y lo mantengo todo en orden.
+onboarding-hello-questions = Tres preguntas rápidas. O ninguna, si tienes prisa.
+onboarding-hello-start = Empecemos
+onboarding-hello-defaults = Usar ajustes predeterminados
+onboarding-hello-have-account = ¿Ya tienes una cuenta de { -knoa }?
+onboarding-hello-sign-in = Iniciar sesión
+onboarding-browser-title = ¿Dónde viven tus marcadores?
+onboarding-browser-lead = Sigue guardando marcadores como siempre. Notaré los nuevos en un par de segundos. Solo leo; nunca toco los marcadores de tu navegador.
 onboarding-browser-count =
     { $count ->
-        [one] { $count } bookmark
-       *[other] { $count } bookmarks
+        [one] { $count } marcador
+       *[other] { $count } marcadores
     }
-onboarding-browser-none-found = I couldn't find a Chromium-based browser here (Helium, Chrome, Brave, Edge, Vivaldi). No worries: you can pick one later in Settings.
-onboarding-browser-bring-in = Bring in { $count }
-onboarding-ai-title = Want me to do the tidying?
-onboarding-ai-lead = With an OpenRouter key I'll read each new page and give it a kind, a summary, tags and a folder. It's your key and your account: about 17 cents per thousand bookmarks.
-onboarding-ai-key-placeholder = Paste your key: sk-or-v1-…
-onboarding-ai-check-key = Check key
-onboarding-ai-checking = Knocking on OpenRouter's door…
-onboarding-ai-key-works = That key works.
-onboarding-ai-key-missing = Paste a key first, or skip this step.
-onboarding-ai-key-unknown = OpenRouter doesn't recognise that key. Double-check it?
-onboarding-ai-key-check-failed = Couldn't check the key: { $error }
-onboarding-ai-get-key = Get a key ↗
-onboarding-ai-without-key = Without one, I still fetch images and descriptions.
-onboarding-ai-skip = Skip, no AI
-onboarding-library-title = Last thing: what's this library called?
+onboarding-browser-none-found = No encontré ningún navegador basado en Chromium aquí (Helium, Chrome, Brave, Edge, Vivaldi). No pasa nada: puedes elegir uno más tarde en Ajustes.
+onboarding-browser-bring-in = Traer { $count }
+onboarding-ai-title = ¿Quieres que me encargue de ordenar?
+onboarding-ai-lead = Con una clave de OpenRouter leeré cada página nueva y le pondré un tipo, un resumen, etiquetas y una carpeta. Es tu clave y tu cuenta: unos 17 centavos de dólar por cada mil marcadores.
+onboarding-ai-key-placeholder = Pega tu clave: sk-or-v1-…
+onboarding-ai-check-key = Comprobar clave
+onboarding-ai-checking = Llamando a la puerta de OpenRouter…
+onboarding-ai-key-works = Esa clave funciona.
+onboarding-ai-key-missing = Pega una clave primero, u omite este paso.
+onboarding-ai-key-unknown = OpenRouter no reconoce esa clave. ¿La revisas?
+onboarding-ai-key-check-failed = No se pudo comprobar la clave: { $error }
+onboarding-ai-get-key = Obtener una clave ↗
+onboarding-ai-without-key = Sin ella, también obtengo imágenes y descripciones.
+onboarding-ai-skip = Omitir, sin IA
+onboarding-library-title = Por último: ¿cómo se llama esta biblioteca?
 onboarding-library-default-name = Personal
-onboarding-library-house-rules = Any house rules for organizing?
-onboarding-library-instructions-placeholder = Optional. Write it like you'd tell a friend.
-onboarding-library-example-apart = Keep work and personal things apart.
-onboarding-library-example-recipes = Tag recipes by cuisine.
-onboarding-library-example-rust = Anything about Rust goes in a Rust folder.
-onboarding-library-example-short = Short summaries, no fluff.
+onboarding-library-house-rules = ¿Alguna regla de la casa para organizar?
+onboarding-library-instructions-placeholder = Opcional. Escríbelo como se lo dirías a un amigo.
+onboarding-library-example-apart = Mantén el trabajo y lo personal por separado.
+onboarding-library-example-recipes = Etiqueta las recetas por tipo de cocina.
+onboarding-library-example-rust = Todo lo relacionado con Rust va en una carpeta Rust.
+onboarding-library-example-short = Resúmenes cortos, sin relleno.
 onboarding-library-add-example = + { $example }
-onboarding-library-finish = Finish
-onboarding-done-title = All set.
-onboarding-done-no-browser = No browser yet, so your library starts empty. Pick one in Settings whenever you like.
-onboarding-done-bringing-in = Bringing your bookmarks in…
+onboarding-library-finish = Finalizar
+onboarding-done-title = Todo listo.
+onboarding-done-no-browser = Todavía no hay ningún navegador, así que tu biblioteca empieza vacía. Elige uno en Ajustes cuando quieras.
+onboarding-done-bringing-in = Trayendo tus marcadores…
 onboarding-done-count =
     { $count ->
-        [one] { $count } bookmark is in, searchable right away.
-       *[other] { $count } bookmarks are in, searchable right away.
+        [one] { $count } marcador listo, ya puedes buscarlo.
+       *[other] { $count } marcadores listos, ya puedes buscarlos.
     }
 onboarding-done-organize-existing =
     { $count ->
-        [one] New bookmarks get organized on their own. Want me to go through the { $count } you already have too? About { $cost }.
-       *[other] New bookmarks get organized on their own. Want me to go through the { $count } you already have too? About { $cost }.
+        [one] Los marcadores nuevos se organizan solos. ¿Quieres que también revise el marcador que ya tienes? Unos { $cost }.
+       *[other] Los marcadores nuevos se organizan solos. ¿Quieres que también revise los { $count } que ya tienes? Unos { $cost }.
     }
-onboarding-done-organize = Yes, organize them
-onboarding-done-open-library = Open my library
+onboarding-done-organize = Sí, organízalos
+onboarding-done-open-library = Abrir mi biblioteca
 
 ## Settings
 
-settings-title = Settings
-settings-workspaces = Workspaces
-settings-new-workspace = New workspace
+settings-title = Ajustes
+settings-workspaces = Espacios
+settings-new-workspace = Nuevo espacio
 settings-nav-general = General
-settings-nav-appearance = Appearance
-settings-nav-ai = AI
-settings-nav-account = Account
+settings-nav-appearance = Apariencia
+settings-nav-ai = IA
+settings-nav-account = Cuenta
 settings-general-title = General
-settings-general-about = Where { -knoa } keeps your library, how it started, and how it updates.
-settings-general-library = Library
-settings-general-location = Library location
-settings-general-show-in-finder = Show in Finder
-settings-general-setup = Setup
-settings-general-run-setup-again = Run setup again
-settings-general-run-setup-about = Pick browsers, AI and instructions from the start. Your bookmarks stay.
-settings-general-run-setup = Run setup
-settings-general-language = Language
-settings-general-language-label = App and AI language
-settings-general-language-about = Menus, settings and dates, and the summaries and tags the AI writes.
-settings-general-language-note = Summaries and tags already written stay in their old language. Organizing your library again rewrites them.
-settings-general-language-organize = Organize again…
-settings-general-language-organize-confirm = Organize them all
+settings-general-about = Dónde guarda { -knoa } tu biblioteca, cómo empezó y cómo se actualiza.
+settings-general-library = Biblioteca
+settings-general-location = Ubicación de la biblioteca
+settings-general-show-in-finder = Mostrar en el Finder
+settings-general-setup = Configuración inicial
+settings-general-run-setup-again = Volver a configurar
+settings-general-run-setup-about = Elige navegadores, IA e instrucciones desde el inicio. Tus marcadores se conservan.
+settings-general-run-setup = Iniciar configuración
+settings-general-language = Idioma
+settings-general-language-label = Idioma de la app y la IA
+settings-general-language-about = Menús, ajustes y fechas, y los resúmenes y etiquetas que escribe la IA.
+settings-general-language-note = Los resúmenes y etiquetas que ya existen se quedan en su idioma anterior. Volver a organizar tu biblioteca los reescribe.
+settings-general-language-organize = Volver a organizar…
+settings-general-language-organize-confirm = Organizar todos
+settings-updates = Actualizaciones
 settings-general-language-waiting = You can organize again once your account has the new language.
-settings-updates = Updates
 settings-updates-version = { -knoa } { $version }
-settings-updates-self-built = This build doesn't update itself. Release builds from GitHub do.
-settings-updates-checked-today = Last checked today at { $time }
-settings-updates-checked-yesterday = Last checked yesterday at { $time }
-settings-updates-checked-on = Last checked on { $date }
-settings-updates-not-checked = Not checked yet
-settings-updates-check-now = Check Now
-settings-updates-check-automatically = Check for updates automatically
-settings-updates-check-automatically-about = Once a day, in the background.
-settings-updates-install-automatically = Install updates automatically
-settings-updates-install-automatically-about = Download new versions and install them when you quit { -knoa }.
-settings-appearance-title = Appearance
-settings-appearance-about = How { -knoa } looks. Changes show right away.
-settings-appearance-theme = Theme
-settings-appearance-light = Light
-settings-appearance-dark = Dark
-settings-appearance-library = Library
-settings-appearance-summaries = Show summaries on cards
-settings-appearance-summaries-about = Up to three lines under each title.
-settings-appearance-up-next = Show the Up next strip
-settings-appearance-up-next-about = The row of things to read or watch, at the top of Everything.
-settings-appearance-events = Show events as
-settings-appearance-events-about = A month calendar with what's coming up, or one list. On this Mac only.
-settings-reorganize-title = Organize again
-settings-reorganize-about = Folders only files organized bookmarks into the current folders, without reading pages or asking the chat model again. Everything also redoes summaries, fields and tags with the current instructions. Folders you set or removed stay as they are.
-settings-reorganize-all-title = Organize every workspace again
-settings-reorganize-all-about = The same for all workspaces at once, after you've changed folders in several.
-settings-reorganize-folders = Folders only…
-settings-reorganize-folders-confirm = File them all
-settings-reorganize-everything = Everything…
-settings-reorganize-everything-confirm = Organize them all
+settings-updates-self-built = Esta compilación no se actualiza sola. Las versiones publicadas en GitHub sí.
+settings-updates-checked-today = Última comprobación hoy a las { $time }
+settings-updates-checked-yesterday = Última comprobación ayer a las { $time }
+settings-updates-checked-on = Última comprobación el { $date }
+settings-updates-not-checked = Sin comprobar aún
+settings-updates-check-now = Buscar ahora
+settings-updates-check-automatically = Buscar actualizaciones automáticamente
+settings-updates-check-automatically-about = Una vez al día, en segundo plano.
+settings-updates-install-automatically = Instalar actualizaciones automáticamente
+settings-updates-install-automatically-about = Descarga nuevas versiones y las instala al salir de { -knoa }.
+settings-appearance-title = Apariencia
+settings-appearance-about = Cómo se ve { -knoa }. Los cambios se ven al instante.
+settings-appearance-theme = Tema
+settings-appearance-light = Claro
+settings-appearance-dark = Oscuro
+settings-appearance-library = Biblioteca
+settings-appearance-summaries = Mostrar resúmenes en las tarjetas
+settings-appearance-summaries-about = Hasta tres líneas debajo de cada título.
+settings-appearance-up-next = Mostrar la franja de A continuación
+settings-appearance-up-next-about = La fila con lo que quieres leer o ver, en la parte superior de Todo.
+settings-appearance-events = Mostrar eventos como
+settings-appearance-events-about = Un calendario mensual con lo próximo, o una sola lista. Solo en este Mac.
+settings-reorganize-title = Volver a organizar
+settings-reorganize-about = Solo carpetas clasifica los marcadores ya organizados en las carpetas actuales, sin volver a leer las páginas ni consultar de nuevo al modelo de chat. Todo también rehace resúmenes, campos y etiquetas con las instrucciones actuales. Las carpetas que elegiste o quitaste quedan como están.
+settings-reorganize-all-title = Volver a organizar todos los espacios
+settings-reorganize-all-about = Lo mismo para todos los espacios a la vez, después de cambiar carpetas en varios.
+settings-reorganize-folders = Solo carpetas…
+settings-reorganize-folders-confirm = Clasificar todos
+settings-reorganize-everything = Todo…
+settings-reorganize-everything-confirm = Organizar todos
 settings-reorganize-queued =
     { $count ->
-        [one] Queued { $count } bookmark.
-       *[other] Queued { $count } bookmarks.
+        [one] Se puso { $count } marcador en cola.
+       *[other] Se pusieron { $count } marcadores en cola.
     }
-settings-account-synced-today = Last synced today at { $time }
-settings-account-synced-yesterday = Last synced yesterday at { $time }
-settings-account-synced-on = Last synced on { $date }
-settings-account-not-synced = Not synced yet
-settings-account-start-trial = Start free trial
-settings-account-upgrade = Upgrade
-settings-account-manage-subscription = Manage subscription
-settings-account-usage = Usage
-settings-account-usage-device = { $used } of { $limit } bookmarks
-settings-account-usage-cloud = { $used } of { $limit } bookmarks, { $organized } of { $allowance } organized this month
-settings-account-plan-free = Free plan.
-settings-account-plan-trial = Pro trial.
-settings-account-plan-pro = Pro plan.
-settings-account-plan-ends = Ends { $date }.
-settings-account-plan-trial-ends = Trial ends { $date }.
-settings-account-plan-renews = Renews { $date }.
-settings-account-organized-on-device = Organizing uses your own AI key, on this Mac.
-settings-account-organized-in-cloud = { -knoa } organizes your bookmarks in the cloud.
-settings-account-title = Account
-settings-account-about = Sync your library with a { -knoa } account.
-settings-account-unavailable = Cloud sync isn't available in this build.
-settings-account-couldnt-start = It couldn't start: { $reason }
-settings-account-cloud-mode = Cloud mode
-settings-account-what-it-is = Cloud mode syncs your library across your devices and with { -knoa } on the web. With Pro, { -knoa } also organizes your bookmarks in the cloud, with no key of your own.
-settings-account-privacy = In Cloud mode your library is kept on { -knoa }'s servers, which read your pages to organize them. It isn't end-to-end encrypted. Signed out, everything stays on this Mac.
-settings-account-finish-signing-in = Finish signing in in your browser…
-settings-account-finish-signing-in-about = { -knoa } opened the sign-in page in your browser.
-settings-account-cancel = Cancel
-settings-account-knoa-account = { -knoa } account
-settings-account-sign-in-about = Sign in or create an account in your browser.
-settings-account-sign-in = Sign in
-settings-account-other-account = This library is synced with another { -knoa } account. Nothing syncs until you choose.
-settings-account-sync-with = Sync with { $email } instead
-settings-account-sync-with-this-account = Sync with this account instead
-settings-account-sync-with-about = The library is merged into this account. The other account keeps its copy.
-settings-account-use-this-account = Use this account
-settings-account-this-account = this account
-settings-account-asking = Signed in. Asking the server about the account…
-settings-account-sync = Sync
-settings-account-connecting = Connecting…
-settings-account-up-to-date = Up to date
+settings-account-synced-today = Última sincronización hoy a las { $time }
+settings-account-synced-yesterday = Última sincronización ayer a las { $time }
+settings-account-synced-on = Última sincronización el { $date }
+settings-account-not-synced = Sin sincronizar aún
+settings-account-start-trial = Empezar prueba gratuita
+settings-account-upgrade = Pasar a Pro
+settings-account-manage-subscription = Administrar suscripción
+settings-account-usage = Uso
+settings-account-usage-device = { $used } de { $limit } marcadores
+settings-account-usage-cloud = { $used } de { $limit } marcadores, { $organized } de { $allowance } organizados este mes
+settings-account-plan-free = Plan gratuito.
+settings-account-plan-trial = Prueba de Pro.
+settings-account-plan-pro = Plan Pro.
+settings-account-plan-ends = Termina el { $date }.
+settings-account-plan-trial-ends = La prueba termina el { $date }.
+settings-account-plan-renews = Se renueva el { $date }.
+settings-account-organized-on-device = La organización usa tu propia clave de IA, en este Mac.
+settings-account-organized-in-cloud = { -knoa } organiza tus marcadores en la nube.
+settings-account-title = Cuenta
+settings-account-about = Sincroniza tu biblioteca con una cuenta de { -knoa }.
+settings-account-unavailable = La sincronización en la nube no está disponible en esta compilación.
+settings-account-couldnt-start = No pudo iniciarse: { $reason }
+settings-account-cloud-mode = Modo nube
+settings-account-what-it-is = El modo nube sincroniza tu biblioteca entre tus dispositivos y con { -knoa } en la web. Con Pro, { -knoa } también organiza tus marcadores en la nube, sin necesidad de tu propia clave.
+settings-account-privacy = En el modo nube, tu biblioteca se guarda en los servidores de { -knoa }, que leen tus páginas para organizarlas. No tiene cifrado de extremo a extremo. Si cierras sesión, todo se queda en este Mac.
+settings-account-finish-signing-in = Termina de iniciar sesión en tu navegador…
+settings-account-finish-signing-in-about = { -knoa } abrió la página de inicio de sesión en tu navegador.
+settings-account-cancel = Cancelar
+settings-account-knoa-account = Cuenta de { -knoa }
+settings-account-sign-in-about = Inicia sesión o crea una cuenta en tu navegador.
+settings-account-sign-in = Iniciar sesión
+settings-account-other-account = Esta biblioteca está sincronizada con otra cuenta de { -knoa }. No se sincronizará nada hasta que elijas.
+settings-account-sync-with = Sincronizar con { $email } en su lugar
+settings-account-sync-with-this-account = Sincronizar con esta cuenta en su lugar
+settings-account-sync-with-about = La biblioteca se combina con esta cuenta. La otra cuenta conserva su copia.
+settings-account-use-this-account = Usar esta cuenta
+settings-account-this-account = Esta cuenta
+settings-account-asking = Sesión iniciada. Consultando la cuenta en el servidor…
+settings-account-sync = Sincronización
+settings-account-connecting = Conectando…
+settings-account-up-to-date = Al día
 settings-account-syncing =
     { $count ->
-        [one] Syncing { $count } change…
-       *[other] Syncing { $count } changes…
+        [one] Sincronizando { $count } cambio…
+       *[other] Sincronizando { $count } cambios…
     }
-settings-account-offline = Offline. Changes sync when { -knoa } can reach the server.
-settings-account-sync-stopped = Sync stopped: { $error }
+settings-account-offline = Sin conexión. Los cambios se sincronizarán cuando { -knoa } pueda conectar con el servidor.
+settings-account-sync-stopped = Sincronización detenida: { $error }
 settings-account-notice-plan-limit =
     { $unsent ->
-        [one] Your plan holds { $limit } bookmarks, so { $unsent } new bookmark stayed on this Mac only.
-       *[other] Your plan holds { $limit } bookmarks, so { $unsent } new bookmarks stayed on this Mac only.
+        [one] Tu plan admite { $limit } marcadores, así que { $unsent } marcador nuevo quedó solo en este Mac.
+       *[other] Tu plan admite { $limit } marcadores, así que { $unsent } marcadores nuevos quedaron solo en este Mac.
     }
-settings-account-notice-rejected = Some changes couldn't be synced and stayed on this Mac only.
-settings-account-notice-too-large = Some changes were too large to sync and stayed on this Mac only.
-settings-account-notice-allowance-used-up = This month's organizing allowance is used up. { -knoa } keeps your organizing requests and resumes them automatically when allowance becomes available.
-settings-account-sign-out = Sign out
-settings-account-sign-out-about = Your library stays on this Mac. Sign in again to carry on syncing.
-settings-ai-access-title = AI access
-settings-ai-access-about = Let AI apps like Claude and ChatGPT read and manage your bookmarks.
-settings-ai-access-copy = Copy
-settings-ai-access-url = MCP URL
-settings-ai-access-default = Default access
-settings-ai-access-default-about = Applies to workspaces set to Same as default.
-settings-ai-access-same-as-default = Same as default
-settings-ai-access-off = Off
-settings-ai-access-read = Read only
-settings-ai-access-full = Full access
-settings-ai-access-not-linked = Available once this workspace is linked to the cloud.
-settings-ai-access-saving = Saving…
-settings-ai-access-loading = Loading AI access…
-settings-ai-access-save-again = Save AI access again
-settings-ai-access-load-again = Load AI access again
-settings-ai-access-retry = Retry
-settings-ai-access-needs-pro = AI access needs { -knoa } Pro
-settings-ai-title = AI
-settings-ai-about = { -knoa } works without AI too. With it, new bookmarks get a kind, a summary, tags and folders.
-settings-ai-provider = Provider
-settings-ai-cloud-note = With Pro, { -knoa } organizes your bookmarks in the cloud. A key you connected stays on this Mac for when you're not signed in.
-settings-ai-key = OpenRouter key
-settings-ai-key-about = Your own key; requests go from this Mac straight to OpenRouter.
-settings-ai-connect = Connect
-settings-ai-checking = Checking the key…
-settings-ai-key-connected = Connected. New bookmarks get organized from now on.
-settings-ai-key-failed = That didn't work: { $error }.
-settings-ai-no-key = No key yet?
-settings-ai-no-key-about = A few dollars of credit organizes thousands of bookmarks.
-settings-ai-get-key = Get a key
-settings-ai-connected = Connected
-settings-ai-disconnect = Disconnect
-settings-ai-openrouter-says = OpenRouter says: { $problem }. Check your key or credits.
-settings-ai-models = Models
-settings-ai-existing = Existing bookmarks
-settings-ai-all-organized = Everything in { $workspace } is organized.
+settings-account-notice-rejected = Algunos cambios no se pudieron sincronizar y quedaron solo en este Mac.
+settings-account-notice-too-large = Algunos cambios eran demasiado grandes para sincronizar y quedaron solo en este Mac.
+settings-account-notice-allowance-used-up = Se agotó el cupo de organización de este mes. { -knoa } guarda tus solicitudes de organización y las reanuda automáticamente cuando haya cupo disponible.
+settings-account-sign-out = Cerrar sesión
+settings-account-sign-out-about = Tu biblioteca se queda en este Mac. Vuelve a iniciar sesión para seguir sincronizando.
+settings-ai-access-title = Acceso para IA
+settings-ai-access-about = Deja que apps de IA como Claude y ChatGPT lean y administren tus marcadores.
+settings-ai-access-copy = Copiar
+settings-ai-access-url = URL de MCP
+settings-ai-access-default = Acceso predeterminado
+settings-ai-access-default-about = Se aplica a los espacios configurados como Igual que el predeterminado.
+settings-ai-access-same-as-default = Igual que el predeterminado
+settings-ai-access-off = Desactivado
+settings-ai-access-read = Solo lectura
+settings-ai-access-full = Acceso completo
+settings-ai-access-not-linked = Disponible en cuanto este espacio se vincule a la nube.
+settings-ai-access-saving = Guardando…
+settings-ai-access-loading = Cargando acceso para IA…
+settings-ai-access-save-again = Volver a guardar el acceso para IA
+settings-ai-access-load-again = Volver a cargar el acceso para IA
+settings-ai-access-retry = Reintentar
+settings-ai-access-needs-pro = El acceso para IA requiere { -knoa } Pro
+settings-ai-title = IA
+settings-ai-about = { -knoa } también funciona sin IA. Con ella, los nuevos marcadores obtienen un tipo, un resumen, etiquetas y carpetas.
+settings-ai-provider = Proveedor
+settings-ai-cloud-note = Con Pro, { -knoa } organiza tus marcadores en la nube. La clave que conectaste se queda en este Mac para cuando no tengas sesión iniciada.
+settings-ai-key = Clave de OpenRouter
+settings-ai-key-about = Tu propia clave; las solicitudes van desde este Mac directo a OpenRouter.
+settings-ai-connect = Conectar
+settings-ai-checking = Comprobando la clave…
+settings-ai-key-connected = Conectada. Los marcadores nuevos se organizarán a partir de ahora.
+settings-ai-key-failed = No funcionó: { $error }.
+settings-ai-no-key = ¿Todavía no tienes clave?
+settings-ai-no-key-about = Con unos pocos dólares de crédito organizas miles de marcadores.
+settings-ai-get-key = Obtener una clave
+settings-ai-connected = Conectado
+settings-ai-disconnect = Desconectar
+settings-ai-openrouter-says = OpenRouter dice: { $problem }. Revisa tu clave o tu saldo.
+settings-ai-models = Modelos
+settings-ai-existing = Marcadores existentes
+settings-ai-all-organized = Todo en { $workspace } está organizado.
 settings-ai-not-organized =
     { $count ->
-        [one] { $count } bookmark in { $workspace } isn't organized yet
-       *[other] { $count } bookmarks in { $workspace } aren't organized yet
+        [one] { $count } marcador en { $workspace } aún no está organizado
+       *[other] { $count } marcadores en { $workspace } aún no están organizados
     }
-settings-ai-included-in-pro = Included in Pro, within its monthly allowance.
-settings-ai-cost = About { $cost } to do them all.
-settings-ai-organize = Organize
-settings-ai-pro-title = Let { -knoa } do it with Pro
-settings-ai-pro-pitch = { -knoa } organizes your bookmarks in the cloud. No key to set up, no bill per request, and your library syncs across your devices.
-settings-ai-pro-get = Get Pro
-settings-ai-pro-upgrade = Upgrade
-settings-ai-pro-have = I have Pro
-settings-ai-usage = Usage
-settings-ai-usage-none = No AI requests yet.
+settings-ai-included-in-pro = Incluido en Pro, dentro de su cupo mensual.
+settings-ai-cost = Unos { $cost } para organizarlos todos.
+settings-ai-organize = Organizar
+settings-ai-pro-title = Deja que { -knoa } lo haga con Pro
+settings-ai-pro-pitch = { -knoa } organiza tus marcadores en la nube. Sin clave que configurar, sin cobros por solicitud y con tu biblioteca sincronizada en todos tus dispositivos.
+settings-ai-pro-get = Obtener Pro
+settings-ai-pro-upgrade = Pasar a Pro
+settings-ai-pro-have = Ya tengo Pro
+settings-ai-usage = Uso
+settings-ai-usage-none = Aún no hay solicitudes de IA.
 settings-ai-usage-recent =
     { $days ->
-        [one] Last { $days } day
-       *[other] Last { $days } days
+        [one] Último día
+       *[other] Últimos { $days } días
     }
-settings-ai-usage-all-time = All time
+settings-ai-usage-all-time = Todo el historial
 settings-ai-usage-by-model =
     { $days ->
-        [one] By model, last { $days } day
-       *[other] By model, last { $days } days
+        [one] Por modelo, último día
+       *[other] Por modelo, últimos { $days } días
     }
-settings-ai-usage-records = { $provider }'s own records
-settings-ai-usage-records-about = Every request, with the exact amount charged.
-settings-ai-usage-open = Open
+settings-ai-usage-records = Registros de { $provider }
+settings-ai-usage-records-about = Cada solicitud, con el cargo exacto.
+settings-ai-usage-open = Abrir
 settings-ai-usage-requests =
     { $count ->
-        [one] { $count } request
-       *[other] { $count } requests
+        [one] { $count } solicitud
+       *[other] { $count } solicitudes
     }
-settings-ai-usage-tokens = { $input } tokens in, { $output } out
+settings-ai-usage-tokens = { $input } tokens de entrada, { $output } de salida
 settings-ai-usage-unmetered =
     { $count ->
-        [one] { $count } without token counts
-       *[other] { $count } without token counts
+        [one] { $count } sin conteo de tokens
+       *[other] { $count } sin conteo de tokens
     }
 settings-ai-usage-unpriced =
     { $count ->
-        [one] { $count } without a price
-       *[other] { $count } without a price
+        [one] { $count } sin precio
+       *[other] { $count } sin precio
     }
-settings-workspace-new = New workspace
-settings-workspace-new-about = A separate library, like Work or Personal, with its own browsers and folders.
-settings-workspace-shown-now = Shown now
-settings-workspace-show-it = Show it
-settings-workspace-name-and-color = Name and color
-settings-workspace-name = Name
-settings-workspace-name-too-long = A name can be at most { $max } characters.
+settings-workspace-new = Nuevo espacio
+settings-workspace-new-about = Una biblioteca aparte, como Trabajo o Personal, con sus propios navegadores y carpetas.
+settings-workspace-shown-now = Visible ahora
+settings-workspace-show-it = Mostrar
+settings-workspace-name-and-color = Nombre y color
+settings-workspace-name = Nombre
+settings-workspace-name-too-long = El nombre puede tener como máximo { $max } caracteres.
 settings-workspace-color = Color
-settings-workspace-sync-from = Sync bookmarks from
-settings-workspace-no-browser = No Chromium-based browser found. { -knoa } reads Helium, Chrome, Brave, Edge, Vivaldi and Chromium.
-settings-workspace-browsers-note = With none on, links are only added by hand (⌘N). One browser can feed several workspaces.
-settings-workspace-open-in = Open bookmarks in
-settings-workspace-default-browser = Default browser
-settings-workspace-by-hand = Links added by hand only.
-settings-workspace-synced-from-one = Synced from { $browser }.
-settings-workspace-synced-from-many = Synced from { $browsers } and { $last }.
-settings-workspace-organizing = Organizing
-settings-workspace-instructions = Instructions
-settings-workspace-instructions-about = How the AI should sort, tag and summarize what lands here.
-settings-workspace-instructions-too-long = Instructions can be at most { $max } characters.
-settings-workspace-screening = Only keep bookmarks that fit
-settings-workspace-screening-about = Off: everything from the browser lands here. On: the AI sets aside what doesn't fit, and you can keep it anyway.
-settings-workspace-guideline = What belongs here
-settings-workspace-guideline-too-long = A guideline can be at most { $max } characters.
-settings-workspace-name-placeholder = Work, Personal…
-settings-workspace-instructions-placeholder = e.g. Tag recipes by cuisine. Short summaries, no fluff.
-settings-workspace-guideline-placeholder = e.g. Only things about work: engineering, design and our clients.
-settings-workspace-create = Create workspace
-settings-workspace-delete = Delete
-settings-workspace-delete-label = Delete this workspace
-settings-workspace-delete-about = Its bookmarks and folders go with it. Your browsers keep their bookmarks.
-settings-workspace-delete-button = Delete…
-settings-workspace-delete-confirm = Delete for good
-settings-tags-title = Tag list
-settings-tags-label = Tags the AI should use
-settings-tags-about = When one of these fits a bookmark, the AI uses it instead of a word of its own. A short hint tells it when one fits. You can also right-click a tag on a bookmark to list it.
-settings-tags-add-placeholder = Add a tag
-settings-tags-hint-placeholder = When to use it (optional)
-settings-tags-remove = Remove from list
-settings-tags-only-listed = Only use tags from this list
-settings-tags-only-listed-about = Off: the AI adds its own tags for what the list doesn't cover. On: bookmarks get only listed tags, or none when nothing fits.
-settings-tags-only-listed-about-empty = Add a tag first. Off: the AI adds its own tags for what the list doesn't cover. On: bookmarks get only listed tags, or none when nothing fits.
-settings-tags-note = Bookmarks organized from now on get these tags. To bring them to the ones already organized, organize again.
-settings-tags-count = { $count } of { $max }
+settings-workspace-sync-from = Sincronizar marcadores desde
+settings-workspace-no-browser = No se encontró ningún navegador basado en Chromium. { -knoa } lee Helium, Chrome, Brave, Edge, Vivaldi y Chromium.
+settings-workspace-browsers-note = Sin ninguno activado, los enlaces solo se agregan a mano (⌘N). Un mismo navegador puede alimentar varios espacios.
+settings-workspace-open-in = Abrir marcadores en
+settings-workspace-default-browser = Navegador predeterminado
+settings-workspace-by-hand = Solo enlaces agregados a mano.
+settings-workspace-synced-from-one = Sincronizado desde { $browser }.
+settings-workspace-synced-from-many = Sincronizado desde { $browsers } y { $last }.
+settings-workspace-organizing = Organización
+settings-workspace-instructions = Instrucciones
+settings-workspace-instructions-about = Cómo debe la IA clasificar, etiquetar y resumir lo que llega aquí.
+settings-workspace-instructions-too-long = Las instrucciones pueden tener como máximo { $max } caracteres.
+settings-workspace-screening = Conservar solo los marcadores que encajen
+settings-workspace-screening-about = Desactivado: todo lo del navegador llega aquí. Activado: la IA aparta lo que no encaja, y puedes conservarlo de todas formas.
+settings-workspace-guideline = Qué va aquí
+settings-workspace-guideline-too-long = Esta guía puede tener como máximo { $max } caracteres.
+settings-workspace-name-placeholder = Trabajo, Personal…
+settings-workspace-instructions-placeholder = p. ej., Etiqueta las recetas por tipo de cocina. Resúmenes cortos, sin relleno.
+settings-workspace-guideline-placeholder = p. ej., Solo cosas de trabajo: ingeniería, diseño y nuestros clientes.
+settings-workspace-create = Crear espacio
+settings-workspace-delete = Eliminar
+settings-workspace-delete-label = Eliminar este espacio
+settings-workspace-delete-about = Sus marcadores y carpetas se eliminarán con él. Tus navegadores conservan sus marcadores.
+settings-workspace-delete-button = Eliminar…
+settings-workspace-delete-confirm = Eliminar para siempre
+settings-tags-title = Lista de etiquetas
+settings-tags-label = Etiquetas que debe usar la IA
+settings-tags-about = Cuando una de estas encaja con un marcador, la IA la usa en lugar de una propia. Una pista corta le indica cuándo encaja. También puedes hacer clic derecho en una etiqueta de un marcador para agregarla a la lista.
+settings-tags-add-placeholder = Agregar una etiqueta
+settings-tags-hint-placeholder = Cuándo usarla (opcional)
+settings-tags-remove = Quitar de la lista
+settings-tags-only-listed = Usar solo etiquetas de esta lista
+settings-tags-only-listed-about = Desactivado: la IA agrega sus propias etiquetas para lo que la lista no cubre. Activado: los marcadores solo reciben etiquetas de la lista, o ninguna si nada encaja.
+settings-tags-only-listed-about-empty = Agrega una etiqueta primero. Desactivado: la IA agrega sus propias etiquetas para lo que la lista no cubre. Activado: los marcadores solo reciben etiquetas de la lista, o ninguna si nada encaja.
+settings-tags-note = Los marcadores que se organicen a partir de ahora recibirán estas etiquetas. Para aplicarlas a los ya organizados, vuelve a organizar.
+settings-tags-count = { $count } de { $max }
 
 ## Sidebar
 
-sidebar-status-ai-needs-attention = AI needs attention
-sidebar-status-fix = Fix
-sidebar-sync-stopped = Sync stopped
-sidebar-retry = Retry
-sidebar-sync-paused = Sync paused
-sidebar-status-changes-not-synced = Changes didn't sync
-sidebar-status-view = View
-sidebar-status-plan-limit = Plan limit reached
-sidebar-status-upgrade = Upgrade
-sidebar-status-organizing = Organizing { $current } of { $total }…
-sidebar-status-ai-off = AI is off
-sidebar-status-turn-on = Turn on
-sidebar-status-offline = Offline. Changes sync later.
-sidebar-syncing = Syncing…
+sidebar-status-ai-needs-attention = La IA necesita atención
+sidebar-status-fix = Resolver
+sidebar-sync-stopped = Sincronización detenida
+sidebar-retry = Reintentar
+sidebar-sync-paused = Sincronización en pausa
+sidebar-status-changes-not-synced = Los cambios no se sincronizaron
+sidebar-status-view = Ver
+sidebar-status-plan-limit = Límite del plan alcanzado
+sidebar-status-upgrade = Mejorar
+sidebar-status-organizing = Organizando { $current } de { $total }…
+sidebar-status-ai-off = IA desactivada
+sidebar-status-turn-on = Activar
+sidebar-status-offline = Sin conexión. Los cambios se sincronizarán luego.
+sidebar-syncing = Sincronizando…
 sidebar-sync-offline =
     { $count ->
-        [0] Offline
-        [one] Offline · { $count } change waiting
-       *[other] Offline · { $count } changes waiting
+        [0] Sin conexión
+        [one] Sin conexión · { $count } cambio pendiente
+       *[other] Sin conexión · { $count } cambios pendientes
     }
-sidebar-synced-just-now = Synced just now
+sidebar-synced-just-now = Sincronizado ahora mismo
 sidebar-synced-minutes-ago =
     { $minutes ->
-        [one] Synced { $minutes } min ago
-       *[other] Synced { $minutes } min ago
+        [one] Sincronizado hace { $minutes } min
+       *[other] Sincronizado hace { $minutes } min
     }
 sidebar-synced-hours-ago =
     { $hours ->
-        [one] Synced { $hours } hr ago
-       *[other] Synced { $hours } hr ago
+        [one] Sincronizado hace { $hours } h
+       *[other] Sincronizado hace { $hours } h
     }
-sidebar-account-settings = Account settings…
-sidebar-open-web = Open { -knoa } on the web
-sidebar-sign-out = Sign out
-sidebar-sign-in = Sign in…
-sidebar-finish-in-browser = Finish in browser
-sidebar-cancel = Cancel
+sidebar-account-settings = Ajustes de cuenta…
+sidebar-open-web = Abrir { -knoa } en la web
+sidebar-sign-out = Cerrar sesión
+sidebar-sign-in = Iniciar sesión…
+sidebar-finish-in-browser = Termina en el navegador
+sidebar-cancel = Cancelar
 sidebar-plan-pro = { -knoa } Pro
-sidebar-plan-free = Free plan
-sidebar-signed-in = Signed in
-sidebar-manage-plan = Manage plan…
-sidebar-upgrade-to-pro = Upgrade to Pro
-sidebar-this-mac = This Mac
-sidebar-knoa-account = { -knoa } account
-sidebar-place-everything = Everything
-sidebar-place-gallery = Gallery
-sidebar-place-events = Events
-sidebar-place-up-next = Up next
-sidebar-place-unsorted = Unsorted
-sidebar-place-not-organized = Not organized
-sidebar-place-set-aside = Set aside
-sidebar-place-trash = Trash
-sidebar-settings = Settings
-sidebar-folders = Folders
-sidebar-new-folder = New folder
-sidebar-folder-new-subfolder = New subfolder
-sidebar-folder-edit = Edit folder…
-sidebar-folder-delete = Delete…
-sidebar-folder-move-to = Move to
-sidebar-folder-top-level = Top level
-sidebar-add-link = Add link
-sidebar-workspaces-title = Workspaces
-sidebar-workspaces-new = New workspace
-sidebar-workspaces-by-hand = Links added by hand
-sidebar-workspaces-from = From { $browsers }
+sidebar-plan-free = Plan gratuito
+sidebar-signed-in = Sesión iniciada
+sidebar-manage-plan = Administrar plan…
+sidebar-upgrade-to-pro = Pasar a Pro
+sidebar-this-mac = Este Mac
+sidebar-knoa-account = Cuenta de { -knoa }
+sidebar-place-everything = Todo
+sidebar-place-gallery = Galería
+sidebar-place-events = Eventos
+sidebar-place-up-next = A continuación
+sidebar-place-unsorted = Sin carpeta
+sidebar-place-not-organized = Sin organizar
+sidebar-place-set-aside = Apartado
+sidebar-place-trash = Papelera
+sidebar-settings = Ajustes
+sidebar-folders = Carpetas
+sidebar-new-folder = Nueva carpeta
+sidebar-folder-new-subfolder = Nueva subcarpeta
+sidebar-folder-edit = Editar carpeta…
+sidebar-folder-delete = Eliminar…
+sidebar-folder-move-to = Mover a
+sidebar-folder-top-level = Nivel superior
+sidebar-add-link = Agregar enlace
+sidebar-workspaces-title = Espacios
+sidebar-workspaces-new = Nuevo espacio
+sidebar-workspaces-by-hand = Enlaces agregados a mano
+sidebar-workspaces-from = Desde { $browsers }
 
 ## Main
 
 main-blocked-browsers =
     { $count ->
-        [one] { $browsers } is installed, but macOS keeps its bookmarks private. Give { -knoa } Full Disk Access, then restart { -knoa }.
-       *[other] { $browsers } are installed, but macOS keeps their bookmarks private. Give { -knoa } Full Disk Access, then restart { -knoa }.
+        [one] { $browsers } está instalado, pero macOS mantiene privados sus marcadores. Dale a { -knoa } Acceso total al disco y luego reinicia { -knoa }.
+       *[other] { $browsers } están instalados, pero macOS mantiene privados sus marcadores. Dale a { -knoa } Acceso total al disco y luego reinicia { -knoa }.
     }
-main-open-privacy-settings = Open Privacy settings
-main-cancel = Cancel
-main-delete = Delete
-main-save = Save
-main-folder-new-title = New folder
-main-folder-edit-title = Edit folder
-main-folder-name-placeholder = Folder name
-main-folder-description-placeholder = What belongs here? The AI uses this to file bookmarks.
-main-folder-name-too-long = A name can be at most { $max } characters.
-main-folder-description-too-long = A description can be at most { $max } characters.
-main-folder-auto-assign = Let the AI add bookmarks
-main-folder-auto-assign-about = New bookmarks that fit go here on their own.
-main-glyph-read = Reading
-main-glyph-article = Articles
-main-glyph-code = Code
-main-glyph-write = Writing
-main-glyph-work = Work
-main-glyph-tag = Deals
-main-glyph-bag = Shopping
-main-glyph-plane = Travel
-main-glyph-cup = Food
-main-glyph-music = Music
+main-open-privacy-settings = Abrir ajustes de Privacidad
+main-cancel = Cancelar
+main-delete = Eliminar
+main-save = Guardar
+main-folder-new-title = Nueva carpeta
+main-folder-edit-title = Editar carpeta
+main-folder-name-placeholder = Nombre de la carpeta
+main-folder-description-placeholder = ¿Qué va aquí? La IA usa esto para clasificar marcadores.
+main-folder-name-too-long = El nombre puede tener como máximo { $max } caracteres.
+main-folder-description-too-long = La descripción puede tener como máximo { $max } caracteres.
+main-folder-auto-assign = Dejar que la IA agregue marcadores
+main-folder-auto-assign-about = Los nuevos marcadores que encajen irán aquí automáticamente.
+main-glyph-read = Lectura
+main-glyph-article = Artículos
+main-glyph-code = Código
+main-glyph-write = Escritura
+main-glyph-work = Trabajo
+main-glyph-tag = Ofertas
+main-glyph-bag = Compras
+main-glyph-plane = Viajes
+main-glyph-cup = Comida
+main-glyph-music = Música
 main-glyph-play = Video
-main-glyph-photo = Photos
+main-glyph-photo = Fotos
 main-glyph-bulb = Ideas
-main-glyph-heart = Health
-main-glyph-home = Home
-main-glyph-star = Favorites
-main-glyph-clock = Later
-main-glyph-flask = Science
+main-glyph-heart = Salud
+main-glyph-home = Hogar
+main-glyph-star = Favoritos
+main-glyph-clock = Más tarde
+main-glyph-flask = Ciencia
 main-glyph-globe = Web
-main-glyph-person = People
-main-glyph-box = Archive
-main-glyph-inbox = Inbox
-main-glyph-leaf = Nature
-main-glyph-bolt = Quick
-main-glyph-lock = Private
-main-glyph-pin = Places
-main-glyph-chat = Threads
-main-glyph-game = Games
-main-folder-icon-none = Folder
+main-glyph-person = Personas
+main-glyph-box = Archivo
+main-glyph-inbox = Bandeja de entrada
+main-glyph-leaf = Naturaleza
+main-glyph-bolt = Rápido
+main-glyph-lock = Privado
+main-glyph-pin = Lugares
+main-glyph-chat = Hilos
+main-glyph-game = Juegos
+main-folder-icon-none = Carpeta
 main-folder-icon-emoji = Emoji
-main-folder-parent = Parent
-main-folder-parent-none = None
-main-folder-emoji-placeholder = Type or paste
-main-folder-any-emoji = Any emoji
-main-folder-custom-color = Custom
-main-delete-folder-title = Delete “{ $name }”?
+main-folder-parent = Carpeta superior
+main-folder-parent-none = Ninguna
+main-folder-emoji-placeholder = Escribe o pega
+main-folder-any-emoji = Cualquier emoji
+main-folder-custom-color = Personalizado
+main-delete-folder-title = ¿Eliminar “{ $name }”?
 main-delete-folder-detail =
     { $count ->
-        [0] Its bookmarks stay in your library.
-        [one] Its subfolder is deleted with it. Their bookmarks stay in your library.
-       *[other] Its { $count } subfolders are deleted with it. Their bookmarks stay in your library.
+        [0] Sus marcadores se conservan en tu biblioteca.
+        [one] Su subcarpeta también se eliminará. Los marcadores se conservan en tu biblioteca.
+       *[other] Sus { $count } subcarpetas también se eliminarán. Los marcadores se conservan en tu biblioteca.
     }
-main-open = Open
-main-open-in-background = Open in background
-main-copy-link = Copy link
-main-copied = Copied
-main-show-details = Show details
-main-view-picture = View picture
-main-copy-image = Copy image
-main-save-image = Save image…
-main-add-to-up-next = Add to Up next
-main-remove-from-up-next = Remove from Up next
-main-add-to-folder = Add to folder
-main-remove-from-folder = Remove from { $folder }
-main-refresh-thumbnail = Refresh thumbnail
-main-refreshing-thumbnail = Refreshing thumbnail…
-main-organize = Organize
-main-organize-again = Organize again
-main-organizing = Organizing…
-main-move-to-trash = Move to Trash
-main-restore = Restore
-main-delete-now = Delete now
-main-open-link = Open link
-main-card-failed = Couldn't organize
-main-card-not-organized = Not organized yet
-main-empty-no-events-match = No events match
-main-empty-no-events-match-body = Try fewer words, or a date filter like starts>2026-12-01.
-main-empty-nothing-matches = Nothing matches
-main-empty-nothing-matches-body = Try fewer words, or filters like kind:movie, site:github.com or #tag.
-main-empty-trash = Trash is empty
-main-empty-trash-body = Bookmarks you delete wait here for 30 days.
-main-empty-caught-up = All caught up
-main-empty-caught-up-body = Every bookmark here has been organized.
-main-empty-no-pictures = No pictures here
-main-empty-no-pictures-body = Links straight to an image file show up here.
-main-empty-no-events = No events here
-main-empty-no-events-body = Pages for concerts, talks and meetups show up here by date.
-main-empty-nothing-yet = Nothing here yet
-main-empty-nothing-yet-synced-body = Bookmark something in your browser and it lands here a moment later.
-main-empty-nothing-yet-unsynced-body = Add a link with ⌘N, or pick a browser for this workspace from the workspace menu.
-main-empty-nothing-yet-body = Bookmarks show up here as you add them.
-main-up-next = Up next
+main-open = Abrir
+main-open-in-background = Abrir en segundo plano
+main-copy-link = Copiar enlace
+main-copied = Copiado
+main-show-details = Mostrar detalles
+main-view-picture = Ver imagen
+main-copy-image = Copiar imagen
+main-save-image = Guardar imagen…
+main-add-to-up-next = Agregar a A continuación
+main-remove-from-up-next = Quitar de A continuación
+main-add-to-folder = Agregar a carpeta
+main-remove-from-folder = Quitar de { $folder }
+main-refresh-thumbnail = Actualizar miniatura
+main-refreshing-thumbnail = Actualizando miniatura…
+main-organize = Organizar
+main-organize-again = Volver a organizar
+main-organizing = Organizando…
+main-move-to-trash = Mover a la Papelera
+main-restore = Restaurar
+main-delete-now = Eliminar ahora
+main-open-link = Abrir enlace
+main-card-failed = No se pudo organizar
+main-card-not-organized = Aún sin organizar
+main-empty-no-events-match = Ningún evento coincide
+main-empty-no-events-match-body = Prueba con menos palabras o un filtro de fecha como starts>2026-12-01.
+main-empty-nothing-matches = No hay coincidencias
+main-empty-nothing-matches-body = Prueba con menos palabras o filtros como kind:película, site:github.com o #etiqueta.
+main-empty-trash = La Papelera está vacía
+main-empty-trash-body = Los marcadores que elimines esperan aquí durante 30 días.
+main-empty-caught-up = Todo al día
+main-empty-caught-up-body = Todos los marcadores de aquí ya están organizados.
+main-empty-no-pictures = No hay imágenes aquí
+main-empty-no-pictures-body = Los enlaces directos a un archivo de imagen aparecen aquí.
+main-empty-no-events = No hay eventos aquí
+main-empty-no-events-body = Las páginas de conciertos, charlas y encuentros aparecen aquí por fecha.
+main-empty-nothing-yet = Aún no hay nada aquí
+main-empty-nothing-yet-synced-body = Guarda un marcador en tu navegador y aparecerá aquí un momento después.
+main-empty-nothing-yet-unsynced-body = Agrega un enlace con ⌘N, o elige un navegador para este espacio desde el menú de espacios.
+main-empty-nothing-yet-body = Los marcadores aparecerán aquí a medida que los agregues.
+main-up-next = A continuación
 main-up-next-count =
     { $count ->
-        [one] · { $count } to read and watch
-       *[other] · { $count } to read and watch
+        [one] · { $count } para leer y ver
+       *[other] · { $count } para leer y ver
     }
-main-best-matches = Best matches
-main-place-gallery = Gallery
-main-place-events = Events
-main-place-up-next = Up next
-main-place-unsorted = Unsorted
-main-place-not-organized = Not organized
-main-place-set-aside = Set aside
-main-place-trash = Trash
+main-best-matches = Mejores resultados
+main-place-gallery = Galería
+main-place-events = Eventos
+main-place-up-next = A continuación
+main-place-unsorted = Sin carpeta
+main-place-not-organized = Sin organizar
+main-place-set-aside = Apartado
+main-place-trash = Papelera
 main-search-found =
     { $count ->
-        [one] { $count } found
-       *[other] { $count } found
+        [one] { $count } resultado
+       *[other] { $count } resultados
     }
-main-kind-all = All
+main-kind-all = Todos
 main-kind-chip = { $kind } { $count }
-main-trash-empty = Empty Trash
+main-trash-empty = Vaciar Papelera
 main-trash-delete-count =
     { $count ->
-        [one] Delete { $count } for good
-       *[other] Delete { $count } for good
+        [one] Eliminar { $count } para siempre
+       *[other] Eliminar { $count } para siempre
     }
-main-trash-about = Bookmarks in Trash are deleted for good after 30 days.
+main-trash-about = Los marcadores en la Papelera se eliminan para siempre después de 30 días.
 main-trash-days-left =
     { $days ->
-        [1] In Trash. Deleted for good within a day.
-       *[other] In Trash. Deleted for good in { $days } days.
+        [1] En la Papelera. Se eliminará para siempre en menos de un día.
+       *[other] En la Papelera. Se eliminará para siempre en { $days } días.
     }
-main-add-link-title = Add a link to { $workspace }
-main-add-link-not-a-link = That doesn't look like a web address.
-main-add-link-add = Add
-main-image-file-name = Image
-main-viewer-position = { $position } of { $count }
-main-viewer-open-original = Open original
-main-viewer-close = Close
-main-viewer-image-copied = Image copied
-main-viewer-copy-failed = Couldn't copy the image
-main-viewer-image-saved = Image saved
-main-viewer-save-failed = Couldn't save the image
-main-search-placeholder = Just start typing to search
-main-view-options-title = View
-main-view-options-summaries = Show summaries on cards
-main-view-options-up-next = Show the Up next strip
-main-view-options-about = Cards are grouped by date. Searching ranks by best match.
+main-add-link-title = Agregar un enlace a { $workspace }
+main-add-link-not-a-link = Eso no parece una dirección web.
+main-add-link-add = Agregar
+main-image-file-name = Imagen
+main-viewer-position = { $position } de { $count }
+main-viewer-open-original = Abrir original
+main-viewer-close = Cerrar
+main-viewer-image-copied = Imagen copiada
+main-viewer-copy-failed = No se pudo copiar la imagen
+main-viewer-image-saved = Imagen guardada
+main-viewer-save-failed = No se pudo guardar la imagen
+main-search-placeholder = Empieza a escribir para buscar
+main-view-options-title = Vista
+main-view-options-summaries = Mostrar resúmenes en las tarjetas
+main-view-options-up-next = Mostrar la franja de A continuación
+main-view-options-about = Las tarjetas se agrupan por fecha. Al buscar se ordenan por relevancia.
 main-duration-minutes = { $minutes } min
-main-duration-hours = { $hours }h
-main-duration-hours-minutes = { $hours }h { $minutes }m
+main-duration-hours = { $hours } h
+main-duration-hours-minutes = { $hours } h { $minutes } min
 
 ## Detail
 
-detail-details = Details
-detail-removed-from-browser = Removed from the browser, kept here
-detail-saved = Saved { $date }
-detail-chosen-by = Marks what { $model } chose
-detail-folders = Folders
-detail-no-folders = No folders yet. Make one in the sidebar.
-detail-folder-undo = Undo: take it out
-detail-folder-take-out = Take it out
+detail-details = Detalles
+detail-removed-from-browser = Eliminado del navegador, conservado aquí
+detail-saved = Guardado el { $date }
+detail-chosen-by = Indica lo que eligió { $model }
+detail-folders = Carpetas
+detail-no-folders = Aún no hay carpetas. Crea una en la barra lateral.
+detail-folder-undo = Deshacer: quitar de aquí
+detail-folder-take-out = Quitar de aquí
 detail-folder-probability = { $percent }%
-detail-add-to-another-folder = Add to another folder
-detail-set-aside = Set aside: doesn't fit this workspace
-detail-keep = Keep
-detail-organizing-now = Organizing this one now…
-detail-organize-failed = Organizing didn't work out.
-detail-try-again = Try again
-detail-title-and-link-only = Only the title and link so far.
-detail-read-without-ai = Read from the page only, without AI.
-detail-no-thumbnail = No thumbnail on the page
-detail-page-unreachable = Couldn't reach the page
-detail-more = More
-detail-tags = Tags
-detail-remove-tag = Remove tag
-detail-put-back = Put back
-detail-add-tag = Add tag
-detail-add-a-tag = Add a tag
-detail-in-tag-list = In tag list
-detail-in-tag-list-full = In tag list (list is full)
-detail-edit-tag-list = Edit tag list…
+detail-add-to-another-folder = Agregar a otra carpeta
+detail-set-aside = Apartado: no encaja en este espacio
+detail-keep = Conservar
+detail-organizing-now = Organizando este marcador ahora…
+detail-organize-failed = No se pudo organizar.
+detail-try-again = Intentar de nuevo
+detail-title-and-link-only = Por ahora solo están el título y el enlace.
+detail-read-without-ai = Leído solo de la página, sin IA.
+detail-no-thumbnail = Sin miniatura en la página
+detail-page-unreachable = No se pudo acceder a la página
+detail-more = Más
+detail-tags = Etiquetas
+detail-remove-tag = Quitar etiqueta
+detail-put-back = Volver a poner
+detail-add-tag = Agregar etiqueta
+detail-add-a-tag = Agregar una etiqueta
+detail-in-tag-list = En la lista de etiquetas
+detail-in-tag-list-full = En la lista de etiquetas (lista llena)
+detail-edit-tag-list = Editar lista de etiquetas…
 
 ## Events
 
-events-title = Events
-events-view-calendar = Calendar
-events-view-list = List
-events-previous-month = Previous month
-events-next-month = Next month
-events-today = Today
-events-upcoming = Upcoming
-events-happening-now = Happening now
-events-date-not-set = Date not set
-events-past = Past
-events-nothing-on-day = Nothing on this day.
-events-nothing-coming-up = Nothing coming up.
-events-nothing-coming-up-panel = Nothing coming up. Events you save show here until they end.
-events-more = +{ $count } more
+events-title = Eventos
+events-view-calendar = Calendario
+events-view-list = Lista
+events-previous-month = Mes anterior
+events-next-month = Mes siguiente
+events-today = Hoy
+events-upcoming = Próximos
+events-happening-now = En curso
+events-date-not-set = Sin fecha
+events-past = Pasados
+events-nothing-on-day = Nada en este día.
+events-nothing-coming-up = Nada próximamente.
+events-nothing-coming-up-panel = Nada próximamente. Los eventos que guardes aparecerán aquí hasta que terminen.
+events-more = +{ $count } más
 
 ## Dates
 
-date-today = Today
-date-yesterday = Yesterday
-date-tomorrow = Tomorrow
-date-this-week = This week
-date-last-week = Last week
-date-all-day = All day
+date-today = Hoy
+date-yesterday = Ayer
+date-tomorrow = Mañana
+date-this-week = Esta semana
+date-last-week = La semana pasada
+date-all-day = Todo el día
 
 ## Kinds
 
-kind-article = Article
-kind-article-plural = Articles
+kind-article = Artículo
+kind-article-plural = Artículos
 kind-video = Video
 kind-video-plural = Videos
-kind-movie = Movie
-kind-movie-plural = Movies
-kind-recipe = Recipe
-kind-recipe-plural = Recipes
-kind-product = Product
-kind-product-plural = Products
-kind-repository = Repository
-kind-repository-plural = Code
-kind-book = Book
-kind-book-plural = Books
-kind-image = Image
-kind-image-plural = Images
+kind-movie = Película
+kind-movie-plural = Películas
+kind-recipe = Receta
+kind-recipe-plural = Recetas
+kind-product = Producto
+kind-product-plural = Productos
+kind-repository = Repositorio
+kind-repository-plural = Código
+kind-book = Libro
+kind-book-plural = Libros
+kind-image = Imagen
+kind-image-plural = Imágenes
 kind-app = App
 kind-app-plural = Apps
 kind-podcast = Podcast
 kind-podcast-plural = Podcasts
-kind-place = Place
-kind-place-plural = Places
-kind-event = Event
-kind-event-plural = Events
-kind-other = Other
-kind-other-plural = Other
+kind-place = Lugar
+kind-place-plural = Lugares
+kind-event = Evento
+kind-event-plural = Eventos
+kind-other = Otro
+kind-other-plural = Otros
 
 ## Fields
 
-field-address = Address
-field-attendance = Attendance
-field-author = Author
-field-brand = Brand
-field-cast = Cast
-field-category = Category
-field-channel = Channel
-field-city = City
-field-colors = Colors
-field-country = Country
-field-cuisine = Cuisine
-field-currency = Currency
-field-diet = Diet
-field-director = Director
-field-duration = Duration
-field-ends = Ends
-field-format = Format
-field-genre = Genre
-field-host = Host
-field-language = Language
-field-license = License
-field-maker = Maker
-field-medium = Medium
-field-name = Name
-field-organizer = Organizer
-field-owner = Owner
-field-pages = Pages
-field-platform = Platform
-field-price = Price
-field-pricing = Pricing
-field-published = Published
-field-publisher = Publisher
-field-rating = Rating
-field-reading-minutes = Reading minutes
-field-resolution = Resolution
-field-runtime = Runtime
-field-servings = Servings
-field-show = Show
-field-stars = Stars
-field-starts = Starts
-field-total-time = Total time
-field-venue = Venue
-field-visible-text = Visible text
-field-year = Year
+field-address = Dirección
+field-attendance = Asistencia
+field-author = Autor
+field-brand = Marca
+field-cast = Reparto
+field-category = Categoría
+field-channel = Canal
+field-city = Ciudad
+field-colors = Colores
+field-country = País
+field-cuisine = Cocina
+field-currency = Moneda
+field-diet = Dieta
+field-director = Dirección
+field-duration = Duración
+field-ends = Fin
+field-format = Formato
+field-genre = Género
+field-host = Presentador
+field-language = Idioma
+field-license = Licencia
+field-maker = Creador
+field-medium = Medio
+field-name = Nombre
+field-organizer = Organizador
+field-owner = Propietario
+field-pages = Páginas
+field-platform = Plataforma
+field-price = Precio
+field-pricing = Precio
+field-published = Publicado
+field-publisher = Editorial
+field-rating = Puntuación
+field-reading-minutes = Tiempo de lectura
+field-resolution = Resolución
+field-runtime = Duración
+field-servings = Porciones
+field-show = Programa
+field-stars = Estrellas
+field-starts = Inicio
+field-total-time = Tiempo total
+field-venue = Lugar
+field-visible-text = Texto visible
+field-year = Año
 
 ## Inks
 
-ink-ochre = Ochre
-ink-olive = Olive
-ink-moss = Moss
-ink-pine = Pine
-ink-teal = Teal
-ink-sky = Sky
-ink-cobalt = Cobalt
-ink-violet = Violet
-ink-plum = Plum
-ink-rose = Rose
-ink-cocoa = Cocoa
-ink-slate = Slate
+ink-ochre = Ocre
+ink-olive = Oliva
+ink-moss = Musgo
+ink-pine = Pino
+ink-teal = Verde azulado
+ink-sky = Cielo
+ink-cobalt = Cobalto
+ink-violet = Violeta
+ink-plum = Ciruela
+ink-rose = Rosa
+ink-cocoa = Cacao
+ink-slate = Pizarra
 
 ## Errors
 
-error-cant-start = { $name } can't start
-error-quit = Quit
-error-signed-out = You were signed out. Sign in again to keep syncing.
-error-sync-unanswered = The server didn't take the latest changes.
-error-unlink-library = Couldn't unlink the library: { $error }
-error-mcp-load = Couldn't load AI access: { $problem }
-error-mcp-save = Couldn't save AI access: { $problem }
-error-mcp-needs-pro = AI access needs { -knoa } Pro.
+error-cant-start = { $name } no puede iniciarse
+error-quit = Salir
+error-signed-out = Se cerró tu sesión. Vuelve a iniciar sesión para seguir sincronizando.
+error-sync-unanswered = El servidor no aceptó los últimos cambios.
+error-unlink-library = No se pudo desvincular la biblioteca: { $error }
+error-mcp-load = No se pudo cargar el acceso para IA: { $problem }
+error-mcp-save = No se pudo guardar el acceso para IA: { $problem }
+error-mcp-needs-pro = El acceso para IA requiere { -knoa } Pro.
