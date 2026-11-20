@@ -64,12 +64,12 @@ onboarding-library-house-rules = Jakieś zasady porządkowania?
 onboarding-library-instructions-placeholder = Opcjonalnie. Napisz tak, jak znajomemu.
 onboarding-library-example-apart = Oddzielaj sprawy służbowe od prywatnych.
 onboarding-library-example-recipes = Taguj przepisy według kuchni.
-onboarding-library-example-rust = Wszystko o Rust trafia do folderu Rust.
+onboarding-library-example-rust = Wszystko o Ruście trafia do folderu Rust.
 onboarding-library-example-short = Krótkie podsumowania, bez lania wody.
 onboarding-library-add-example = + { $example }
 onboarding-library-finish = Gotowe
 onboarding-done-title = Wszystko gotowe.
-onboarding-done-no-browser = Na razie bez przeglądarki, więc biblioteka zaczyna pusta. Wybierz ją w Ustawieniach, kiedy tylko zechcesz.
+onboarding-done-no-browser = Na razie bez przeglądarki, więc na początek biblioteka jest pusta. Wybierz ją w Ustawieniach, kiedy tylko zechcesz.
 onboarding-done-bringing-in = Importowanie Twoich zakładek…
 onboarding-done-count =
     { $count ->
@@ -114,7 +114,7 @@ settings-general-language-organize = Uporządkuj ponownie…
 settings-general-language-organize-confirm = Uporządkuj wszystkie
 settings-updates = Aktualizacje
 settings-updates-version = { -knoa } { $version }
-settings-updates-self-built = Ta kompilacja nie aktualizuje się sama. Wydania z GitHuba robią to automatycznie.
+settings-updates-self-built = Ta kompilacja nie aktualizuje się sama. Wydania z GitHuba już tak.
 settings-updates-checked-today = Ostatnio sprawdzono dzisiaj o { $time }
 settings-updates-checked-yesterday = Ostatnio sprawdzono wczoraj o { $time }
 settings-updates-checked-on = Ostatnio sprawdzono { $date }
@@ -123,7 +123,7 @@ settings-updates-check-now = Sprawdź teraz
 settings-updates-check-automatically = Sprawdzaj aktualizacje automatycznie
 settings-updates-check-automatically-about = Raz dziennie, w tle.
 settings-updates-install-automatically = Instaluj aktualizacje automatycznie
-settings-updates-install-automatically-about = Pobieraj nowe wersje i instaluj je po zakończeniu pracy z { -knoa }.
+settings-updates-install-automatically-about = Pobiera nowe wersje i instaluje je przy zamykaniu { -knoa }.
 settings-appearance-title = Wygląd
 settings-appearance-about = Jak wygląda { -knoa }. Zmiany widać od razu.
 settings-appearance-theme = Motyw
@@ -135,7 +135,7 @@ settings-appearance-summaries-about = Do trzech wierszy pod każdym tytułem.
 settings-appearance-up-next = Pokazuj pasek Na później
 settings-appearance-up-next-about = Rząd rzeczy do przeczytania lub obejrzenia na górze widoku Wszystko.
 settings-appearance-events = Pokazuj wydarzenia jako
-settings-appearance-events-about = Kalendarz miesięczny z nadchodzącymi wydarzeniami albo jedną listę. Tylko na tym Macu.
+settings-appearance-events-about = Kalendarz miesięczny z nadchodzącymi wydarzeniami albo jedna lista. Tylko na tym Macu.
 settings-reorganize-title = Uporządkuj ponownie
 settings-reorganize-about = „Tylko foldery” układa uporządkowane zakładki w obecnych folderach, bez ponownego czytania stron ani odpytywania modelu. „Wszystko” tworzy też od nowa podsumowania, pola i tagi według bieżących instrukcji. Foldery ustawione lub usunięte przez Ciebie pozostają bez zmian.
 settings-reorganize-all-title = Uporządkuj ponownie wszystkie przestrzenie
@@ -174,7 +174,7 @@ settings-account-about = Synchronizuj bibliotekę z kontem { -knoa }.
 settings-account-unavailable = Synchronizacja w chmurze nie jest dostępna w tej kompilacji.
 settings-account-couldnt-start = Nie udało się uruchomić: { $reason }
 settings-account-cloud-mode = Tryb chmurowy
-settings-account-what-it-is = Tryb chmurowy synchronizuje bibliotekę między Twoimi urządzeniami oraz z { -knoa } w przeglądarce. W planie Pro { -knoa } porządkuje też zakładki w chmurze, bez własnego klucza.
+settings-account-what-it-is = Tryb chmurowy synchronizuje bibliotekę między Twoimi urządzeniami oraz z { -knoa } w przeglądarce. W planie Pro { -knoa } porządkuje też zakładki w chmurze, bez Twojego klucza.
 settings-account-privacy = W trybie chmurowym Twoja biblioteka jest przechowywana na serwerach { -knoa }, które czytają Twoje strony, żeby je uporządkować. Dane nie są szyfrowane end-to-end. Po wylogowaniu wszystko zostaje na tym Macu.
 settings-account-finish-signing-in = Dokończ logowanie w przeglądarce…
 settings-account-finish-signing-in-about = Strona logowania { -knoa } otworzyła się w Twojej przeglądarce.
@@ -183,8 +183,8 @@ settings-account-knoa-account = Konto { -knoa }
 settings-account-sign-in-about = Zaloguj się lub utwórz konto w przeglądarce.
 settings-account-sign-in = Zaloguj się
 settings-account-other-account = Ta biblioteka jest zsynchronizowana z innym kontem { -knoa }. Nic się nie zsynchronizuje, dopóki nie wybierzesz.
-settings-account-sync-with = Synchronizuj zamiast tego z { $email }
-settings-account-sync-with-this-account = Synchronizuj zamiast tego z tym kontem
+settings-account-sync-with = Zamiast tego synchronizuj z { $email }
+settings-account-sync-with-this-account = Zamiast tego synchronizuj z tym kontem
 settings-account-sync-with-about = Biblioteka zostanie połączona z tym kontem. Drugie konto zachowa swoją kopię.
 settings-account-use-this-account = Użyj tego konta
 settings-account-this-account = To konto
@@ -233,7 +233,7 @@ settings-ai-access-needs-pro = Dostęp AI wymaga { -knoa } Pro
 settings-ai-title = AI
 settings-ai-about = { -knoa } działa też bez AI. Z nim nowe zakładki dostają rodzaj, podsumowanie, tagi i foldery.
 settings-ai-provider = Dostawca
-settings-ai-cloud-note = W planie Pro { -knoa } porządkuje Twoje zakładki w chmurze. Połączony wcześniej klucz zostaje na tym Macu na czas, gdy się wylogujesz.
+settings-ai-cloud-note = W planie Pro { -knoa } porządkuje Twoje zakładki w chmurze. Połączony wcześniej klucz zostaje na tym Macu na wypadek wylogowania.
 settings-ai-key = Klucz OpenRouter
 settings-ai-key-about = Twój własny klucz — zapytania idą z tego Maca prosto do OpenRouter.
 settings-ai-connect = Połącz
@@ -259,7 +259,7 @@ settings-ai-not-organized =
 settings-ai-included-in-pro = Wliczone w plan Pro, w ramach miesięcznego limitu.
 settings-ai-cost = Około ${ $cost } za wszystkie.
 settings-ai-organize = Uporządkuj
-settings-ai-pro-title = Pozwól { -knoa } zrobić to z Pro
+settings-ai-pro-title = Zostaw to { -knoa } w planie Pro
 settings-ai-pro-pitch = { -knoa } porządkuje Twoje zakładki w chmurze. Bez konfiguracji klucza, bez rozliczania za każde zapytanie, a Twoja biblioteka synchronizuje się między urządzeniami.
 settings-ai-pro-get = Wybierz Pro
 settings-ai-pro-upgrade = Przejdź na Pro
@@ -348,7 +348,7 @@ settings-tags-remove = Usuń z listy
 settings-tags-only-listed = Używaj tylko tagów z tej listy
 settings-tags-only-listed-about = Wył.: AI dodaje własne tagi tam, gdzie lista nie wystarcza. Wł.: zakładki dostają tylko tagi z listy lub żadne, jeśli nic nie pasuje.
 settings-tags-only-listed-about-empty = Najpierw dodaj tag. Wył.: AI dodaje własne tagi tam, gdzie lista nie wystarcza. Wł.: zakładki dostają tylko tagi z listy lub żadne, jeśli nic nie pasuje.
-settings-tags-note = Te tagi dostaną nowo porządkowane zakładki. Aby dodać je do już uporządkowanych, użyj ponownego porządkowania.
+settings-tags-note = Zakładki porządkowane od teraz dostaną te tagi. Aby dodać je do już uporządkowanych, uporządkuj je ponownie.
 settings-tags-count = { $count } z { $max }
 
 ## Sidebar
@@ -501,7 +501,7 @@ main-save-image = Zapisz obraz…
 main-add-to-up-next = Dodaj do Na później
 main-remove-from-up-next = Usuń z Na później
 main-add-to-folder = Dodaj do folderu
-main-remove-from-folder = Usuń z folderu „{ $folder }”
+main-remove-from-folder = Usuń z „{ $folder }”
 main-refresh-thumbnail = Odśwież miniaturę
 main-refreshing-thumbnail = Odświeżanie miniatury…
 main-organize = Uporządkuj
@@ -532,10 +532,10 @@ main-empty-nothing-yet-body = Zakładki pojawiają się tutaj, gdy je dodasz.
 main-up-next = Na później
 main-up-next-count =
     { $count ->
-        [one] · { $count } do przeczytania i obejrzenia
-        [few] · { $count } do przeczytania i obejrzenia
-        [many] · { $count } do przeczytania i obejrzenia
-       *[other] · { $count } do przeczytania i obejrzenia
+        [one] · { $count } do przeczytania lub obejrzenia
+        [few] · { $count } do przeczytania lub obejrzenia
+        [many] · { $count } do przeczytania lub obejrzenia
+       *[other] · { $count } do przeczytania lub obejrzenia
     }
 main-best-matches = Najlepsze dopasowania
 main-place-gallery = Galeria
@@ -611,7 +611,7 @@ detail-try-again = Spróbuj ponownie
 detail-title-and-link-only = Na razie tylko tytuł i link.
 detail-read-without-ai = Odczytano tylko ze strony, bez AI.
 detail-no-thumbnail = Brak miniatury na stronie
-detail-page-unreachable = Nie udało się otworzyć strony
+detail-page-unreachable = Nie udało się połączyć ze stroną
 detail-more = Więcej
 detail-tags = Tagi
 detail-remove-tag = Usuń tag

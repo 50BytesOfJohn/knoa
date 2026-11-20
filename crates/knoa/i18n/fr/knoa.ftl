@@ -43,7 +43,7 @@ onboarding-browser-count =
        *[other] { $count } signets
     }
 onboarding-browser-none-found = Je n’ai trouvé aucun navigateur basé sur Chromium ici (Helium, Chrome, Brave, Edge, Vivaldi). Pas de souci : vous pourrez en choisir un plus tard dans les Réglages.
-onboarding-browser-bring-in = Importer ({ $count })
+onboarding-browser-bring-in = En importer { $count }
 onboarding-ai-title = Vous voulez que je fasse le rangement ?
 onboarding-ai-lead = Avec une clé OpenRouter, je lis chaque nouvelle page et lui attribue un type, un résumé, des tags et un dossier. C’est votre clé et votre compte : environ 0,17 $ pour mille signets.
 onboarding-ai-key-placeholder = Collez votre clé : sk-or-v1-…
@@ -92,7 +92,7 @@ settings-nav-appearance = Apparence
 settings-nav-ai = IA
 settings-nav-account = Compte
 settings-general-title = Général
-settings-general-about = Où { -knoa } range votre bibliothèque, comment l’app a démarré et comment elle se met à jour.
+settings-general-about = Où { -knoa } range votre bibliothèque, comment elle a été configurée et comment elle se met à jour.
 settings-general-library = Bibliothèque
 settings-general-location = Emplacement de la bibliothèque
 settings-general-show-in-finder = Afficher dans le Finder
@@ -128,7 +128,7 @@ settings-appearance-summaries = Afficher les résumés sur les cartes
 settings-appearance-summaries-about = Jusqu’à trois lignes sous chaque titre.
 settings-appearance-up-next = Afficher le bandeau « À suivre »
 settings-appearance-up-next-about = La rangée d’éléments à lire ou à regarder, en haut de « Tout ».
-settings-appearance-events = Afficher les événements en
+settings-appearance-events = Affichage des événements
 settings-appearance-events-about = Un calendrier mensuel avec ce qui arrive, ou une seule liste. Sur ce Mac uniquement.
 settings-reorganize-title = Réorganiser
 settings-reorganize-about = « Dossiers uniquement » classe les signets organisés dans les dossiers actuels, sans relire les pages ni solliciter à nouveau le modèle de chat. « Tout » refait aussi les résumés, les champs et les tags avec les instructions actuelles. Les dossiers que vous avez définis ou retirés restent tels quels.
@@ -221,7 +221,7 @@ settings-ai-access-needs-pro = L’accès IA nécessite { -knoa } Pro
 settings-ai-title = IA
 settings-ai-about = { -knoa } fonctionne aussi sans IA. Avec elle, les nouveaux signets reçoivent un type, un résumé, des tags et des dossiers.
 settings-ai-provider = Fournisseur
-settings-ai-cloud-note = Avec Pro, { -knoa } organise vos signets dans le cloud. La clé que vous avez connectée reste sur ce Mac lorsque vous êtes déconnecté.
+settings-ai-cloud-note = Avec Pro, { -knoa } organise vos signets dans le cloud. La clé que vous avez connectée reste sur ce Mac pour quand vous êtes déconnecté.
 settings-ai-key = Clé OpenRouter
 settings-ai-key-about = Votre propre clé ; les requêtes partent de ce Mac directement vers OpenRouter.
 settings-ai-connect = Connecter
@@ -231,7 +231,7 @@ settings-ai-key-failed = L’opération a échoué : { $error }.
 settings-ai-no-key = Pas encore de clé ?
 settings-ai-no-key-about = Quelques dollars de crédit suffisent pour organiser des milliers de signets.
 settings-ai-get-key = Obtenir une clé
-settings-ai-connected = Connectée
+settings-ai-connected = Connecté
 settings-ai-disconnect = Déconnecter
 settings-ai-openrouter-says = OpenRouter indique : { $problem }. Vérifiez votre clé ou vos crédits.
 settings-ai-models = Modèles
@@ -254,13 +254,13 @@ settings-ai-usage = Utilisation
 settings-ai-usage-none = Aucune requête IA pour l’instant.
 settings-ai-usage-recent =
     { $days ->
-        [one] Dernier jour ({ $days })
+        [one] Dernier jour
        *[other] { $days } derniers jours
     }
 settings-ai-usage-all-time = Depuis le début
 settings-ai-usage-by-model =
     { $days ->
-        [one] Par modèle, dernier jour ({ $days })
+        [one] Par modèle, dernier jour
        *[other] Par modèle, { $days } derniers jours
     }
 settings-ai-usage-records = Relevés de { $provider }
@@ -295,7 +295,7 @@ settings-workspace-no-browser = Aucun navigateur basé sur Chromium trouvé. { -
 settings-workspace-browsers-note = Si aucun n’est activé, les liens ne sont ajoutés que manuellement (⌘N). Un navigateur peut alimenter plusieurs espaces.
 settings-workspace-open-in = Ouvrir les signets dans
 settings-workspace-default-browser = Navigateur par défaut
-settings-workspace-by-hand = Liens ajoutés manuellement uniquement.
+settings-workspace-by-hand = Liens ajoutés uniquement à la main.
 settings-workspace-synced-from-one = Synchronisé depuis { $browser }.
 settings-workspace-synced-from-many = Synchronisé depuis { $browsers } et { $last }.
 settings-workspace-organizing = Organisation
@@ -409,7 +409,7 @@ main-save = Enregistrer
 main-folder-new-title = Nouveau dossier
 main-folder-edit-title = Modifier le dossier
 main-folder-name-placeholder = Nom du dossier
-main-folder-description-placeholder = Ce qui y a sa place ? L’IA s’en sert pour classer les signets.
+main-folder-description-placeholder = Qu’est-ce qui a sa place ici ? L’IA s’en sert pour classer les signets.
 main-folder-name-too-long = Un nom peut contenir au maximum { $max } caractères.
 main-folder-description-too-long = Une description peut contenir au maximum { $max } caractères.
 main-folder-auto-assign = Laisser l’IA ajouter des signets
@@ -525,7 +525,7 @@ main-trash-delete-count =
 main-trash-about = Les signets dans la Corbeille sont supprimés définitivement après 30 jours.
 main-trash-days-left =
     { $days ->
-        [1] Dans la Corbeille. Supprimé définitivement sous un jour.
+        [1] Dans la Corbeille. Supprimé définitivement dans moins d’un jour.
        *[other] Dans la Corbeille. Supprimé définitivement dans { $days } jours.
     }
 main-add-link-title = Ajouter un lien dans { $workspace }
@@ -566,7 +566,7 @@ detail-organizing-now = Organisation en cours…
 detail-organize-failed = L’organisation a échoué.
 detail-try-again = Réessayer
 detail-title-and-link-only = Seulement le titre et le lien pour l’instant.
-detail-read-without-ai = Lu uniquement depuis la page, sans IA.
+detail-read-without-ai = Lu sur la page uniquement, sans IA.
 detail-no-thumbnail = Aucune vignette sur la page
 detail-page-unreachable = Impossible d’accéder à la page
 detail-more = Plus
