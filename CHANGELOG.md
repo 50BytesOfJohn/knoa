@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.8.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.8.0) - 2026-11-20
+
+### Changed
+
+- Speak Polish, German, Spanish and French ([#49](https://github.com/50BytesOfJohn/knoa/pull/49))
 ## [0.7.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.7.0) - 2026-11-18
 
 ### Added
