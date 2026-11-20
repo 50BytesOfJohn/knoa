@@ -5,7 +5,7 @@ use gpui::{Context, Div, IntoElement, Stateful};
 use gpui_component::menu::{ContextMenuExt as _, PopupMenuItem};
 use knoa_core::TagList;
 
-use crate::ui::main::MainView;
+use crate::{i18n::t, ui::main::MainView};
 
 /// The chip with its menu. `name` is the tag it shows.
 pub(super) fn with_list_menu(
@@ -19,9 +19,9 @@ pub(super) fn with_list_menu(
     let view = cx.entity().downgrade();
     chip.context_menu(move |menu, _, _| {
         let label = if full {
-            "In tag list (list is full)"
+            t!("detail-in-tag-list-full")
         } else {
-            "In tag list"
+            t!("detail-in-tag-list")
         };
         let (toggle_view, edit_view, name) = (view.clone(), view.clone(), name.clone());
         menu.item(
@@ -36,7 +36,7 @@ pub(super) fn with_list_menu(
         )
         .separator()
         .item(
-            PopupMenuItem::new("Edit tag list…").on_click(move |_, window, cx| {
+            PopupMenuItem::new(t!("detail-edit-tag-list")).on_click(move |_, window, cx| {
                 let _ = edit_view.update(cx, |this, cx| {
                     let workspace = this.library.read(cx).workspace_id();
                     this.edit_workspace(Some(workspace), window, cx);

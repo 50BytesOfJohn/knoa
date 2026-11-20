@@ -323,6 +323,30 @@ detail-details = Details
 detail-removed-from-browser = Removed from the browser, kept here
 detail-saved = Saved { $date }
 detail-chosen-by = Marks what { $model } chose
+detail-folders = Folders
+detail-no-folders = No folders yet. Make one in the sidebar.
+detail-folder-undo = Undo: take it out
+detail-folder-take-out = Take it out
+detail-folder-probability = { $percent }%
+detail-add-to-another-folder = Add to another folder
+detail-set-aside = Set aside: doesn't fit this workspace
+detail-keep = Keep
+detail-organizing-now = Organizing this one now…
+detail-organize-failed = Organizing didn't work out.
+detail-try-again = Try again
+detail-title-and-link-only = Only the title and link so far.
+detail-read-without-ai = Read from the page only, without AI.
+detail-no-thumbnail = No thumbnail on the page
+detail-page-unreachable = Couldn't reach the page
+detail-more = More
+detail-tags = Tags
+detail-remove-tag = Remove tag
+detail-put-back = Put back
+detail-add-tag = Add tag
+detail-add-a-tag = Add a tag
+detail-in-tag-list = In tag list
+detail-in-tag-list-full = In tag list (list is full)
+detail-edit-tag-list = Edit tag list…
 
 ## Events
 
@@ -332,6 +356,14 @@ events-view-list = List
 events-previous-month = Previous month
 events-next-month = Next month
 events-today = Today
+events-upcoming = Upcoming
+events-happening-now = Happening now
+events-date-not-set = Date not set
+events-past = Past
+events-nothing-on-day = Nothing on this day.
+events-nothing-coming-up = Nothing coming up.
+events-nothing-coming-up-panel = Nothing coming up. Events you save show here until they end.
+events-more = +{ $count } more
 
 ## Dates
 
