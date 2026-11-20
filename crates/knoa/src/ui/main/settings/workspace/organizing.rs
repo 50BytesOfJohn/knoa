@@ -3,12 +3,16 @@
 
 use gpui::{Context, Div, IntoElement as _, px};
 use gpui_component::{input::Textarea, switch::Switch};
-use knoa_core::protocol::max_chars::workspace::{GUIDELINE, INSTRUCTIONS};
+use knoa_core::protocol::max_chars::{
+    fits,
+    workspace::{GUIDELINE, INSTRUCTIONS},
+};
 
 use super::{WorkspacePage, form};
 use crate::{
+    i18n::t,
     services::organizer::{AiStatus, Organizer},
-    ui::{components::too_long, theme::Theme},
+    ui::{components::grouped, theme::Theme},
 };
 
 impl WorkspacePage {
@@ -18,39 +22,39 @@ impl WorkspacePage {
         cx: &mut Context<'_, WorkspacePage>,
     ) -> Div {
         let mut rows = vec![form::stacked(
-            "Instructions",
-            Some("How the AI should sort, tag and summarize what lands here."),
+            &t!("settings-workspace-instructions"),
+            Some(&t!("settings-workspace-instructions-about")),
             Textarea::new(&self.instructions).h(px(84.)),
             theme,
         )];
         let instructions = self.instructions.read(cx).value();
-        if let Some(reason) = too_long("Instructions", instructions.trim(), INSTRUCTIONS) {
+        if !fits(instructions.trim(), INSTRUCTIONS) {
+            let max = grouped(INSTRUCTIONS as u64);
+            let reason = t!("settings-workspace-instructions-too-long", max = max);
             rows.push(form::problem_note(reason, theme));
         }
-        rows.push(
-            form::row(
-                "Only keep bookmarks that fit",
-                Some(
-                    "Off: everything from the browser lands here. On: the AI sets aside what doesn't fit, and you can keep it anyway.",
-                ),
-                Switch::new("screening")
-                    .checked(self.screening)
-                    .on_click(cx.listener(|this, on: &bool, _, cx| {
-                        this.screening = *on;
-                        this.changed(cx);
-                    })),
-                theme,
-            ),
-        );
+        rows.push(form::row(
+            &t!("settings-workspace-screening"),
+            Some(&t!("settings-workspace-screening-about")),
+            Switch::new("screening")
+                .checked(self.screening)
+                .on_click(cx.listener(|this, on: &bool, _, cx| {
+                    this.screening = *on;
+                    this.changed(cx);
+                })),
+            theme,
+        ));
         if self.screening {
             rows.push(form::stacked(
-                "What belongs here",
+                &t!("settings-workspace-guideline"),
                 None,
                 Textarea::new(&self.guideline).h(px(84.)),
                 theme,
             ));
             let guideline = self.guideline.read(cx).value();
-            if let Some(reason) = too_long("A guideline", guideline.trim(), GUIDELINE) {
+            if !fits(guideline.trim(), GUIDELINE) {
+                let max = grouped(GUIDELINE as u64);
+                let reason = t!("settings-workspace-guideline-too-long", max = max);
                 rows.push(form::problem_note(reason, theme));
             }
         }
@@ -58,6 +62,6 @@ impl WorkspacePage {
         if let Some(reorganize) = self.reorganize.clone().filter(|_| ai_on) {
             rows.push(reorganize.into_any_element());
         }
-        form::group("Organizing", rows, theme)
+        form::group(&t!("settings-workspace-organizing"), rows, theme)
     }
 }

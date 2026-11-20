@@ -28,6 +28,7 @@ use super::{
     reorganize::{Reorganize, Scope},
 };
 use crate::{
+    i18n::t,
     services::organizer::Organizer,
     state::library::Library,
     ui::{
@@ -81,19 +82,20 @@ impl WorkspacePage {
         let next_color = Ink::nth(library.read(cx).workspaces().len());
         let workspace = existing.unwrap_or_else(|| blank_workspace(next_color));
         let name = cx.new(|cx| {
-            let mut input = InputState::new(window, cx).placeholder("Work, Personal…");
+            let mut input =
+                InputState::new(window, cx).placeholder(t!("settings-workspace-name-placeholder"));
             input.set_value(workspace.name.clone(), window, cx);
             input
         });
         let instructions = cx.new(|cx| {
             let mut input = TextareaState::new(window, cx)
-                .placeholder("e.g. Tag recipes by cuisine. Short summaries, no fluff.");
+                .placeholder(t!("settings-workspace-instructions-placeholder"));
             input.set_value(workspace.instructions.clone(), window, cx);
             input
         });
         let guideline = cx.new(|cx| {
             let mut input = TextareaState::new(window, cx)
-                .placeholder("e.g. Only things about work: engineering, design and our clients.");
+                .placeholder(t!("settings-workspace-guideline-placeholder"));
             input.set_value(workspace.screening.guideline.clone(), window, cx);
             input
         });
@@ -250,8 +252,13 @@ impl WorkspacePage {
         let Some(id) = self.existing else {
             return Some(
                 div().flex().justify_end().child(
-                    button("create-workspace", "Create workspace", Tone::Primary, cx)
-                        .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
+                    button(
+                        "create-workspace",
+                        t!("settings-workspace-create"),
+                        Tone::Primary,
+                        cx,
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
                 ),
             );
         };
@@ -259,20 +266,24 @@ impl WorkspacePage {
             return None;
         }
         let label = if self.confirm_delete {
-            "Delete for good"
+            t!("settings-workspace-delete-confirm")
         } else {
-            "Delete…"
+            t!("settings-workspace-delete-button")
         };
         let delete = button("delete-workspace", label, Tone::Soft, cx)
             .when(self.confirm_delete, |s| s.text_color(theme.danger))
             .on_click(cx.listener(move |this, _, _, cx| this.delete(id, cx)));
         let row = form::row(
-            "Delete this workspace",
-            Some("Its bookmarks and folders go with it. Your browsers keep their bookmarks."),
+            &t!("settings-workspace-delete-label"),
+            Some(&t!("settings-workspace-delete-about")),
             delete,
             theme,
         );
-        Some(form::group("Delete", vec![row], theme))
+        Some(form::group(
+            &t!("settings-workspace-delete"),
+            vec![row],
+            theme,
+        ))
     }
 }
 

@@ -7,14 +7,13 @@ use gpui::{
 use knoa_core::protocol::Plan;
 
 use crate::{
+    i18n::t,
     services::cloud::{Cloud, Phase},
     ui::{
         components::{Tone, button, icon},
         theme::{CARD_RADIUS, Theme},
     },
 };
-
-const PITCH: &str = "Knoa organizes your bookmarks in the cloud. No key to set up, no bill per request, and your library syncs across your devices.";
 
 /// `None` when Pro isn't on offer: a build without a cloud, an account that has it, or
 /// one still being looked up or waiting on a choice on the Account page.
@@ -27,7 +26,11 @@ pub fn card(theme: &Theme, cx: &App) -> Option<Div> {
         Phase::SignedIn(_) if cloud.account()?.plan == Plan::Free => false,
         Phase::SignedIn(_) | Phase::OtherAccount(_) => return None,
     };
-    let label = if signed_out { "Get Pro" } else { "Upgrade" };
+    let label = if signed_out {
+        t!("settings-ai-pro-get")
+    } else {
+        t!("settings-ai-pro-upgrade")
+    };
     let mut actions = div().flex().items_center().gap_2().child(
         button("get-pro", label, Tone::Primary, cx)
             .on_click(move |_, _, cx| cx.open_url(pricing.as_str())),
@@ -35,7 +38,7 @@ pub fn card(theme: &Theme, cx: &App) -> Option<Div> {
     if signed_out && matches!(cloud.phase(), Phase::SignedOut) {
         // Someone who already pays only needs to sign in on this Mac.
         actions = actions.child(
-            button("pro-sign-in", "I have Pro", Tone::Ghost, cx)
+            button("pro-sign-in", t!("settings-ai-pro-have"), Tone::Ghost, cx)
                 .on_click(|_, _, cx| Cloud::entity(cx).update(cx, Cloud::sign_in)),
         );
     }
@@ -73,7 +76,12 @@ fn text(theme: &Theme) -> Div {
                 .text_sm()
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.ai_text)
-                .child("Let Knoa do it with Pro"),
+                .child(t!("settings-ai-pro-title")),
         )
-        .child(div().text_sm().text_color(theme.text).child(PITCH))
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme.text)
+                .child(t!("settings-ai-pro-pitch")),
+        )
 }

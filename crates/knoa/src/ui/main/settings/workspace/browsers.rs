@@ -8,7 +8,10 @@ use gpui_component::{
 use knoa_browser::{Profile, ProfileId};
 
 use super::{WorkspacePage, form};
-use crate::ui::{components::blocked_browsers_notice, theme::Theme};
+use crate::{
+    i18n::t,
+    ui::{components::blocked_browsers_notice, theme::Theme},
+};
 
 impl WorkspacePage {
     pub(super) fn browsers_group(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
@@ -27,19 +30,16 @@ impl WorkspacePage {
             ));
         }
         if self.profiles.is_empty() && self.blocked.is_empty() {
-            rows.push(form::note(
-                "No Chromium-based browser found. Knoa reads Helium, Chrome, Brave, Edge, Vivaldi and Chromium.",
-                theme.muted,
-            ));
+            rows.push(form::note(t!("settings-workspace-no-browser"), theme.muted));
         }
         if let Some(notice) = blocked_browsers_notice(&self.blocked, cx) {
             rows.push(div().p_2().child(notice).into_any_element());
         }
         rows.push(form::note(
-            "With none on, links are only added by hand (⌘N). One browser can feed several workspaces.",
+            t!("settings-workspace-browsers-note"),
             theme.muted,
         ));
-        form::group("Sync bookmarks from", rows, theme)
+        form::group(&t!("settings-workspace-sync-from"), rows, theme)
     }
 
     pub(super) fn opens_in_group(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
@@ -61,7 +61,7 @@ impl WorkspacePage {
                 }
             }));
         let row = div().px_4().py_3().child(group).into_any_element();
-        form::group("Open bookmarks in", vec![row], theme)
+        form::group(&t!("settings-workspace-open-in"), vec![row], theme)
     }
 
     /// The default browser, every readable profile, and the blocked browsers' profiles this
@@ -82,7 +82,7 @@ impl WorkspacePage {
                 let label = format!("{} · {}", id.browser.name(), id.dir);
                 (id, label)
             });
-        let mut choices = vec![(None, "Default browser".to_owned())];
+        let mut choices = vec![(None, t!("settings-workspace-default-browser"))];
         for (id, label) in readable.chain(known_blocked) {
             let id = Some(id.to_string());
             if !choices.iter().any(|(c, _)| *c == id) {
@@ -107,8 +107,12 @@ pub(super) fn synced_from(browsers: &[String]) -> String {
         .collect();
     names.dedup();
     match names.as_slice() {
-        [] => "Links added by hand only.".to_owned(),
-        [one] => format!("Synced from {one}."),
-        [rest @ .., last] => format!("Synced from {} and {last}.", rest.join(", ")),
+        [] => t!("settings-workspace-by-hand"),
+        [one] => t!("settings-workspace-synced-from-one", browser = (*one)),
+        [rest @ .., last] => t!(
+            "settings-workspace-synced-from-many",
+            browsers = (rest.join(", ")),
+            last = (*last)
+        ),
     }
 }

@@ -9,6 +9,7 @@ use knoa_core::{
 
 use crate::{
     assets::line_icon,
+    i18n::t,
     services::cloud::{Cloud, Phase},
     state::settings::SettingsFile,
     ui::{components::svg_icon, theme::Theme},
@@ -44,8 +45,8 @@ pub(super) enum Who {
     #[default]
     ThisMac,
     Account {
-        /// What the account is called: its email, the only name the server gives.
-        name: SharedString,
+        /// The only name the server gives, empty when it gave none.
+        email: SharedString,
         initials: SharedString,
         plan: Option<Plan>,
     },
@@ -83,19 +84,16 @@ impl Who {
         let email = account.and_then(|a| a.email.clone()).unwrap_or_default();
         Who::Account {
             initials: initials(&email).into(),
-            name: if email.is_empty() {
-                SharedString::new_static("Knoa account")
-            } else {
-                email.into()
-            },
+            email: email.into(),
             plan: account.map(|a| a.plan),
         }
     }
 
     pub fn name(&self) -> SharedString {
         match self {
-            Who::ThisMac => SharedString::new_static("This Mac"),
-            Who::Account { name, .. } => name.clone(),
+            Who::ThisMac => t!("sidebar-this-mac").into(),
+            Who::Account { email, .. } if email.is_empty() => t!("sidebar-knoa-account").into(),
+            Who::Account { email, .. } => email.clone(),
         }
     }
 }

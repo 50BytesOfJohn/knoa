@@ -11,6 +11,7 @@ use knoa_core::protocol::Plan;
 use super::{ITEM_HEIGHT, ITEM_ICON, Item};
 use crate::{
     assets::line_icon,
+    i18n::t,
     services::cloud::{Cloud, Phase},
     ui::{
         components::svg_icon,
@@ -29,7 +30,7 @@ impl SidebarView {
         let who = self.identity.who(cx);
         match &who {
             Who::ThisMac => vec![self.sign_in_item(cx)],
-            Who::Account { name, plan, .. } => self.signed_in_items(&who, name.clone(), *plan, cx),
+            Who::Account { plan, .. } => self.signed_in_items(&who, who.name(), *plan, cx),
         }
     }
 
@@ -49,19 +50,24 @@ impl SidebarView {
         ];
         items.extend(plan_item(plan, cx));
         items.push(item(
-            "Account settings…",
+            t!("sidebar-account-settings"),
             line_icon!("circle-user-round"),
             Item::AccountSettings,
             cx,
         ));
         items.push(item(
-            "Open Knoa on the web",
+            t!("sidebar-open-web"),
             line_icon!("external-link"),
             Item::OpenWeb,
             cx,
         ));
         items.push(separator(&theme));
-        items.push(item("Sign out", line_icon!("log-out"), Item::SignOut, cx));
+        items.push(item(
+            t!("sidebar-sign-out"),
+            line_icon!("log-out"),
+            Item::SignOut,
+            cx,
+        ));
         items
     }
 
@@ -70,7 +76,12 @@ impl SidebarView {
         if matches!(self.cloud.read(cx).phase(), Phase::SigningIn(_)) {
             self.finish_in_browser(cx)
         } else {
-            item("Sign in…", line_icon!("log-in"), Item::SignIn, cx)
+            item(
+                t!("sidebar-sign-in"),
+                line_icon!("log-in"),
+                Item::SignIn,
+                cx,
+            )
         }
     }
 
@@ -97,34 +108,42 @@ impl SidebarView {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .child("Finish in browser"),
+                    .child(t!("sidebar-finish-in-browser")),
             )
             .child(
-                text_button("Cancel", theme).on_click(cx.listener(|this, _, _, cx| {
-                    this.cloud.update(cx, Cloud::cancel_sign_in);
-                })),
+                text_button("cancel-sign-in", t!("sidebar-cancel"), theme).on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.cloud.update(cx, Cloud::cancel_sign_in);
+                    },
+                )),
             )
             .into_any_element()
     }
 }
 
 fn plan_line(plan: Option<Plan>) -> SharedString {
-    SharedString::new_static(match plan {
-        Some(Plan::Pro) => "Knoa Pro",
-        Some(Plan::Free) => "Free plan",
-        None => "Signed in",
-    })
+    let line = match plan {
+        Some(Plan::Pro) => t!("sidebar-plan-pro"),
+        Some(Plan::Free) => t!("sidebar-plan-free"),
+        None => t!("sidebar-signed-in"),
+    };
+    line.into()
 }
 
 fn plan_item(plan: Option<Plan>, cx: &mut Context<'_, SidebarView>) -> Option<AnyElement> {
     match plan? {
         Plan::Pro => Some(item(
-            "Manage plan…",
+            t!("sidebar-manage-plan"),
             line_icon!("credit-card"),
             Item::ManagePlan,
             cx,
         )),
-        Plan::Free => Some(item("Upgrade to Pro", line_icon!("zap"), Item::Upgrade, cx)),
+        Plan::Free => Some(item(
+            t!("sidebar-upgrade-to-pro"),
+            line_icon!("zap"),
+            Item::Upgrade,
+            cx,
+        )),
     }
 }
 
@@ -171,7 +190,7 @@ fn separator(theme: &Theme) -> AnyElement {
 
 /// One row of the menu, the same for every item: an icon, then its label.
 fn item(
-    label: &'static str,
+    label: String,
     icon: SharedString,
     action: Item,
     cx: &mut Context<'_, SidebarView>,
@@ -179,7 +198,7 @@ fn item(
     let theme = Theme::get(cx);
     let hover = theme.hover;
     item_row()
-        .id(label)
+        .id(("account-menu-item", action as usize))
         .text_color(theme.text)
         .cursor_pointer()
         .hover(move |s| s.bg(hover))

@@ -16,6 +16,7 @@ use super::{
     reorganize::{Reorganize, Scope},
 };
 use crate::{
+    i18n::t,
     services::{
         ai,
         cloud::Cloud,
@@ -40,12 +41,18 @@ pub struct AiPage {
     library: Entity<Library>,
     reorganize: Entity<Reorganize>,
     key: Entity<InputState>,
-    /// The result of the last key check, and whether it failed.
-    message: Option<(String, bool)>,
+    /// Where the last key check got to.
+    key_check: Option<KeyCheck>,
     checking: Option<Task<()>>,
     /// `None` until the first load, so the page doesn't flash "no requests".
     usage: Option<UsageReport>,
     loading_usage: Option<Task<()>>,
+}
+
+enum KeyCheck {
+    Checking,
+    Connected,
+    Failed(String),
 }
 
 impl AiPage {
@@ -74,7 +81,7 @@ impl AiPage {
             library,
             reorganize,
             key,
-            message: None,
+            key_check: None,
             checking: None,
             usage: None,
             loading_usage: None,
@@ -102,20 +109,17 @@ impl AiPage {
         if key.is_empty() {
             return;
         }
-        self.message = Some(("Checking the key…".into(), false));
+        self.key_check = Some(KeyCheck::Checking);
         let check = ai::check_key(ProviderKind::OpenRouter, key.clone(), cx);
         self.checking = Some(cx.spawn(async move |this, cx| {
             let result = check.await;
             let _ = this.update(cx, |this, cx| {
-                this.message = Some(match result {
+                this.key_check = Some(match result {
                     Ok(()) => {
                         ai::enable(ProviderKind::OpenRouter, &key, cx).detach_and_log_err(cx);
-                        (
-                            "Connected. New bookmarks get organized from now on.".into(),
-                            false,
-                        )
+                        KeyCheck::Connected
                     }
-                    Err(err) => (format!("That didn't work: {err}."), true),
+                    Err(err) => KeyCheck::Failed(err.to_string()),
                 });
                 cx.notify();
             });
@@ -144,8 +148,8 @@ impl Render for AiPage {
             .items_center()
             .gap_6()
             .child(div().flex_1().child(form::header(
-                "AI",
-                "Knoa works without AI too. With it, new bookmarks get a kind, a summary, tags and folders.",
+                t!("settings-ai-title"),
+                &t!("settings-ai-about"),
                 &theme,
             )))
             .child(mascot(
@@ -166,11 +170,8 @@ impl Render for AiPage {
                 .child(self.backlog_group(&theme, cx)),
             AiStatus::Cloud => page
                 .child(form::group(
-                    "Provider",
-                    vec![form::note(
-                        "With Pro, Knoa organizes your bookmarks in the cloud. A key you connected stays on this Mac for when you're not signed in.",
-                        theme.muted,
-                    )],
+                    &t!("settings-ai-provider"),
+                    vec![form::note(t!("settings-ai-cloud-note"), theme.muted)],
                     &theme,
                 ))
                 .child(self.backlog_group(&theme, cx)),
@@ -193,24 +194,24 @@ impl AiPage {
             .gap_2()
             .child(div().flex_1().child(Input::new(&self.key)))
             .child(
-                button("connect-ai", "Connect", Tone::Primary, cx)
+                button("connect-ai", t!("settings-ai-connect"), Tone::Primary, cx)
                     .on_click(cx.listener(|this, _, _, cx| this.connect(cx))),
             );
         let mut rows = vec![form::stacked(
-            "OpenRouter key",
-            Some("Your own key; requests go from this Mac straight to OpenRouter."),
+            &t!("settings-ai-key"),
+            Some(&t!("settings-ai-key-about")),
             field,
             theme,
         )];
         rows.extend(self.message_row(theme));
         rows.push(form::row(
-            "No key yet?",
-            Some("A few dollars of credit organizes thousands of bookmarks."),
-            button("get-key", "Get a key", Tone::Soft, cx)
+            &t!("settings-ai-no-key"),
+            Some(&t!("settings-ai-no-key-about")),
+            button("get-key", t!("settings-ai-get-key"), Tone::Soft, cx)
                 .on_click(|_, _, cx| cx.open_url(ProviderKind::OpenRouter.keys_url())),
             theme,
         ));
-        form::group("Provider", rows, theme)
+        form::group(&t!("settings-ai-provider"), rows, theme)
     }
 
     fn provider_group(
@@ -226,24 +227,33 @@ impl AiPage {
             .unwrap_or_default();
         let mut rows = vec![form::row(
             "OpenRouter",
-            Some("Connected"),
-            button("disconnect-ai", "Disconnect", Tone::Soft, cx).on_click(cx.listener(
-                |_, _, _, cx| {
-                    ai::disable(cx);
-                    cx.notify();
-                },
-            )),
+            Some(&t!("settings-ai-connected")),
+            button(
+                "disconnect-ai",
+                t!("settings-ai-disconnect"),
+                Tone::Soft,
+                cx,
+            )
+            .on_click(cx.listener(|_, _, _, cx| {
+                ai::disable(cx);
+                cx.notify();
+            })),
             theme,
         )];
         if let AiStatus::NeedsAttention(problem) = status {
             rows.push(form::problem_note(
-                format!("OpenRouter says: {problem}. Check your key or credits."),
+                t!("settings-ai-openrouter-says", problem = problem),
                 theme,
             ));
         }
         rows.extend(self.message_row(theme));
-        rows.push(form::row("Models", Some(&models), div(), theme));
-        form::group("Provider", rows, theme)
+        rows.push(form::row(
+            &t!("settings-ai-models"),
+            Some(&models),
+            div(),
+            theme,
+        ));
+        form::group(&t!("settings-ai-provider"), rows, theme)
     }
 
     fn backlog_group(&self, theme: &Theme, cx: &mut Context<'_, AiPage>) -> Div {
@@ -254,19 +264,31 @@ impl AiPage {
             .map(|w| w.name.clone())
             .unwrap_or_default();
         let row = if not_organized == 0 {
-            form::note(format!("Everything in {name} is organized."), theme.muted)
+            form::note(
+                t!("settings-ai-all-organized", workspace = name),
+                theme.muted,
+            )
         } else {
             let cost = not_organized as f64 * DOLLARS_PER_BOOKMARK;
             let about = if *Organizer::entity(cx).read(cx).status() == AiStatus::Cloud {
-                "Included in Pro, within its monthly allowance.".to_owned()
+                t!("settings-ai-included-in-pro")
             } else {
-                format!("About ${cost:.2} to do them all.")
+                t!("settings-ai-cost", cost = format!("{cost:.2}"))
             };
             form::row(
-                &format!("{not_organized} bookmarks in {name} aren't organized yet"),
+                &t!(
+                    "settings-ai-not-organized",
+                    count = (not_organized),
+                    workspace = name
+                ),
                 Some(&about),
-                button("organize-all", "Organize", Tone::Primary, cx)
-                    .on_click(cx.listener(|this, _, _, cx| this.organize_existing(cx))),
+                button(
+                    "organize-all",
+                    t!("settings-ai-organize"),
+                    Tone::Primary,
+                    cx,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.organize_existing(cx))),
                 theme,
             )
         };
@@ -274,15 +296,16 @@ impl AiPage {
         if library.workspaces().len() > 1 {
             rows.push(self.reorganize.clone().into_any_element());
         }
-        form::group("Existing bookmarks", rows, theme)
+        form::group(&t!("settings-ai-existing"), rows, theme)
     }
 
     fn message_row(&self, theme: &Theme) -> Option<AnyElement> {
-        let (text, is_error) = self.message.as_ref()?;
-        Some(if *is_error {
-            form::problem_note(text.clone(), theme)
-        } else {
-            form::note(text.clone(), theme.muted)
+        Some(match self.key_check.as_ref()? {
+            KeyCheck::Checking => form::note(t!("settings-ai-checking"), theme.muted),
+            KeyCheck::Connected => form::note(t!("settings-ai-key-connected"), theme.muted),
+            KeyCheck::Failed(err) => {
+                form::problem_note(t!("settings-ai-key-failed", error = err), theme)
+            }
         })
     }
 }

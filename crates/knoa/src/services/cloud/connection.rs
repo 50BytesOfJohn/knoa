@@ -10,6 +10,7 @@ use knoa_paths::Channel;
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
 use super::{Backend, Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
+use crate::i18n::t;
 use crate::services::{credentials::Credentials, generation::Ticket, network::Network};
 
 impl Cloud {
@@ -292,8 +293,7 @@ async fn on_session_events(
                     tracing::warn!("the cloud sign-in was refused; signed out");
                     this.forget_account(cx);
                     this.phase = Phase::SignedOut;
-                    this.problem =
-                        Some("You were signed out. Sign in again to keep syncing.".into());
+                    this.problem = Some(t!("error-signed-out"));
                     cx.notify();
                 }
             }

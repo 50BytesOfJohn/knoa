@@ -14,7 +14,7 @@ use knoa_core::Language;
 use objc2_foundation::NSLocale;
 use rust_embed::RustEmbed;
 
-pub use vocabulary::{field_label, kind_label, kind_plural, with_kind_slugs};
+pub use vocabulary::{field_label, ink_label, kind_label, kind_plural, with_kind_slugs};
 
 use crate::state::settings::SettingsFile;
 

@@ -10,6 +10,7 @@ use knoa_core::{ModelUsage, UsageTotals};
 
 use super::super::form;
 use crate::{
+    i18n::t,
     services::usage::{RECENT_DAYS, UsageReport},
     ui::{
         components::{Tone, button},
@@ -25,27 +26,31 @@ pub fn groups(
     cx: &mut App,
 ) -> Vec<Div> {
     if report.is_empty() {
-        let note = form::note("No AI requests yet.", theme.muted);
-        return vec![form::group("Usage", vec![note], theme)];
+        let note = form::note(t!("settings-ai-usage-none"), theme.muted);
+        return vec![form::group(&t!("settings-ai-usage"), vec![note], theme)];
     }
-    let recent_label = format!("Last {RECENT_DAYS} days");
+    let recent_label = t!("settings-ai-usage-recent", days = RECENT_DAYS);
     let mut rows = vec![
         totals_row(&recent_label, &sum(&report.recent), theme),
-        totals_row("All time", &sum(&report.all_time), theme),
+        totals_row(
+            &t!("settings-ai-usage-all-time"),
+            &sum(&report.all_time),
+            theme,
+        ),
     ];
     if let Some(provider) = provider {
         rows.push(form::row(
-            &format!("{}'s own records", provider.name()),
-            Some("Every request, with the exact amount charged."),
-            button("ai-activity", "Open", Tone::Soft, cx)
+            &t!("settings-ai-usage-records", provider = (provider.name())),
+            Some(&t!("settings-ai-usage-records-about")),
+            button("ai-activity", t!("settings-ai-usage-open"), Tone::Soft, cx)
                 .on_click(move |_, _, cx| cx.open_url(provider.activity_url())),
             theme,
         ));
     }
-    let mut groups = vec![form::group("Usage", rows, theme)];
+    let mut groups = vec![form::group(&t!("settings-ai-usage"), rows, theme)];
     if !report.recent.is_empty() {
         let models = report.recent.iter().map(|m| model_row(m, theme)).collect();
-        let title = format!("By model, last {RECENT_DAYS} days");
+        let title = t!("settings-ai-usage-by-model", days = RECENT_DAYS);
         groups.push(form::group(&title, models, theme));
     }
     groups
@@ -85,25 +90,24 @@ fn amount(totals: &UsageTotals, theme: &Theme) -> Div {
 
 /// Requests and tokens, and what the provider left unreported.
 fn details(totals: &UsageTotals) -> String {
-    let mut parts = vec![count(totals.requests, "request", "requests")];
+    let mut parts = vec![t!("settings-ai-usage-requests", count = (totals.requests))];
     if totals.unmetered < totals.requests {
-        parts.push(format!(
-            "{} tokens in, {} out",
-            tokens(totals.input_tokens),
-            tokens(totals.output_tokens)
+        parts.push(t!(
+            "settings-ai-usage-tokens",
+            input = (tokens(totals.input_tokens)),
+            output = (tokens(totals.output_tokens))
         ));
     }
     if totals.unmetered > 0 {
-        parts.push(format!("{} without token counts", totals.unmetered));
+        parts.push(t!(
+            "settings-ai-usage-unmetered",
+            count = (totals.unmetered)
+        ));
     }
     if totals.unpriced > 0 {
-        parts.push(format!("{} without a price", totals.unpriced));
+        parts.push(t!("settings-ai-usage-unpriced", count = (totals.unpriced)));
     }
     parts.join(" · ")
-}
-
-fn count(n: u64, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
 }
 
 /// Cents hide what a few bookmarks cost, so small amounts get more digits.

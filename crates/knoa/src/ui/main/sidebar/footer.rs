@@ -12,6 +12,7 @@ use super::{
 };
 use crate::{
     assets::line_icon,
+    i18n::t,
     ui::{
         components::{svg_icon, tip},
         main::{OpenSettings, settings::Page},
@@ -26,7 +27,7 @@ impl SidebarView {
     pub(super) fn footer(&mut self, cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
         let theme = Theme::get(cx);
         let settings = icon_button("settings", line_icon!("settings"), BUTTON, px(16.), theme)
-            .tooltip(tip("Settings", Some(&OpenSettings), theme))
+            .tooltip(tip(t!("sidebar-settings"), Some(&OpenSettings), theme))
             .on_click(cx.listener(|_, _, _, cx| {
                 cx.emit(SidebarEvent::OpenSettings(Page::General));
             }));

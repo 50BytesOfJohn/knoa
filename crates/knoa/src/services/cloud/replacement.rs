@@ -3,6 +3,7 @@
 use gpui::{AppContext as _, Context};
 
 use super::{Cloud, Phase};
+use crate::i18n::t;
 
 impl Cloud {
     /// The user agreed to replace the other account's link: this library becomes the
@@ -35,7 +36,7 @@ impl Cloud {
                         if let Phase::OtherAccount(connection) = &mut this.phase {
                             connection.replacement = None;
                         }
-                        this.problem = Some(format!("Couldn't unlink the library: {err}"));
+                        this.problem = Some(t!("error-unlink-library", error = (err.to_string())));
                         cx.notify();
                     }
                     None => {}
