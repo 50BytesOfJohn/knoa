@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-pub(super) fn button(
+pub(in crate::ui::main::settings) fn button(
     id: &'static str,
     account: &Account,
     config: &CloudConfig,

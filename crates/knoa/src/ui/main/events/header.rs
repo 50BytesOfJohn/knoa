@@ -13,6 +13,7 @@ use crate::{
     i18n::t,
     state::settings::EventsView,
     ui::{
+        choice::segmented,
         components::{Tone, button, icon},
         main::MainView,
         theme::{SERIF, Theme},
@@ -36,41 +37,8 @@ fn view_label(view: EventsView) -> String {
 
 /// The two-way switch between the calendar and the list. It saves the choice.
 pub fn view_switch(id: &'static str, current: EventsView, theme: &Theme) -> Div {
-    let mut switch = div()
-        .flex()
-        .p(px(2.))
-        .gap(px(2.))
-        .rounded_full()
-        .bg(theme.soft);
-    for (index, view) in VIEWS.into_iter().enumerate() {
-        let (text, hover) = (theme.text, theme.hover);
-        let segment = div()
-            .id((id, index))
-            .h(px(26.))
-            .px_3()
-            .flex()
-            .items_center()
-            .rounded_full()
-            .text_xs()
-            .font_weight(FontWeight::MEDIUM)
-            .cursor_pointer()
-            .map(|s| {
-                if view == current {
-                    s.bg(theme.panel).text_color(text).shadow_sm()
-                } else {
-                    s.text_color(theme.muted)
-                        .hover(move |s| s.bg(hover).text_color(text))
-                }
-            })
-            .child(view_label(view))
-            .on_click(move |_, _, cx| {
-                if view != current {
-                    set_events_view(view, cx);
-                }
-            });
-        switch = switch.child(segment);
-    }
-    switch
+    let views = VIEWS.map(|view| (view, view_label(view))).to_vec();
+    segmented(id, views, Some(current), false, theme, set_events_view)
 }
 
 impl MainView {

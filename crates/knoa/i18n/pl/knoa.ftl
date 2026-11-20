@@ -97,6 +97,8 @@ settings-nav-general = Ogólne
 settings-nav-appearance = Wygląd
 settings-nav-ai = AI
 settings-nav-account = Konto
+settings-nav-organize = Porządkowanie
+settings-nav-mcp = MCP
 settings-general-title = Ogólne
 settings-general-about = Gdzie { -knoa } trzyma Twoją bibliotekę, jak skonfigurować aplikację i jak działają aktualizacje.
 settings-general-library = Biblioteka
@@ -138,13 +140,32 @@ settings-appearance-up-next-about = Rząd rzeczy do przeczytania lub obejrzenia 
 settings-appearance-events = Pokazuj wydarzenia jako
 settings-appearance-events-about = Kalendarz miesięczny z nadchodzącymi wydarzeniami albo jedna lista. Tylko na tym Macu.
 settings-reorganize-title = Uporządkuj ponownie
-settings-reorganize-about = „Tylko foldery” układa uporządkowane zakładki w obecnych folderach, bez ponownego czytania stron ani odpytywania modelu. „Wszystko” tworzy też od nowa podsumowania, pola i tagi według bieżących instrukcji. Foldery ustawione lub usunięte przez Ciebie pozostają bez zmian.
-settings-reorganize-all-title = Uporządkuj ponownie wszystkie przestrzenie
-settings-reorganize-all-about = To samo dla wszystkich przestrzeni naraz, gdy zmienisz foldery w kilku z nich.
-settings-reorganize-folders = Tylko foldery…
 settings-reorganize-folders-confirm = Ułóż wszystkie
-settings-reorganize-everything = Wszystko…
 settings-reorganize-everything-confirm = Uporządkuj wszystkie
+settings-organize-title = Porządkowanie
+settings-organize-about = Niech AI uporządkuje zakładki, do których jeszcze nie dotarło, albo przejrzy ponownie te już uporządkowane.
+settings-organize-scope = Zakładki w
+settings-organize-scope-all = Wszystkie przestrzenie
+settings-organize-new = Jeszcze nieuporządkowane
+settings-organize-counting = Liczenie zakładek…
+settings-organize-none = Tu wszystko jest uporządkowane.
+settings-organize-waiting =
+    { $count ->
+        [one] { $count } zakładka nie jest jeszcze uporządkowana
+        [few] { $count } zakładki nie są jeszcze uporządkowane
+        [many] { $count } zakładek nie jest jeszcze uporządkowanych
+       *[other] { $count } zakładek nie jest jeszcze uporządkowanych
+    }
+settings-organize-ai-off = Porządkowanie wymaga AI
+settings-organize-ai-off-about = Podłącz własny klucz albo wybierz Pro na stronie AI.
+settings-organize-open-ai = Skonfiguruj AI
+settings-reorganize-folders-label = Tylko foldery
+settings-reorganize-folders-about = Układa uporządkowane zakładki w obecnych folderach. Strony nie są czytane ponownie, więc to szybkie i tanie.
+settings-reorganize-folders-start = Ułóż ponownie…
+settings-reorganize-everything-label = Wszystko
+settings-reorganize-everything-about = Czyta każdą stronę ponownie i od nowa tworzy podsumowanie, pola, tagi i foldery według obecnych instrukcji i języka.
+settings-reorganize-everything-start = Uporządkuj ponownie…
+settings-reorganize-kept = Foldery ustawione lub usunięte przez Ciebie zostają bez zmian.
 settings-reorganize-queued =
     { $count ->
         [one] Dodano do kolejki { $count } zakładkę.
@@ -214,12 +235,10 @@ settings-account-notice-too-large = Część zmian była zbyt duża do synchroni
 settings-account-notice-allowance-used-up = Miesięczny limit porządkowania został wyczerpany. { -knoa } zachowa Twoje zlecenia porządkowania i wznowi je automatycznie, gdy limit się odnowi.
 settings-account-sign-out = Wyloguj się
 settings-account-sign-out-about = Twoja biblioteka zostanie na tym Macu. Zaloguj się ponownie, żeby wrócić do synchronizacji.
-settings-ai-access-title = Dostęp AI
 settings-ai-access-about = Pozwól aplikacjom AI, takim jak Claude i ChatGPT, czytać Twoje zakładki i nimi zarządzać.
 settings-ai-access-copy = Kopiuj
-settings-ai-access-url = Adres URL MCP
+settings-ai-access-url = Adres URL łącznika
 settings-ai-access-default = Domyślny dostęp
-settings-ai-access-default-about = Dotyczy przestrzeni z ustawieniem „Tak jak domyślny”.
 settings-ai-access-same-as-default = Tak jak domyślny
 settings-ai-access-off = Wyłączony
 settings-ai-access-read = Tylko odczyt
@@ -231,6 +250,22 @@ settings-ai-access-save-again = Zapisz dostęp AI ponownie
 settings-ai-access-load-again = Wczytaj dostęp AI ponownie
 settings-ai-access-retry = Ponów
 settings-ai-access-needs-pro = Dostęp AI wymaga { -knoa } Pro
+settings-mcp-title = MCP
+settings-mcp-sign-in = Zaloguj się, aby połączyć aplikacje AI
+settings-mcp-sign-in-about = Aplikacje AI łączą się z Twoją biblioteką przez konto { -knoa }.
+settings-mcp-open-account = Otwórz Konto
+settings-mcp-pro-about = Z Pro aplikacje AI, takie jak Claude i ChatGPT, mogą przeszukiwać, czytać i porządkować Twoją bibliotekę.
+settings-mcp-copied = Skopiowano
+settings-mcp-connect = Połączenie
+settings-mcp-how = Jak się połączyć
+settings-mcp-how-copy = Skopiuj adres URL łącznika.
+settings-mcp-how-add = W Claude, ChatGPT lub innej aplikacji AI dodaj go jako własny łącznik.
+settings-mcp-how-sign-in = Zaloguj się do { -knoa }, gdy aplikacja o to poprosi.
+settings-mcp-how-about = Połączona aplikacja AI może czytać Twoje zakładki, w tym tekst zapisany z ich stron, w każdej przestrzeni, do której ma dostęp. Zmiany wprowadzone tutaj zadziałają od następnego zapytania.
+settings-mcp-access = Dostęp
+settings-mcp-default-off = Aplikacje AI nie mają dostępu do przestrzeni z ustawieniem domyślnym.
+settings-mcp-default-read = Aplikacje AI mogą przeszukiwać i czytać zakładki w przestrzeniach z ustawieniem domyślnym.
+settings-mcp-default-full = Aplikacje AI mogą też dodawać, edytować i przenosić zakładki do Kosza oraz zarządzać folderami i przestrzeniami.
 settings-ai-title = AI
 settings-ai-about = { -knoa } działa też bez AI. Z nim nowe zakładki dostają rodzaj, podsumowanie, tagi i foldery.
 settings-ai-provider = Dostawca
@@ -248,15 +283,6 @@ settings-ai-connected = Połączono
 settings-ai-disconnect = Rozłącz
 settings-ai-openrouter-says = OpenRouter odpowiada: { $problem }. Sprawdź swój klucz lub środki.
 settings-ai-models = Modele
-settings-ai-existing = Istniejące zakładki
-settings-ai-all-organized = Wszystko w „{ $workspace }” jest uporządkowane.
-settings-ai-not-organized =
-    { $count ->
-        [one] { $count } zakładka w „{ $workspace }” nie jest jeszcze uporządkowana
-        [few] { $count } zakładki w „{ $workspace }” nie są jeszcze uporządkowane
-        [many] { $count } zakładek w „{ $workspace }” nie jest jeszcze uporządkowanych
-       *[other] { $count } zakładek w „{ $workspace }” nie jest jeszcze uporządkowanych
-    }
 settings-ai-included-in-pro = Wliczone w plan Pro, w ramach miesięcznego limitu.
 settings-ai-cost = Około { $cost } za wszystkie.
 settings-ai-organize = Uporządkuj
@@ -315,10 +341,13 @@ settings-workspace-name-and-color = Nazwa i kolor
 settings-workspace-name = Nazwa
 settings-workspace-name-too-long = Nazwa może mieć maksymalnie { $max } znaków.
 settings-workspace-color = Kolor
-settings-workspace-sync-from = Synchronizuj zakładki z
 settings-workspace-no-browser = Nie znaleziono przeglądarki opartej na Chromium. { -knoa } obsługuje Helium, Chrome, Brave, Edge, Vivaldi i Chromium.
 settings-workspace-browsers-note = Gdy żadna nie jest włączona, linki dodajesz tylko ręcznie (⌘N). Jedna przeglądarka może zasilać kilka przestrzeni.
 settings-workspace-open-in = Otwieraj zakładki w
+settings-workspace-browsers = Przeglądarki
+settings-workspace-open-in-about = Gdzie otwierają się linki z tej przestrzeni.
+settings-workspace-organize-again-about = Po zmianie instrukcji lub tagów ułóż albo uporządkuj ponownie zakładki tej przestrzeni.
+settings-workspace-open-organize = Uporządkuj…
 settings-workspace-default-browser = Domyślna przeglądarka
 settings-workspace-by-hand = Tylko linki dodane ręcznie.
 settings-workspace-synced-from-one = Synchronizacja z { $browser }.

@@ -43,9 +43,19 @@ impl SettingsView {
                 ai_mark(px(15.), theme.ai).into_any_element(),
             ),
             (
+                Page::Organize,
+                t!("settings-nav-organize"),
+                icon_mark(Page::Organize, "folder-sync"),
+            ),
+            (
+                Page::Mcp,
+                t!("settings-nav-mcp"),
+                icon_mark(Page::Mcp, "plug"),
+            ),
+            (
                 Page::Account,
                 t!("settings-nav-account"),
-                icon_mark(Page::Account, "cloud"),
+                icon_mark(Page::Account, "user-round"),
             ),
         ] {
             app_pages = app_pages.child(self.nav_row(page, &label, mark, cx));

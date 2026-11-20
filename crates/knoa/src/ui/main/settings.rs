@@ -1,12 +1,15 @@
 //! Settings: one sheet over the main window, with its own sidebar of pages. App-wide pages
-//! (General, Appearance, AI, Account) come first, then one page per workspace.
+//! (General, Appearance, AI, Organize, MCP, Account) come first, then one page per
+//! workspace.
 
 mod account;
 mod ai;
 mod appearance;
 mod form;
 mod general;
+mod mcp;
 mod nav;
+mod organize;
 mod reorganize;
 mod updates;
 mod workspace;
@@ -25,6 +28,9 @@ use crate::{
 };
 use account::AccountPage;
 use ai::AiPage;
+use mcp::{McpPage, McpPageEvent};
+use organize::{OrganizePage, OrganizePageEvent};
+use reorganize::Scope;
 use workspace::{WorkspacePage, WorkspacePageEvent};
 
 /// The widest a page's column gets; past this, rows are hard to read across.
@@ -35,6 +41,8 @@ pub enum Page {
     General,
     Appearance,
     Ai,
+    Organize,
+    Mcp,
     Account,
     Workspace(WorkspaceId),
     NewWorkspace,
@@ -46,6 +54,8 @@ pub struct SettingsView {
     main: WeakEntity<MainView>,
     focus: FocusHandle,
     ai: Entity<AiPage>,
+    organize: Entity<OrganizePage>,
+    mcp: Entity<McpPage>,
     account: Entity<AccountPage>,
     /// The page of the workspace shown, while one is.
     workspace: Option<Entity<WorkspacePage>>,
@@ -63,24 +73,40 @@ impl SettingsView {
         cx: &mut Context<'_, SettingsView>,
     ) -> SettingsView {
         let ai = cx.new(|cx| AiPage::new(library.clone(), window, cx));
-        let account = cx.new(|cx| AccountPage::new(library.clone(), cx));
+        let organize = cx.new(|cx| OrganizePage::new(library.clone(), cx));
+        let mcp = cx.new(|cx| McpPage::new(library.clone(), cx));
+        let account = cx.new(AccountPage::new);
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         // However the sheet closes (Esc, a click outside, the close button), edits not yet
         // saved are saved.
         cx.on_release(|this: &mut SettingsView, cx| this.commit(cx))
             .detach();
-        let subscriptions = vec![cx.subscribe_in(
-            &library,
-            window,
-            |this, _, _: &LibraryChanged, window, cx| this.on_library_changed(window, cx),
-        )];
+        let subscriptions = vec![
+            cx.subscribe_in(
+                &library,
+                window,
+                |this, _, _: &LibraryChanged, window, cx| this.on_library_changed(window, cx),
+            ),
+            cx.subscribe_in(
+                &organize,
+                window,
+                |this, _, event, window, cx| match event {
+                    OrganizePageEvent::OpenAi => this.show(Page::Ai, window, cx),
+                },
+            ),
+            cx.subscribe_in(&mcp, window, |this, _, event, window, cx| match event {
+                McpPageEvent::OpenAccount => this.show(Page::Account, window, cx),
+            }),
+        ];
         let mut view = SettingsView {
             page: Page::General,
             library,
             main,
             focus,
             ai,
+            organize,
+            mcp,
             account,
             workspace: None,
             language_note: None,
@@ -101,8 +127,8 @@ impl SettingsView {
             Page::NewWorkspace => Some(self.workspace_page(None, window, cx)),
             _ => None,
         };
-        if page == Page::Account {
-            self.account.update(cx, AccountPage::load);
+        if page == Page::Mcp {
+            self.mcp.update(cx, McpPage::load);
         }
         self.page = page;
         cx.notify();
@@ -143,10 +169,16 @@ impl SettingsView {
         let library = self.library.clone();
         let page = cx.new(|cx| WorkspacePage::new(existing, library, window, cx));
         // The page stays: it turns into the new workspace's page by itself.
-        cx.subscribe(&page, |this, _, event, cx| match event {
+        cx.subscribe_in(&page, window, |this, _, event, window, cx| match event {
             WorkspacePageEvent::Created(id) => {
                 this.page = Page::Workspace(*id);
                 cx.notify();
+            }
+            WorkspacePageEvent::OpenOrganize(id) => {
+                let scope = Scope::Workspace(*id);
+                this.organize
+                    .update(cx, |page, cx| page.set_scope(scope, cx));
+                this.show(Page::Organize, window, cx);
             }
         })
         .detach();
@@ -211,6 +243,8 @@ impl SettingsView {
             (Page::General, _) => general::page(self, cx).into_any_element(),
             (Page::Appearance, _) => appearance::page(cx).into_any_element(),
             (Page::Ai, _) => self.ai.clone().into_any_element(),
+            (Page::Organize, _) => self.organize.clone().into_any_element(),
+            (Page::Mcp, _) => self.mcp.clone().into_any_element(),
             (Page::Account, _) => self.account.clone().into_any_element(),
             (Page::Workspace(_) | Page::NewWorkspace, Some(page)) => {
                 page.clone().into_any_element()

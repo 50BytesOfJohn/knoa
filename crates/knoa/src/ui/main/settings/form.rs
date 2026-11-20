@@ -34,12 +34,25 @@ pub fn header(title: impl Into<String>, about: &str, theme: &Theme) -> Div {
 
 /// A titled block of rows, separated by hairlines.
 pub fn group(title: &str, rows: Vec<AnyElement>, theme: &Theme) -> Div {
-    let mut body = div()
+    div()
         .flex()
         .flex_col()
+        .gap_2()
+        .child(group_title(title, theme))
+        .child(card(rows, theme))
+}
+
+/// Rows in a bordered card, for a group or a block of rows without a title.
+pub fn card(rows: Vec<AnyElement>, theme: &Theme) -> Div {
+    divided(rows, theme)
         .rounded(CARD_RADIUS)
         .border_1()
-        .border_color(theme.hairline);
+        .border_color(theme.hairline)
+}
+
+/// Rows stacked with hairlines between them, for a group or a part of one.
+pub fn divided(rows: Vec<AnyElement>, theme: &Theme) -> Div {
+    let mut body = div().flex().flex_col();
     for (index, row) in rows.into_iter().enumerate() {
         body = body.child(
             div()
@@ -47,12 +60,7 @@ pub fn group(title: &str, rows: Vec<AnyElement>, theme: &Theme) -> Div {
                 .child(row),
         );
     }
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(group_title(title, theme))
-        .child(body)
+    body
 }
 
 pub fn group_title(title: &str, theme: &Theme) -> Div {

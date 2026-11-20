@@ -1,16 +1,13 @@
-//! The workspace page's browser sections: which profiles feed it and where its links open.
+//! The workspace page's browsers section: which profiles feed it and where its links open.
 
 use gpui::{AnyElement, Context, Div, IntoElement as _, ParentElement as _, Styled as _, div};
-use gpui_component::{
-    radio::{Radio, RadioGroup},
-    switch::Switch,
-};
+use gpui_component::switch::Switch;
 use knoa_browser::{Profile, ProfileId};
 
 use super::{WorkspacePage, form};
 use crate::{
     i18n::t,
-    ui::{components::blocked_browsers_notice, theme::Theme},
+    ui::{choice::select, components::blocked_browsers_notice, theme::Theme},
 };
 
 impl WorkspacePage {
@@ -39,29 +36,43 @@ impl WorkspacePage {
             t!("settings-workspace-browsers-note"),
             theme.muted,
         ));
-        form::group(&t!("settings-workspace-sync-from"), rows, theme)
+        rows.push(self.opens_in_row(theme, cx));
+        form::group(&t!("settings-workspace-browsers"), rows, theme)
     }
 
-    pub(super) fn opens_in_group(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
-        let (choices, labels): (Vec<_>, Vec<_>) = self.open_choices().into_iter().unzip();
+    fn opens_in_row(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> AnyElement {
+        let choices = self.open_choices();
         // A saved profile that's gone from this Mac shows nothing picked; opening falls
         // back to the default browser.
-        let selected = choices.iter().position(|c| *c == self.opens_in);
-        let radios = labels
-            .into_iter()
+        let options: Vec<(usize, String)> = choices
+            .iter()
             .enumerate()
-            .map(|(index, label)| Radio::new(("opens-in", index)).label(label));
-        let group = RadioGroup::vertical("opens-in")
-            .children(radios)
-            .selected_index(selected)
-            .on_change(cx.listener(move |this, index: &usize, _, cx| {
-                if let Some(choice) = choices.get(*index) {
-                    this.opens_in.clone_from(choice);
-                    this.changed(cx);
+            .map(|(index, (_, label))| (index, label.clone()))
+            .collect();
+        let selected = choices.iter().position(|(c, _)| *c == self.opens_in);
+        let page = cx.entity().downgrade();
+        let picker = select(
+            "opens-in",
+            options,
+            selected,
+            false,
+            theme,
+            move |index, cx| {
+                if let Some((choice, _)) = choices.get(index) {
+                    let choice = choice.clone();
+                    let _ = page.update(cx, |this, cx| {
+                        this.opens_in = choice;
+                        this.changed(cx);
+                    });
                 }
-            }));
-        let row = div().px_4().py_3().child(group).into_any_element();
-        form::group(&t!("settings-workspace-open-in"), vec![row], theme)
+            },
+        );
+        form::row(
+            &t!("settings-workspace-open-in"),
+            Some(&t!("settings-workspace-open-in-about")),
+            picker,
+            theme,
+        )
     }
 
     /// The default browser, every readable profile, and the blocked browsers' profiles this
