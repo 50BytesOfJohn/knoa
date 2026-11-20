@@ -120,36 +120,17 @@ fn identifier(language: Language) -> LanguageIdentifier {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
     use fluent_syntax::{ast, parser};
 
     use super::*;
 
-    /// Every message and attribute in a file, as `id` and `id.attribute`.
-    fn keys(language: Language) -> BTreeSet<String> {
-        let path = format!("{}/knoa.ftl", language.code());
-        let file = Localizations::get(&path).unwrap_or_else(|| panic!("{path} is missing"));
-        let text = String::from_utf8(file.data.into_owned()).expect("FTL files are UTF-8");
-        let resource = parser::parse(text.as_str())
-            .unwrap_or_else(|(_, errors)| panic!("{path} doesn't parse: {errors:?}"));
-        let mut keys = BTreeSet::new();
-        for entry in resource.body {
-            if let ast::Entry::Message(message) = entry {
-                for attribute in &message.attributes {
-                    keys.insert(format!("{}.{}", message.id.name, attribute.id.name));
-                }
-                keys.insert(message.id.name.to_owned());
-            }
-        }
-        keys
-    }
-
     #[test]
     fn every_language_has_exactly_the_english_messages() {
-        let english = keys(Language::En);
+        let english = keys(&resource(Language::En));
         for language in Language::ALL {
-            let translated = keys(language);
+            let translated = keys(&resource(language));
             let missing: Vec<_> = english.difference(&translated).collect();
             let extra: Vec<_> = translated.difference(&english).collect();
             assert!(
@@ -157,6 +138,132 @@ mod tests {
                 "{}: missing {missing:?}, not in English {extra:?}",
                 language.code()
             );
+        }
+    }
+
+    /// Fluent prints a variable the caller doesn't pass, or a term the file lacks, as its
+    /// name, so a renamed `$count` would only show up as "{$count}" on screen.
+    #[test]
+    fn translations_use_english_variables_and_existing_terms() {
+        let english = references(&resource(Language::En));
+        for language in Language::ALL {
+            let resource = resource(language);
+            let terms = terms(&resource);
+            for (id, used) in references(&resource) {
+                // A message English lacks fails the test above.
+                let Some(allowed) = english.get(&id).map(|e| &e.variables) else {
+                    continue;
+                };
+                let unknown: Vec<_> = used.variables.difference(allowed).collect();
+                let missing: Vec<_> = used.terms.difference(&terms).collect();
+                assert!(
+                    unknown.is_empty() && missing.is_empty(),
+                    "{} {id}: variables not in English {unknown:?}, undefined terms {missing:?}",
+                    language.code()
+                );
+            }
+        }
+    }
+
+    fn resource(language: Language) -> ast::Resource<String> {
+        let path = format!("{}/knoa.ftl", language.code());
+        let file = Localizations::get(&path).unwrap_or_else(|| panic!("{path} is missing"));
+        let text = String::from_utf8(file.data.into_owned()).expect("FTL files are UTF-8");
+        parser::parse(text).unwrap_or_else(|(_, errors)| panic!("{path} doesn't parse: {errors:?}"))
+    }
+
+    fn messages(resource: &ast::Resource<String>) -> impl Iterator<Item = &ast::Message<String>> {
+        resource.body.iter().filter_map(|entry| match entry {
+            ast::Entry::Message(message) => Some(message),
+            _ => None,
+        })
+    }
+
+    /// Every message and attribute in a file, as `id` and `id.attribute`.
+    fn keys(resource: &ast::Resource<String>) -> BTreeSet<String> {
+        let mut keys = BTreeSet::new();
+        for message in messages(resource) {
+            for attribute in &message.attributes {
+                keys.insert(format!("{}.{}", message.id.name, attribute.id.name));
+            }
+            keys.insert(message.id.name.clone());
+        }
+        keys
+    }
+
+    fn terms(resource: &ast::Resource<String>) -> BTreeSet<String> {
+        let terms = resource.body.iter().filter_map(|entry| match entry {
+            ast::Entry::Term(term) => Some(term.id.name.clone()),
+            _ => None,
+        });
+        terms.collect()
+    }
+
+    /// The variables and terms each message uses anywhere: value, attributes and every
+    /// selector variant.
+    #[derive(Default)]
+    struct References {
+        variables: BTreeSet<String>,
+        terms: BTreeSet<String>,
+    }
+
+    fn references(resource: &ast::Resource<String>) -> BTreeMap<String, References> {
+        let mut all = BTreeMap::new();
+        for message in messages(resource) {
+            let mut found = References::default();
+            let attributes = message.attributes.iter().map(|a| &a.value);
+            for pattern in message.value.iter().chain(attributes) {
+                found.add_pattern(pattern);
+            }
+            all.insert(message.id.name.clone(), found);
+        }
+        all
+    }
+
+    impl References {
+        fn add_pattern(&mut self, pattern: &ast::Pattern<String>) {
+            for element in &pattern.elements {
+                if let ast::PatternElement::Placeable { expression } = element {
+                    self.add_expression(expression);
+                }
+            }
+        }
+
+        fn add_expression(&mut self, expression: &ast::Expression<String>) {
+            match expression {
+                ast::Expression::Select { selector, variants } => {
+                    self.add_inline(selector);
+                    for variant in variants {
+                        self.add_pattern(&variant.value);
+                    }
+                }
+                ast::Expression::Inline(inline) => self.add_inline(inline),
+            }
+        }
+
+        fn add_inline(&mut self, inline: &ast::InlineExpression<String>) {
+            use ast::InlineExpression::*;
+            match inline {
+                VariableReference { id } => {
+                    self.variables.insert(id.name.clone());
+                }
+                TermReference { id, arguments, .. } => {
+                    self.terms.insert(id.name.clone());
+                    if let Some(arguments) = arguments {
+                        self.add_arguments(arguments);
+                    }
+                }
+                FunctionReference { arguments, .. } => self.add_arguments(arguments),
+                Placeable { expression } => self.add_expression(expression),
+                StringLiteral { .. } | NumberLiteral { .. } | MessageReference { .. } => {}
+            }
+        }
+
+        fn add_arguments(&mut self, arguments: &ast::CallArguments<String>) {
+            let named = arguments.named.iter().map(|argument| &argument.value);
+            for value in arguments.positional.iter().chain(named) {
+                self.add_inline(value);
+            }
         }
     }
 }
