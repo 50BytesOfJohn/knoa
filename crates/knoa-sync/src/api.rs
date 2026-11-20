@@ -3,9 +3,13 @@
 
 use std::sync::Arc;
 
-use knoa_core::protocol::{
-    Account, ErrorResponse, ImageResponse, MAX_PULL, McpSettings, McpSettingsResponse, Mutation,
-    OrganizeRequest, OrganizeResponse, PullResponse, PushRequest, PushResponse,
+use knoa_core::{
+    Language,
+    protocol::{
+        Account, ErrorResponse, ImageResponse, LanguageRequest, MAX_PULL, McpSettings,
+        McpSettingsResponse, Mutation, OrganizeRequest, OrganizeResponse, PullResponse,
+        PushRequest, PushResponse,
+    },
 };
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -29,6 +33,14 @@ impl Api {
     pub async fn me(&self) -> Result<Account> {
         let url = self.url("v1/me")?;
         self.json(|http, token| http.get(url.clone()).bearer_auth(token))
+            .await
+    }
+
+    /// Makes `language` the account's, for every client. The socket then says `account`.
+    pub async fn set_language(&self, language: Language) -> Result<Account> {
+        let url = self.url("v1/me/language")?;
+        let body = LanguageRequest { language };
+        self.json(|http, token| http.put(url.clone()).bearer_auth(token).json(&body))
             .await
     }
 
