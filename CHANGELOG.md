@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.8.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.8.1) - 2026-11-20
+
+### Changed
+
+- Start new users in their Mac's language ([#50](https://github.com/50BytesOfJohn/knoa/pull/50))
 ## [0.8.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.8.0) - 2026-11-20
 
 ### Changed
