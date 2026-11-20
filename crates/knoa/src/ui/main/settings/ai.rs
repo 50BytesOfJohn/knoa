@@ -16,6 +16,7 @@ use super::{
     reorganize::{Reorganize, Scope},
 };
 use crate::{
+    format,
     i18n::t,
     services::{
         ai,
@@ -273,7 +274,7 @@ impl AiPage {
             let about = if *Organizer::entity(cx).read(cx).status() == AiStatus::Cloud {
                 t!("settings-ai-included-in-pro")
             } else {
-                t!("settings-ai-cost", cost = format!("{cost:.2}"))
+                t!("settings-ai-cost", cost = (format::usd(cost, 2)))
             };
             form::row(
                 &t!(

@@ -46,6 +46,8 @@ getrandom = "0.4"
 i18n-embed = { version = "0.16", features = ["fluent-system"] }
 i18n-embed-fl = "0.10"
 fluent-syntax = "0.12"
+# Already in the tree through i18n-embed; formats the numbers in messages.
+fluent-bundle = "0.16"
 # Decoding, resizing and encoding linked images, also in the cloud organizer's Worker:
 # only the codecs Knoa reads, and no rayon, since a Worker has one thread. `jpeg` is
 # for its encoder; JPEGs are decoded by jpeg-decoder.

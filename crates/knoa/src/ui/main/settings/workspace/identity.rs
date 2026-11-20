@@ -14,7 +14,7 @@ use super::{WorkspacePage, browsers::synced_from, form};
 use crate::{
     i18n::{self, t},
     ui::{
-        components::{Tone, button, grouped, tip, workspace_mark},
+        components::{Tone, button, tip, workspace_mark},
         theme::Theme,
     },
 };
@@ -102,10 +102,7 @@ impl WorkspacePage {
         let name = self.name.read(cx).value();
         let max = max_chars::workspace::NAME;
         if !fits(name.trim(), max) {
-            let reason = t!(
-                "settings-workspace-name-too-long",
-                max = (grouped(max as u64))
-            );
+            let reason = t!("settings-workspace-name-too-long", max = max);
             rows.push(form::problem_note(reason, theme));
         }
         rows.push(form::row(

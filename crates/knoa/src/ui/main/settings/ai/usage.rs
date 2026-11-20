@@ -10,6 +10,7 @@ use knoa_core::{ModelUsage, UsageTotals};
 
 use super::super::form;
 use crate::{
+    format,
     i18n::t,
     services::usage::{RECENT_DAYS, UsageReport},
     ui::{
@@ -94,8 +95,8 @@ fn details(totals: &UsageTotals) -> String {
     if totals.unmetered < totals.requests {
         parts.push(t!(
             "settings-ai-usage-tokens",
-            input = (tokens(totals.input_tokens)),
-            output = (tokens(totals.output_tokens))
+            input = (format::compact(totals.input_tokens)),
+            output = (format::compact(totals.output_tokens))
         ));
     }
     if totals.unmetered > 0 {
@@ -112,17 +113,6 @@ fn details(totals: &UsageTotals) -> String {
 
 /// Cents hide what a few bookmarks cost, so small amounts get more digits.
 fn dollars(cost: f64) -> String {
-    if cost > 0.0 && cost < 0.01 {
-        format!("${cost:.4}")
-    } else {
-        format!("${cost:.2}")
-    }
-}
-
-fn tokens(n: u64) -> String {
-    match n {
-        0..1_000 => n.to_string(),
-        1_000..1_000_000 => format!("{:.1}K", n as f64 / 1e3),
-        _ => format!("{:.1}M", n as f64 / 1e6),
-    }
+    let fraction_digits = if cost > 0.0 && cost < 0.01 { 4 } else { 2 };
+    format::usd(cost, fraction_digits)
 }

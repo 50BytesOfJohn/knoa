@@ -10,7 +10,7 @@ use crate::{
     i18n::t,
     services::cloud::CloudConfig,
     ui::{
-        components::{self, Tone, grouped},
+        components::{self, Tone},
         theme::Theme,
     },
 };
@@ -45,15 +45,15 @@ pub(super) fn button(
 
 pub(super) fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
     let (usage, limits) = (account.usage, account.limits);
-    let (used, limit) = (grouped(usage.bookmarks), grouped(limits.bookmarks));
+    let (used, limit) = (usage.bookmarks, limits.bookmarks);
     let about = match account.organizer {
         Organizer::Device => t!("settings-account-usage-device", used = used, limit = limit),
         Organizer::Cloud => t!(
             "settings-account-usage-cloud",
             used = used,
             limit = limit,
-            organized = grouped(usage.organized_this_month),
-            allowance = grouped(limits.organized_per_month)
+            organized = (usage.organized_this_month),
+            allowance = (limits.organized_per_month)
         ),
     };
     form::row(

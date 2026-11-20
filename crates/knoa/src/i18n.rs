@@ -6,6 +6,7 @@ mod vocabulary;
 
 use std::sync::LazyLock;
 
+use fluent_bundle::FluentValue;
 use gpui::{App, Context, Global, Subscription, Window};
 use i18n_embed::{
     LanguageLoader as _, fluent::FluentLanguageLoader, unic_langid::LanguageIdentifier,
@@ -98,6 +99,16 @@ fn load(loader: &FluentLanguageLoader, language: Language) {
     }
     // GPUI would draw the Unicode isolation marks Fluent puts around arguments.
     loader.set_use_isolating(false);
+    loader.with_bundles_mut(|bundle| bundle.set_formatter(Some(number_argument)));
+}
+
+/// Numbers in messages, like `{ $count }`, as the language and the Mac's region write
+/// them: Fluent alone writes 12345 in every language.
+fn number_argument<M>(value: &FluentValue<'_>, _: &M) -> Option<String> {
+    match value {
+        FluentValue::Number(number) => Some(crate::format::number(number.value)),
+        _ => None,
+    }
 }
 
 fn identifier(language: Language) -> LanguageIdentifier {

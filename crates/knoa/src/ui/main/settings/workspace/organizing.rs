@@ -12,7 +12,7 @@ use super::{WorkspacePage, form};
 use crate::{
     i18n::t,
     services::organizer::{AiStatus, Organizer},
-    ui::{components::grouped, theme::Theme},
+    ui::theme::Theme,
 };
 
 impl WorkspacePage {
@@ -29,8 +29,10 @@ impl WorkspacePage {
         )];
         let instructions = self.instructions.read(cx).value();
         if !fits(instructions.trim(), INSTRUCTIONS) {
-            let max = grouped(INSTRUCTIONS as u64);
-            let reason = t!("settings-workspace-instructions-too-long", max = max);
+            let reason = t!(
+                "settings-workspace-instructions-too-long",
+                max = INSTRUCTIONS
+            );
             rows.push(form::problem_note(reason, theme));
         }
         rows.push(form::row(
@@ -53,8 +55,7 @@ impl WorkspacePage {
             ));
             let guideline = self.guideline.read(cx).value();
             if !fits(guideline.trim(), GUIDELINE) {
-                let max = grouped(GUIDELINE as u64);
-                let reason = t!("settings-workspace-guideline-too-long", max = max);
+                let reason = t!("settings-workspace-guideline-too-long", max = GUIDELINE);
                 rows.push(form::problem_note(reason, theme));
             }
         }

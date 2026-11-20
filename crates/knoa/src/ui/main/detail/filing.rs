@@ -89,7 +89,7 @@ impl MainView {
             .when_some(unsure, |s, p| {
                 s.child(div().text_color(theme.muted).child(t!(
                     "detail-folder-probability",
-                    percent = (format!("{:.0}", p * 100.))
+                    percent = ((p * 100.).round())
                 )))
             })
             .tooltip(super::tip(tip, None, theme))

@@ -188,23 +188,10 @@ pub fn problem(text: impl Into<SharedString>, theme: &Theme) -> Div {
         .child(div().flex_1().min_w_0().child(text.into()))
 }
 
-/// `100000` as `100,000`.
-pub fn grouped(n: u64) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, digit) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
-}
-
-/// The limit, written out, when `text` is past the server's `max` characters for its
-/// field, which would keep the change on this Mac only. The caller says it in a sentence.
-pub fn over_limit(text: &str, max: usize) -> Option<String> {
-    (!fits(text, max)).then(|| grouped(max as u64))
+/// The server's `max` characters for a field, when `text` is past it, which would keep
+/// the change on this Mac only. The caller says it in a sentence.
+pub fn over_limit(text: &str, max: usize) -> Option<usize> {
+    (!fits(text, max)).then_some(max)
 }
 
 /// The site's first letter on a colored disc: a stand-in for favicons, which would mean

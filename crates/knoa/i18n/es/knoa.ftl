@@ -76,8 +76,8 @@ onboarding-done-count =
     }
 onboarding-done-organize-existing =
     { $count ->
-        [one] New bookmarks get organized on their own. Want me to go through the { $count } you already have too? About ${ $cost }.
-       *[other] New bookmarks get organized on their own. Want me to go through the { $count } you already have too? About ${ $cost }.
+        [one] New bookmarks get organized on their own. Want me to go through the { $count } you already have too? About { $cost }.
+       *[other] New bookmarks get organized on their own. Want me to go through the { $count } you already have too? About { $cost }.
     }
 onboarding-done-organize = Yes, organize them
 onboarding-done-open-library = Open my library
@@ -244,7 +244,7 @@ settings-ai-not-organized =
        *[other] { $count } bookmarks in { $workspace } aren't organized yet
     }
 settings-ai-included-in-pro = Included in Pro, within its monthly allowance.
-settings-ai-cost = About ${ $cost } to do them all.
+settings-ai-cost = About { $cost } to do them all.
 settings-ai-organize = Organize
 settings-ai-pro-title = Let { -knoa } do it with Pro
 settings-ai-pro-pitch = { -knoa } organizes your bookmarks in the cloud. No key to set up, no bill per request, and your library syncs across your devices.

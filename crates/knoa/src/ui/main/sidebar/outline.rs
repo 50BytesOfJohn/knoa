@@ -5,9 +5,9 @@
 use std::{collections::BTreeSet, rc::Rc};
 
 use gpui::{App, SharedString};
-use knoa_core::{FolderColor, FolderIcon, FolderId, FolderTree};
+use knoa_core::{FolderColor, FolderIcon, FolderId, FolderTree, Language};
 
-use crate::state::settings::SettingsFile;
+use crate::{format, i18n, state::settings::SettingsFile};
 
 /// One visible folder, with all the sidebar draws for it.
 #[derive(Debug, Clone)]
@@ -35,8 +35,8 @@ pub(super) struct Outline {
     collapsed: BTreeSet<FolderId>,
     /// Goes up whenever `collapsed` changes.
     generation: u64,
-    /// The library's folder generation and ours the rows were made for.
-    made_for: Option<(u64, u64)>,
+    /// The library's folder generation, ours, and the language the counts were written in.
+    made_for: Option<(u64, u64, Language)>,
     rows: Rc<[Rc<FolderRow>]>,
 }
 
@@ -55,10 +55,10 @@ impl Outline {
         }
     }
 
-    /// The visible rows for `tree`, remade only when it or the collapsed set changed. Each
-    /// row is shared, so the elements that hold one copy a pointer.
+    /// The visible rows for `tree`, remade only when it, the collapsed set or the language
+    /// changed. Each row is shared, so the elements that hold one copy a pointer.
     pub(super) fn rows(&mut self, tree: &FolderTree, tree_generation: u64) -> Rc<[Rc<FolderRow>]> {
-        let key = (tree_generation, self.generation);
+        let key = (tree_generation, self.generation, i18n::language());
         if self.made_for != Some(key) {
             self.rows = visible_rows(tree, &self.collapsed).into();
             self.made_for = Some(key);
@@ -127,7 +127,7 @@ fn visible_rows(tree: &FolderTree, collapsed: &BTreeSet<FolderId>) -> Vec<Rc<Fol
             color: folder.color,
             count: match folder.count {
                 0 => SharedString::default(),
-                n => SharedString::from(n.to_string()),
+                n => SharedString::from(format::number(n as f64)),
             },
             depth: tree.depth(folder.id),
             disclosure,

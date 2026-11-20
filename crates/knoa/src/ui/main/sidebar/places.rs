@@ -16,6 +16,7 @@ use super::{
 };
 use crate::{
     assets::line_icon,
+    format,
     i18n::{self, t},
     services::organizer::AiStatus,
     ui::{components::svg_icon, motion, theme::Theme},
@@ -135,7 +136,7 @@ fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
             icon,
             count: match n {
                 0 => SharedString::default(),
-                n => SharedString::from(n.to_string()),
+                n => SharedString::from(format::number(n as f64)),
             },
         })
         .collect()

@@ -6,6 +6,7 @@ use gpui::{
 
 use super::{lead, title};
 use crate::{
+    format,
     i18n::t,
     services::organizer::Organizer,
     ui::{
@@ -56,7 +57,7 @@ impl Onboarding {
                     .child(div().text_sm().child(t!(
                         "onboarding-done-organize-existing",
                         count = counts.not_organized,
-                        cost = format!("{cost:.2}")
+                        cost = (format::usd(cost, 2))
                     )))
                     .child(
                         div().flex().justify_center().child(
