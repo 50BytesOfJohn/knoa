@@ -7,6 +7,8 @@ use jiff::{Timestamp, Zoned, tz::TimeZone};
 
 use super::{SettingsView, form};
 use crate::{
+    format,
+    i18n::t,
     services::updates::Updates,
     ui::{
         components::{Tone, button},
@@ -21,27 +23,37 @@ pub(super) fn group(cx: &mut Context<'_, SettingsView>) -> Div {
     let rows = match Updates::get(cx) {
         Some(updates) => rows(updates, &theme, cx),
         None => vec![
-            form::row(&format!("Knoa {VERSION}"), None, gpui::Empty, &theme),
-            form::note(
-                "This build doesn't update itself. Release builds from GitHub do.",
-                theme.muted,
+            form::row(
+                &t!("settings-updates-version", version = VERSION),
+                None,
+                gpui::Empty,
+                &theme,
             ),
+            form::note(t!("settings-updates-self-built"), theme.muted),
         ],
     };
-    form::group("Updates", rows, &theme)
+    form::group(&t!("settings-updates"), rows, &theme)
 }
 
 fn rows(updates: &Updates, theme: &Theme, cx: &App) -> Vec<AnyElement> {
-    let checked = match updates.last_checked() {
-        Some(at) => format!("Last checked {}", when(at, &Zoned::now())),
-        None => "Not checked yet".to_owned(),
+    let checked = match updates.last_checked().map(|at| When::of(at, &Zoned::now())) {
+        Some(When::Today(time)) => t!("settings-updates-checked-today", time = time),
+        Some(When::Yesterday(time)) => t!("settings-updates-checked-yesterday", time = time),
+        Some(When::On(date)) => t!("settings-updates-checked-on", date = date),
+        None => t!("settings-updates-not-checked"),
     };
     let checks = updates.checks_automatically();
     vec![
         form::row(
-            &format!("Knoa {VERSION}"),
+            &t!("settings-updates-version", version = VERSION),
             Some(&checked),
-            button("check-updates", "Check Now", Tone::Soft, cx).on_click(|_, _, cx| {
+            button(
+                "check-updates",
+                t!("settings-updates-check-now"),
+                Tone::Soft,
+                cx,
+            )
+            .on_click(|_, _, cx| {
                 if let Some(updates) = Updates::get(cx) {
                     updates.check_now();
                 }
@@ -49,8 +61,8 @@ fn rows(updates: &Updates, theme: &Theme, cx: &App) -> Vec<AnyElement> {
             theme,
         ),
         form::row(
-            "Check for updates automatically",
-            Some("Once a day, in the background."),
+            &t!("settings-updates-check-automatically"),
+            Some(&t!("settings-updates-check-automatically-about")),
             Switch::new("updates-check")
                 .checked(checks)
                 .on_click(|on: &bool, window, cx| {
@@ -62,8 +74,8 @@ fn rows(updates: &Updates, theme: &Theme, cx: &App) -> Vec<AnyElement> {
             theme,
         ),
         form::row(
-            "Install updates automatically",
-            Some("Download new versions and install them when you quit Knoa."),
+            &t!("settings-updates-install-automatically"),
+            Some(&t!("settings-updates-install-automatically-about")),
             Switch::new("updates-install")
                 .checked(checks && updates.installs_automatically())
                 .disabled(!checks)
@@ -78,13 +90,22 @@ fn rows(updates: &Updates, theme: &Theme, cx: &App) -> Vec<AnyElement> {
     ]
 }
 
-/// "today at 14:05", "yesterday at 09:30", or "on 3 Nov 2026".
-pub(super) fn when(at: Timestamp, now: &Zoned) -> String {
-    let at = at.to_zoned(TimeZone::system());
-    let days = (now.date() - at.date()).get_days();
-    match days {
-        0 => format!("today at {}", at.strftime("%H:%M")),
-        1 => format!("yesterday at {}", at.strftime("%H:%M")),
-        _ => format!("on {}", at.strftime("%-d %b %Y")),
+/// When something last happened, for "Last checked …" and "Last synced …".
+pub(super) enum When {
+    /// At this time today.
+    Today(String),
+    Yesterday(String),
+    /// On this date, before yesterday.
+    On(String),
+}
+
+impl When {
+    pub(super) fn of(at: Timestamp, now: &Zoned) -> When {
+        let days = (now.date() - at.to_zoned(TimeZone::system()).date()).get_days();
+        match days {
+            0 => When::Today(format::instant(at, format::TIME)),
+            1 => When::Yesterday(format::instant(at, format::TIME)),
+            _ => When::On(format::instant(at, format::DATE)),
+        }
     }
 }

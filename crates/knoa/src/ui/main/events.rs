@@ -32,7 +32,10 @@ use super::{
     content::{LayoutCache, cards_top, content_span},
     keys::{NextMonth, PreviousMonth, ShowToday},
 };
+use knoa_core::Language;
+
 use crate::{
+    i18n,
     state::settings::{EventsView, SettingsFile},
     ui::theme::GUTTER,
 };
@@ -65,6 +68,8 @@ pub struct EventsPage {
 struct BuildKey {
     results: usize,
     minute: i64,
+    /// Headings are written in the language.
+    language: Language,
 }
 
 impl EventsPage {
@@ -87,6 +92,7 @@ impl EventsPage {
         let key = BuildKey {
             results: Arc::as_ptr(&results) as usize,
             minute: now.timestamp().as_second().div_euclid(60),
+            language: i18n::language(),
         };
         if self.built_for.as_ref() == Some(&key) {
             return;
