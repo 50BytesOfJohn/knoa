@@ -160,10 +160,12 @@ share. Signed out, the app is Local mode and none of this runs.
   organizes with the user's own key, pushes the results and uploads the thumbnails.
 - **Browser extension:** signed in, it saves through the API instead of the bridge, and
   the bookmark reaches this Mac by sync.
-- **Language:** one per user, for every client's UI and for what the AI writes. Signed
-  in, it is an account setting (`PUT /v1/me/language`) and the account wins: this Mac
-  adopts the account's language, pushes its own when the account has none, and pushes a
-  change made here. Signed out, it lives in this Mac's settings.
+- **Language:** one per user, for every client's UI and for what the AI writes
+  ([ADR 0020](adr/0020-one-language-per-user.md)). Signed in, it is an account setting
+  (`PUT /v1/me/language`, then `account` on the socket) and the account wins: this Mac
+  adopts the account's language and pushes its own when the account has none. A change
+  made here stays marked unsent in settings until the account has it, so an older
+  account read can't undo it. Signed out, it lives in this Mac's settings.
 - **Account page** in Settings: sign in and out, the plan and its usage, AI access, and
   how sync is doing. AI access settings are fetched when the page is shown and saved on
   change, separately from library sync. Pro accounts can set a default and workspace
@@ -214,8 +216,8 @@ resumes on its own once that one gets through, or when the user sets a new key.
    gets no folders. The summary, tags, a generated title, extras, free-text field values
    and the fit reason are written in the user's language (the Mac's setting for its own
    organizer, the account's for the cloud's); names and titles of works stay as written,
-   and listed tags keep their spelling. For an event the prompt also carries the organizer's date (the
-   Mac's local date, the cloud's UTC date), so a date without a year resolves to the
+   and listed tags keep their spelling. For an event the prompt also carries the
+   organizer's date (the Mac's local date, the cloud's UTC date), so a date without a year resolves to the
    next one. Values read from the page override the model's, except in a field marked
    `translated` in `kinds.json` (a genre, a cuisine) outside English, where the model's
    answer, the page's value translated, wins. When the workspace
@@ -315,6 +317,12 @@ Keychain in release-channel builds and in a plain file in dev builds
   wrote again is released too, the selected one included, so it is decoded anew.
 - Settings: a sheet over the main screen with its own sidebar of app pages (General,
   Appearance, AI) and one page per workspace.
+- Language: every string comes from the Fluent files in `crates/knoa/i18n` through `t!`
+  (`i18n` module), and dates, numbers and lists from macOS's formatters in that language
+  with the Mac's region (`format` module). The picker is in General and in onboarding,
+  which starts in the Mac's language when Knoa speaks it. Switching redraws every window
+  and rebuilds the menus at once; views re-set the placeholders their inputs keep, and
+  a search keeps `kind:` filters as slugs so it means the same in the new language.
 - Masonry, glass panels over a wallpaper and the date rail are Knoa's own elements
   ([ADR 0007](adr/0007-main-screen-rendering.md)).
 - Components: [gpui-component](https://github.com/longbridge/gpui-component) for input,
