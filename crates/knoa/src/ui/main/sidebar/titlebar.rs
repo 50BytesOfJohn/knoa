@@ -14,6 +14,7 @@ use super::{
 };
 use crate::{
     assets::line_icon,
+    i18n::t,
     ui::{
         components::{svg_icon, tip, workspace_mark},
         main::NewLink,
@@ -89,7 +90,7 @@ impl SidebarView {
 fn add_link_button(cx: &mut Context<'_, SidebarView>) -> impl IntoElement {
     let theme = Theme::get(cx);
     icon_button("add-link", line_icon!("plus"), BUTTON, BUTTON_ICON, theme)
-        .tooltip(tip("Add link", Some(&NewLink), theme))
+        .tooltip(tip(t!("sidebar-add-link"), Some(&NewLink), theme))
         .on_click(cx.listener(|_, _, _, cx| cx.emit(SidebarEvent::NewLink)))
 }
 

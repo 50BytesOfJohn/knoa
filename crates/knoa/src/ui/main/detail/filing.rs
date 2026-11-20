@@ -8,7 +8,10 @@ use gpui::{
 use knoa_core::{Bookmark, Folder, FolderLink, Origin};
 
 use super::{MainView, sections::section};
-use crate::ui::{components::icon, mascot::ai_mark, theme::Theme};
+use crate::{
+    i18n::t,
+    ui::{components::icon, mascot::ai_mark, theme::Theme},
+};
 
 /// Below this, the AI's confidence in a folder is worth showing; above it, it's noise.
 const UNSURE: f32 = 0.8;
@@ -30,11 +33,11 @@ impl MainView {
             .map(|f| (f.clone(), tree.path_name(f.id).into()))
             .collect();
         if folders.is_empty() {
-            return section("Folders", &theme).child(
+            return section(&t!("detail-folders"), &theme).child(
                 div()
                     .text_sm()
                     .text_color(theme.muted)
-                    .child("No folders yet. Make one in the sidebar."),
+                    .child(t!("detail-no-folders")),
             );
         }
         let link_of = |folder: &Folder| bookmark.folders.iter().find(|l| l.folder == folder.id);
@@ -53,7 +56,7 @@ impl MainView {
         } else if !unfiled.is_empty() {
             row = row.child(self.more_folders_chip(bookmark, &theme, cx));
         }
-        section("Folders", &theme).child(row)
+        section(&t!("detail-folders"), &theme).child(row)
     }
 
     /// A folder the bookmark is in. Clicking takes it out, which is also how an AI choice
@@ -73,9 +76,9 @@ impl MainView {
             .and_then(|l| l.probability)
             .filter(|p| by_ai && *p < UNSURE);
         let tip = if by_ai {
-            "Undo: take it out"
+            t!("detail-folder-undo")
         } else {
-            "Take it out"
+            t!("detail-folder-take-out")
         };
         pill(("folder", folder.id.0 as usize))
             .bg(color.opacity(0.16))
@@ -84,11 +87,10 @@ impl MainView {
             .child(path.clone())
             .when(by_ai, |s| s.child(ai_mark(px(12.), theme.ai)))
             .when_some(unsure, |s, p| {
-                s.child(
-                    div()
-                        .text_color(theme.muted)
-                        .child(format!("{:.0}%", p * 100.)),
-                )
+                s.child(div().text_color(theme.muted).child(t!(
+                    "detail-folder-probability",
+                    percent = ((p * 100.).round())
+                )))
             })
             .tooltip(super::tip(tip, None, theme))
             .on_click(move |_, _, cx| {
@@ -137,7 +139,7 @@ impl MainView {
             .text_color(theme.muted)
             .hover(move |s| s.bg(hover))
             .child(icon("plus", px(12.), theme.muted))
-            .tooltip(super::tip("Add to another folder", None, theme))
+            .tooltip(super::tip(t!("detail-add-to-another-folder"), None, theme))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.folder_picker = Some(id);
                 cx.notify();

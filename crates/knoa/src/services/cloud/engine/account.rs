@@ -15,10 +15,16 @@ impl Engine {
         &mut self,
         cx: &mut AsyncApp,
     ) -> Result<Option<Account>, Failure> {
+        let read_in = self
+            .this
+            .read_with(cx, |this, _| this.language_epoch)
+            .map_err(|_| Failure::Stopped)?;
         let account = self.fetch_account(cx).await?;
         log_account(self.account.as_ref(), &account);
         self.this
-            .update(cx, |this, cx| this.set_account(account.clone(), cx))
+            .update(cx, |this, cx| {
+                this.set_account(account.clone(), read_in, cx);
+            })
             .map_err(|_| Failure::Stopped)?;
         if link::ensure(self, &account, cx).await? == link::Linked::OtherAccount {
             return Ok(Some(account));

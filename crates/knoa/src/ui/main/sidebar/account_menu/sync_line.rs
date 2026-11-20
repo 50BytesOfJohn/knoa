@@ -8,10 +8,12 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Task, div, prelude::FluentBuilder as _, px,
 };
 use jiff::{SignedDuration, Timestamp};
+use knoa_core::Language;
 
 use super::{ITEM_HEIGHT, ITEM_ICON};
 use crate::{
     assets::line_icon,
+    i18n::{self, t},
     services::cloud::{Cloud, Phase, SyncStatus},
     ui::{
         components::svg_icon,
@@ -24,9 +26,9 @@ use crate::{
 /// redraws on every frame of its animations, and the age changes once a minute at most.
 #[derive(Default)]
 pub(super) struct SyncedAge {
-    /// The sync the text is for, and the timer that drops it when the next age is due.
-    /// `None` once the text has gone stale.
-    shown: Option<(Timestamp, Task<()>)>,
+    /// The sync and language the text is for, and the timer that drops it when the next
+    /// age is due. `None` once the text has gone stale.
+    shown: Option<(Timestamp, Language, Task<()>)>,
     text: SharedString,
 }
 
@@ -45,10 +47,10 @@ enum Tone {
 }
 
 impl Line {
-    fn danger(icon: SharedString, text: &'static str) -> Line {
+    fn danger(icon: SharedString, text: String) -> Line {
         Line {
             icon,
-            text: SharedString::new_static(text),
+            text: text.into(),
             tone: Tone::Danger,
             retry: false,
         }
@@ -84,9 +86,11 @@ impl SidebarView {
             .child(div().flex_1().min_w_0().truncate().child(line.text))
             .when(line.retry, |s| {
                 s.child(
-                    text_button("Retry", theme).on_click(cx.listener(|this, _, _, cx| {
-                        this.cloud.update(cx, Cloud::retry_sync);
-                    })),
+                    text_button("sync-retry", t!("sidebar-retry"), theme).on_click(cx.listener(
+                        |this, _, _, cx| {
+                            this.cloud.update(cx, Cloud::retry_sync);
+                        },
+                    )),
                 )
             })
             .into_any_element()
@@ -99,18 +103,18 @@ impl SidebarView {
         let offline_with = (*cloud.sync() == SyncStatus::Offline).then(|| cloud.waiting_changes());
         let last_synced = cloud.last_synced();
         if paused {
-            Line::danger(line_icon!("cloud-alert"), "Sync paused")
+            Line::danger(line_icon!("cloud-alert"), t!("sidebar-sync-paused"))
         } else if stopped {
             Line {
                 retry: true,
-                ..Line::danger(line_icon!("cloud-alert"), "Sync stopped")
+                ..Line::danger(line_icon!("cloud-alert"), t!("sidebar-sync-stopped"))
             }
         } else if let Some(waiting) = offline_with {
             Line::muted(line_icon!("cloud-off"), offline(waiting))
         } else if let Some(at) = last_synced {
             Line::muted(line_icon!("cloud-check"), self.synced_age(at, cx))
         } else {
-            Line::muted(line_icon!("refresh-cw"), "Syncing…".into())
+            Line::muted(line_icon!("refresh-cw"), t!("sidebar-syncing").into())
         }
     }
 
@@ -120,7 +124,8 @@ impl SidebarView {
             return synced(at, Timestamp::now());
         };
         let age = &mut open.age;
-        if age.shown.as_ref().map(|(of, _)| *of) != Some(at) {
+        let language = i18n::language();
+        if age.shown.as_ref().map(|(of, lang, _)| (*of, *lang)) != Some((at, language)) {
             let now = Timestamp::now();
             age.text = synced(at, now);
             let wait = until_next_age(now.duration_since(at));
@@ -133,7 +138,7 @@ impl SidebarView {
                     }
                 });
             });
-            age.shown = Some((at, stale));
+            age.shown = Some((at, language, stale));
         }
         age.text.clone()
     }
@@ -141,22 +146,19 @@ impl SidebarView {
 
 /// "Offline · 3 changes waiting", or just "Offline" with none.
 fn offline(waiting: usize) -> SharedString {
-    match waiting {
-        0 => "Offline".into(),
-        1 => "Offline · 1 change waiting".into(),
-        n => format!("Offline · {n} changes waiting").into(),
-    }
+    t!("sidebar-sync-offline", count = (waiting)).into()
 }
 
 /// "Synced just now", then "1 min ago", "5 min ago", "1 hr ago".
 fn synced(at: Timestamp, now: Timestamp) -> SharedString {
     let ago = now.duration_since(at).max(SignedDuration::ZERO);
     let minutes = ago.as_secs() / 60;
-    match minutes {
-        0 => "Synced just now".into(),
-        1..60 => format!("Synced {minutes} min ago").into(),
-        _ => format!("Synced {} hr ago", minutes / 60).into(),
-    }
+    let text = match minutes {
+        0 => t!("sidebar-synced-just-now"),
+        1..60 => t!("sidebar-synced-minutes-ago", minutes = (minutes)),
+        _ => t!("sidebar-synced-hours-ago", hours = (minutes / 60)),
+    };
+    text.into()
 }
 
 /// How long until `synced` says something else for a sync `ago` old: the next minute

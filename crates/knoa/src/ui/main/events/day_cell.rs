@@ -9,9 +9,12 @@ use gpui::{
 use jiff::civil::Date;
 
 use super::{dots, labels, model::Model};
-use crate::ui::{
-    main::{MainView, bookmark_menu::with_bookmark_menu},
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        main::{MainView, bookmark_menu::with_bookmark_menu},
+        theme::Theme,
+    },
 };
 
 const DAY_NUMBER: f32 = 26.;
@@ -130,7 +133,7 @@ fn more(hidden: usize, theme: &Theme) -> impl IntoElement {
         .text_xs()
         .text_color(theme.muted)
         .truncate()
-        .child(format!("+{hidden} more"))
+        .child(t!("events-more", count = hidden))
 }
 
 fn chip_frame(event: usize, selected: bool, theme: &Theme) -> Stateful<Div> {

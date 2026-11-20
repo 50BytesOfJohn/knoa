@@ -13,7 +13,10 @@ use gpui_component::{
 use knoa_core::{Emoji, FolderIcon};
 
 use super::FolderEditor;
-use crate::ui::theme::{ROW_RADIUS, Theme};
+use crate::{
+    i18n::t,
+    ui::theme::{ROW_RADIUS, Theme},
+};
 
 /// Emoji for the folders people make most: reading, work, media, food, travel, home.
 const SUGGESTED: [&str; 18] = [
@@ -32,7 +35,7 @@ pub(super) fn emoji_state(
 ) -> Entity<InputState> {
     let current = emoji_of(icon).unwrap_or_default();
     cx.new(|cx| {
-        let mut state = InputState::new(window, cx).placeholder("Type or paste");
+        let mut state = InputState::new(window, cx);
         state.set_value(current, window, cx);
         state
     })
@@ -97,7 +100,7 @@ impl FolderEditor {
                 .gap_3()
                 .text_sm()
                 .text_color(theme.muted)
-                .child("Any emoji")
+                .child(t!("main-folder-any-emoji"))
                 .child(
                     div().w(px(FIELD_WIDTH)).child(
                         Input::new(&self.emoji)

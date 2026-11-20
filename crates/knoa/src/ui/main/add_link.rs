@@ -11,6 +11,7 @@ use knoa_core::{Place, parse_link};
 
 use super::MainView;
 use crate::{
+    i18n::t,
     services::organizer::Organizer,
     state::library::Library,
     ui::{
@@ -21,7 +22,8 @@ use crate::{
 
 pub struct AddLink {
     url: Entity<InputState>,
-    error: Option<&'static str>,
+    /// The last Add was given text that isn't a web address.
+    not_a_link: bool,
     library: Entity<Library>,
     main: WeakEntity<MainView>,
     _enter: Subscription,
@@ -53,7 +55,7 @@ impl AddLink {
         });
         AddLink {
             url,
-            error: None,
+            not_a_link: false,
             library,
             main,
             _enter: enter,
@@ -62,7 +64,7 @@ impl AddLink {
 
     fn add(&mut self, window: &mut Window, cx: &mut Context<'_, AddLink>) {
         let Some(url) = parse_link(&self.url.read(cx).value()) else {
-            self.error = Some("That doesn't look like a web address.");
+            self.not_a_link = true;
             cx.notify();
             return;
         };
@@ -114,21 +116,23 @@ impl Render for AddLink {
                     .font_family(SERIF)
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("Add a link to {workspace}")),
+                    .child(t!("main-add-link-title", workspace = workspace)),
             )
             .child(Input::new(&self.url))
-            .when_some(self.error, |s, error| s.child(problem(error, &theme)))
+            .when(self.not_a_link, |s| {
+                s.child(problem(t!("main-add-link-not-a-link"), &theme))
+            })
             .child(
                 div()
                     .flex()
                     .gap_2()
                     .child(div().flex_1())
                     .child(
-                        button("cancel-link", "Cancel", Tone::Ghost, cx)
+                        button("cancel-link", t!("main-cancel"), Tone::Ghost, cx)
                             .on_click(cx.listener(|this, _, window, cx| this.close(window, cx))),
                     )
                     .child(
-                        button("add-link", "Add", Tone::Primary, cx)
+                        button("add-link", t!("main-add-link-add"), Tone::Primary, cx)
                             .on_click(cx.listener(|this, _, window, cx| this.add(window, cx))),
                     ),
             )

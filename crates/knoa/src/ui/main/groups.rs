@@ -3,6 +3,8 @@
 
 use jiff::{Timestamp, Zoned, civil::Date, tz::TimeZone};
 
+use crate::{format, i18n::t};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Period {
     Today,
@@ -76,27 +78,16 @@ fn period_of(date: Date, today: Date) -> Period {
 }
 
 fn label(period: Period) -> String {
-    const MONTHS: [&str; 12] = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ];
     match period {
-        Period::Today => "Today".into(),
-        Period::Yesterday => "Yesterday".into(),
-        Period::ThisWeek => "This week".into(),
-        Period::LastWeek => "Last week".into(),
-        Period::Month(m) => MONTHS[usize::try_from(m - 1).unwrap_or(0)].into(),
-        Period::Year(y) => y.to_string(),
+        Period::Today => t!("date-today"),
+        Period::Yesterday => t!("date-yesterday"),
+        Period::ThisWeek => t!("date-this-week"),
+        Period::LastWeek => t!("date-last-week"),
+        Period::Month(month) => match Date::new(2000, month, 1) {
+            Ok(day) => format::day(day, format::MONTH),
+            Err(_) => month.to_string(),
+        },
+        Period::Year(year) => year.to_string(),
     }
 }
 

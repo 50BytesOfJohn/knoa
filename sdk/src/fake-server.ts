@@ -8,6 +8,9 @@ import {
 	type Change,
 	type Entity,
 	type Key,
+	LANGUAGES,
+	type Language,
+	type LanguageRequest,
 	MAX_PULL,
 	type Mutation,
 	type MutationResult,
@@ -50,6 +53,7 @@ export class FakeServer {
 	readonly pushes: Mutation[][] = [];
 	bookmarkLimit: number;
 	plan: Account["plan"];
+	language: Language | null = null;
 
 	constructor(options: FakeServerOptions = {}) {
 		this.bookmarkLimit = options.bookmarkLimit ?? 10_000;
@@ -125,6 +129,7 @@ export class FakeServer {
 				cancel_at_period_end: false,
 				trial_available: !pro,
 			},
+			language: this.language,
 		};
 	}
 
@@ -155,6 +160,9 @@ export class FakeServer {
 			return json(this.pull(cursor, limit));
 		}
 		if (method === "GET" && url.pathname === "/v1/me") return json(this.me());
+		if (method === "PUT" && url.pathname === "/v1/me/language") {
+			return this.setLanguage(init);
+		}
 		if (method === "POST" && url.pathname === "/v1/organize") {
 			if (this.plan !== "pro") {
 				return json({ error: "forbidden", message: "Pro only" }, 403);
@@ -166,6 +174,16 @@ export class FakeServer {
 		}
 		return json({ error: "not_found", message: url.pathname }, 404);
 	};
+
+	private setLanguage(init?: RequestInit): Response {
+		const { language } = JSON.parse(String(init?.body)) as LanguageRequest;
+		if (!LANGUAGES.includes(language)) {
+			return json({ error: "bad_request", message: "Unknown language" }, 400);
+		}
+		this.language = language;
+		this.accountChanged();
+		return json(this.me());
+	}
 
 	/** Checkout succeeds at once, with no payment page in between. */
 	private billing(route: string, init?: RequestInit): Response {

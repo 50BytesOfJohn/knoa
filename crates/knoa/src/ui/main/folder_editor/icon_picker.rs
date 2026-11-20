@@ -8,9 +8,12 @@ use gpui::{
 use knoa_core::{FolderGlyph, FolderIcon};
 
 use super::FolderEditor;
-use crate::ui::{
-    components::{Finish, folder_mark, tip},
-    theme::{ROW_RADIUS, Theme},
+use crate::{
+    i18n::{glyph_label, t},
+    ui::{
+        components::{Finish, folder_mark, tip},
+        theme::{ROW_RADIUS, Theme},
+    },
 };
 
 const CELL: f32 = 30.;
@@ -37,9 +40,9 @@ impl FolderEditor {
         let selected = icon == self.icon;
         let color = theme.folder_color(self.color);
         let label = match &icon {
-            None => "Folder",
-            Some(FolderIcon::Glyph(glyph)) => glyph.label(),
-            Some(FolderIcon::Emoji(_)) => "Emoji",
+            None => t!("main-folder-icon-none"),
+            Some(FolderIcon::Glyph(glyph)) => glyph_label(*glyph),
+            Some(FolderIcon::Emoji(_)) => t!("main-folder-icon-emoji"),
         };
         let hover = theme.hover;
         div()

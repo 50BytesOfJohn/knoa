@@ -8,9 +8,12 @@ use gpui_component::input::Input;
 use knoa_core::{Kind, Place};
 
 use super::{MainView, Overlay};
-use crate::ui::{
-    components::icon,
-    theme::{MARGIN, Theme},
+use crate::{
+    i18n::{self, t},
+    ui::{
+        components::icon,
+        theme::{MARGIN, Theme},
+    },
 };
 
 pub const PILL_HEIGHT: f32 = 50.;
@@ -32,13 +35,13 @@ impl MainView {
         let total = library.results().len();
         let scope = match library.place() {
             Place::Everything => None,
-            Place::Gallery => Some("Gallery".to_owned()),
-            Place::Events => Some("Events".to_owned()),
-            Place::UpNext => Some("Up next".to_owned()),
-            Place::Unsorted => Some("Unsorted".to_owned()),
-            Place::NotOrganized => Some("Not organized".to_owned()),
-            Place::SetAside => Some("Set aside".to_owned()),
-            Place::Trash => Some("Trash".to_owned()),
+            Place::Gallery => Some(t!("main-place-gallery")),
+            Place::Events => Some(t!("main-place-events")),
+            Place::UpNext => Some(t!("main-place-up-next")),
+            Place::Unsorted => Some(t!("main-place-unsorted")),
+            Place::NotOrganized => Some(t!("main-place-not-organized")),
+            Place::SetAside => Some(t!("main-place-set-aside")),
+            Place::Trash => Some(t!("main-place-trash")),
             Place::Folder(id) => {
                 let tree = library.folder_tree();
                 tree.get(id).map(|_| tree.path_name(id))
@@ -88,7 +91,7 @@ impl MainView {
                         .flex_none()
                         .text_xs()
                         .text_color(theme.muted)
-                        .child(format!("{total} found")),
+                        .child(t!("main-search-found", count = total)),
                 )
             })
             .child(
@@ -119,6 +122,26 @@ impl MainView {
             .gap_2()
             .child(pill)
             .child(self.kind_chips(cx))
+    }
+
+    /// After a language switch, what inputs keep rather than draw: their placeholders, and
+    /// the search's `kind:` filters, in the new language's names.
+    pub(super) fn translate(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.translate_search(window, cx);
+        if let Some(edits) = &self.tag_edits {
+            edits.translate(window, cx);
+        }
+    }
+
+    /// The search itself doesn't change: its kinds are kept as slugs.
+    fn translate_search(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let search = self.library.read(cx).search().to_owned();
+        self.search.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-search-placeholder"), window, cx);
+            if i18n::with_kind_slugs(&input.value()) != search {
+                input.set_value(i18n::with_kind_names(&search), window, cx);
+            }
+        });
     }
 
     fn kind_chips(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
@@ -152,17 +175,23 @@ impl MainView {
         // The Gallery holds media kinds only, so choosing among them says little.
         let in_gallery = library.place() == Place::Gallery;
         if !in_gallery && (counts.len() > 1 || current.is_some()) {
-            row = row.child(chip("kind-all", "All".into(), current.is_none()).on_click(
-                cx.listener(|this, _, _, cx| {
-                    this.library
-                        .update(cx, |library, cx| library.set_kind(None, cx));
-                }),
-            ));
+            row = row.child(
+                chip("kind-all", t!("main-kind-all"), current.is_none()).on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.library
+                            .update(cx, |library, cx| library.set_kind(None, cx));
+                    },
+                )),
+            );
             for (kind, count) in counts {
                 row = row.child(
                     chip(
                         kind.slug(),
-                        format!("{} {count}", kind.plural()),
+                        t!(
+                            "main-kind-chip",
+                            kind = (i18n::kind_plural(kind)),
+                            count = count
+                        ),
                         current == Some(kind),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {

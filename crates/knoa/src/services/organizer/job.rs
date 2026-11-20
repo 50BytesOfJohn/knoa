@@ -138,6 +138,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
         _ => bookmark.title.clone(),
     };
     let (url, browser_folder) = (bookmark.url.clone(), bookmark.browser_folder.clone());
+    let language = work.language;
     if !work.current() {
         return Outcome::Superseded;
     }
@@ -159,6 +160,7 @@ async fn organize_one(job: &Job, work: &Work) -> Outcome {
                 folders: &context.folders,
                 tag_list: &context.tag_list,
                 today: today(),
+                language,
             };
             knoa_ai::organize(&*provider, provider.classifier(), &input).await
         })

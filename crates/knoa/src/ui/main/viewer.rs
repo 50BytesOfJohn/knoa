@@ -19,12 +19,21 @@ const NOTICE_FOR: Duration = Duration::from_millis(1600);
 pub struct Viewer {
     pub bookmark: BookmarkId,
     /// What the last action did, until its task clears it.
-    notice: Option<(&'static str, Task<()>)>,
+    notice: Option<(Notice, Task<()>)>,
+}
+
+/// What the viewer says under the caption after an action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Notice {
+    ImageCopied,
+    CopyFailed,
+    ImageSaved,
+    SaveFailed,
 }
 
 impl Viewer {
-    pub fn notice(&self) -> Option<&'static str> {
-        self.notice.as_ref().map(|(text, _)| *text)
+    pub fn notice(&self) -> Option<Notice> {
+        self.notice.as_ref().map(|(notice, _)| *notice)
     }
 }
 
@@ -80,7 +89,7 @@ impl MainView {
 
     /// Says briefly what an action did, when the viewer is open to say it. Elsewhere the
     /// clipboard or the saved file speaks for itself.
-    pub(super) fn tell_viewer(&mut self, text: &'static str, cx: &mut Context<'_, MainView>) {
+    pub(super) fn tell_viewer(&mut self, notice: Notice, cx: &mut Context<'_, MainView>) {
         let Some(Overlay::Viewer(viewer)) = &mut self.overlay else {
             return;
         };
@@ -93,7 +102,7 @@ impl MainView {
                 cx.notify();
             });
         });
-        viewer.notice = Some((text, clear));
+        viewer.notice = Some((notice, clear));
         cx.notify();
     }
 

@@ -9,7 +9,9 @@ use knoa_core::protocol::Organizer as Who;
 use knoa_paths::Channel;
 use knoa_sync::{Api, Session, SessionEvent, SignIn, SocketEvent, Tokens};
 
-use super::{Backend, Cloud, Connection, Phase, SyncStatus, Wake, engine, set_cloud_organizes};
+use super::{
+    Backend, Cloud, Connection, Phase, Problem, SyncStatus, Wake, engine, set_cloud_organizes,
+};
 use crate::services::{credentials::Credentials, generation::Ticket, network::Network};
 
 impl Cloud {
@@ -27,9 +29,11 @@ impl Cloud {
         }
         let generation = self.generation.ticket();
         let read = Credentials::read(config.credential_url(), cx);
+        self.restoring = true;
         cx.spawn(async move |this, cx| {
             let read = read.await;
             let _ = this.update(cx, |this, cx| {
+                this.restoring = false;
                 if generation.if_current(|| ()).is_none() {
                     return;
                 }
@@ -137,7 +141,7 @@ impl Cloud {
             }
             Err(problem) => {
                 tracing::warn!("signing in failed: {problem}");
-                self.problem = Some(problem);
+                self.problem = Some(Problem::SignInFailed(problem));
             }
         }
         cx.notify();
@@ -194,6 +198,7 @@ impl Cloud {
             replacement: None,
             mcp: super::McpState::default(),
             mcp_task: None,
+            language_push: None,
         });
         cx.notify();
     }
@@ -205,6 +210,7 @@ impl Cloud {
             Credentials::delete(config.credential_url(), cx).detach_and_log_err(cx);
         }
         crate::state::settings::SettingsFile::update(cx, |s| s.account = None);
+        super::language::set_delivery(crate::state::settings::Delivery::Sent, cx);
         set_cloud_organizes(false, "signed out of the cloud", cx);
         self.session_events = None;
         self.sync = SyncStatus::Starting;
@@ -291,8 +297,7 @@ async fn on_session_events(
                     tracing::warn!("the cloud sign-in was refused; signed out");
                     this.forget_account(cx);
                     this.phase = Phase::SignedOut;
-                    this.problem =
-                        Some("You were signed out. Sign in again to keep syncing.".into());
+                    this.problem = Some(Problem::SignedOut);
                     cx.notify();
                 }
             }

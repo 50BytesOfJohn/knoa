@@ -5,7 +5,7 @@ use gpui::{AppContext as _, Context, Entity, Focusable as _, Subscription, Windo
 use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, Origin, normalize_tag, tag_fits};
 
-use crate::ui::main::MainView;
+use crate::{i18n::t, ui::main::MainView};
 
 /// Tag changes on the bookmark in the detail panel. It lives as long as that bookmark
 /// stays selected.
@@ -23,6 +23,15 @@ pub(super) struct TagField {
 }
 
 impl TagEdits {
+    /// The open field keeps the placeholder it was given, so a new language sets it again.
+    pub(in crate::ui::main) fn translate(&self, window: &mut Window, cx: &mut gpui::App) {
+        if let Some(field) = &self.field {
+            field.input.update(cx, |input, cx| {
+                input.set_placeholder(t!("detail-add-a-tag"), window, cx);
+            });
+        }
+    }
+
     pub(in crate::ui::main) fn is_typing(&self, window: &Window, cx: &gpui::App) -> bool {
         self.field
             .as_ref()
@@ -124,8 +133,11 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Add a tag"));
-        input.update(cx, |input, cx| input.focus(window, cx));
+        let input = cx.new(|cx| InputState::new(window, cx));
+        input.update(cx, |input, cx| {
+            input.set_placeholder(t!("detail-add-a-tag"), window, cx);
+            input.focus(window, cx);
+        });
         let events = cx.subscribe_in(&input, window, move |this, input, event, window, cx| {
             this.on_tag_field_event(bookmark, input, event, window, cx);
         });

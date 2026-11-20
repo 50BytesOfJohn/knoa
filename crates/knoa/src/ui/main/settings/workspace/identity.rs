@@ -5,20 +5,26 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, div, px,
 };
 use gpui_component::input::Input;
-use knoa_core::{Ink, protocol::max_chars};
+use knoa_core::{
+    Ink,
+    protocol::max_chars::{self, fits},
+};
 
 use super::{WorkspacePage, browsers::synced_from, form};
-use crate::ui::{
-    components::{Tone, button, tip, too_long, workspace_mark},
-    theme::Theme,
+use crate::{
+    i18n::{self, t},
+    ui::{
+        components::{Tone, button, tip, workspace_mark},
+        theme::Theme,
+    },
 };
 
 impl WorkspacePage {
     pub(super) fn header(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Div {
         let Some(id) = self.existing else {
             return form::header(
-                "New workspace",
-                "A separate library, like Work or Personal, with its own browsers and folders.",
+                t!("settings-workspace-new"),
+                &t!("settings-workspace-new-about"),
                 theme,
             );
         };
@@ -33,16 +39,21 @@ impl WorkspacePage {
             div()
                 .text_sm()
                 .text_color(theme.muted)
-                .child("Shown now")
+                .child(t!("settings-workspace-shown-now"))
                 .into_any_element()
         } else {
-            button("show-workspace", "Show it", Tone::Soft, cx)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.save(cx);
-                    this.library
-                        .update(cx, |library, cx| library.set_workspace(id, cx));
-                }))
-                .into_any_element()
+            button(
+                "show-workspace",
+                t!("settings-workspace-show-it"),
+                Tone::Soft,
+                cx,
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.save(cx);
+                this.library
+                    .update(cx, |library, cx| library.set_workspace(id, cx));
+            }))
+            .into_any_element()
         };
         div()
             .flex()
@@ -75,7 +86,7 @@ impl WorkspacePage {
                     .p(px(2.))
                     .cursor_pointer()
                     .child(div().size_full().rounded(px(4.)).bg(theme.ink(ink)))
-                    .tooltip(tip(ink.label(), None, theme))
+                    .tooltip(tip(i18n::ink_label(ink), None, theme))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.color = ink;
                         this.changed(cx);
@@ -83,16 +94,23 @@ impl WorkspacePage {
             );
         }
         let mut rows = vec![form::row(
-            "Name",
+            &t!("settings-workspace-name"),
             None,
             div().w(px(240.)).child(Input::new(&self.name)),
             theme,
         )];
         let name = self.name.read(cx).value();
-        if let Some(reason) = too_long("A name", name.trim(), max_chars::workspace::NAME) {
+        let max = max_chars::workspace::NAME;
+        if !fits(name.trim(), max) {
+            let reason = t!("settings-workspace-name-too-long", max = max);
             rows.push(form::problem_note(reason, theme));
         }
-        rows.push(form::row("Color", None, swatches, theme));
-        form::group("Name and color", rows, theme)
+        rows.push(form::row(
+            &t!("settings-workspace-color"),
+            None,
+            swatches,
+            theme,
+        ));
+        form::group(&t!("settings-workspace-name-and-color"), rows, theme)
     }
 }

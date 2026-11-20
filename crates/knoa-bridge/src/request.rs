@@ -1,4 +1,5 @@
-//! What the extension can ask for: the workspaces, and saving a link to one of them.
+//! What the extension can ask for: the workspaces and the app's language, and saving a
+//! link to one of the workspaces.
 
 use std::os::unix::net::UnixDatagram;
 
@@ -8,6 +9,8 @@ use knoa_paths::Paths;
 use knoa_store::{AddOutcome, NewLink, Store};
 use serde::Deserialize;
 use serde_json::{Value, json};
+
+use crate::language;
 
 /// The extension cuts snapshots down to this; the API refuses larger ones too.
 const MAX_SNAPSHOT_BYTES: usize = 1024 * 1024;
@@ -49,6 +52,7 @@ fn answer(message: &[u8]) -> anyhow::Result<Value> {
                 "version": env!("CARGO_PKG_VERSION"),
                 "workspaces": workspaces,
                 "linked": store.is_linked()?,
+                "language": language::read(&paths.settings()).code(),
             }))
         }
         Request::Save {

@@ -8,19 +8,24 @@ use gpui_component::input::{Input, Textarea};
 use knoa_core::Ink;
 
 use super::{nav, title};
-use crate::ui::{
-    components::workspace_mark,
-    onboarding::{KeyCheck, Onboarding},
-    theme::Theme,
+use crate::{
+    i18n::t,
+    ui::{
+        components::workspace_mark,
+        onboarding::{KeyCheck, Onboarding},
+        theme::Theme,
+    },
 };
 
 /// Example instructions the user can add with a click.
-const EXAMPLES: [&str; 4] = [
-    "Keep work and personal things apart.",
-    "Tag recipes by cuisine.",
-    "Anything about Rust goes in a Rust folder.",
-    "Short summaries, no fluff.",
-];
+fn examples() -> [String; 4] {
+    [
+        t!("onboarding-library-example-apart"),
+        t!("onboarding-library-example-recipes"),
+        t!("onboarding-library-example-rust"),
+        t!("onboarding-library-example-short"),
+    ]
+}
 
 impl Onboarding {
     pub(super) fn library_step(
@@ -30,6 +35,7 @@ impl Onboarding {
     ) -> Div {
         let theme = Theme::get(cx).clone();
         let name = self.name.read(cx).value().to_string();
+        let default_name = t!("onboarding-library-default-name");
         let mut swatches = div().flex().gap_2();
         for ink in Ink::ALL {
             swatches = swatches.child(
@@ -46,9 +52,9 @@ impl Onboarding {
                     })),
             );
         }
-        let mut examples = div().flex().flex_wrap().gap_1p5();
-        for (index, example) in EXAMPLES.iter().enumerate() {
-            examples = examples.child(
+        let mut chips = div().flex().flex_wrap().gap_1p5();
+        for (index, example) in examples().into_iter().enumerate() {
+            chips = chips.child(
                 div()
                     .id(("example", index))
                     .px_2p5()
@@ -61,11 +67,14 @@ impl Onboarding {
                     .text_color(theme.muted)
                     .cursor_pointer()
                     .hover(|s| s.bg(theme.hover).text_color(theme.text))
-                    .child(format!("+ {example}"))
+                    .child(t!(
+                        "onboarding-library-add-example",
+                        example = example.clone()
+                    ))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         let current = this.instructions.read(cx).value().to_string();
                         let joined = if current.trim().is_empty() {
-                            (*example).to_owned()
+                            example.clone()
                         } else {
                             format!("{}\n{example}", current.trim_end())
                         };
@@ -79,7 +88,7 @@ impl Onboarding {
             .flex()
             .flex_col()
             .gap_4()
-            .child(title("Last thing: what's this library called?"))
+            .child(title(&t!("onboarding-library-title")))
             .child(
                 div()
                     .flex()
@@ -87,7 +96,7 @@ impl Onboarding {
                     .gap_3()
                     .child(workspace_mark(
                         if name.trim().is_empty() {
-                            "Personal"
+                            &default_name
                         } else {
                             &name
                         },
@@ -104,11 +113,11 @@ impl Onboarding {
                         .mt_2()
                         .text_sm()
                         .font_weight(FontWeight::MEDIUM)
-                        .child("Any house rules for organizing?"),
+                        .child(t!("onboarding-library-house-rules")),
                 )
                 .child(Textarea::new(&self.instructions).h(px(76.)))
-                .child(examples)
+                .child(chips)
             })
-            .child(nav(self.step, "Finish", cx))
+            .child(nav(self.step, t!("onboarding-library-finish"), cx))
     }
 }

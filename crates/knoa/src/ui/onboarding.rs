@@ -1,13 +1,14 @@
 //! First-run setup: pick a browser, optionally connect AI, name the library. Every step
 //! can be skipped, and one click skips the whole thing with defaults.
 
+mod key_check;
 mod steps;
 
 use gpui::{
     Animation, AnimationExt as _, AppContext as _, Context, Entity, FocusHandle, FontWeight,
     InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Task, TaskExt as _, Window, div, ease_out_quint,
-    prelude::FluentBuilder as _, px,
+    StatefulInteractiveElement as _, Styled as _, Subscription, TaskExt as _, Window, div,
+    ease_out_quint, prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::{InputState, TextareaState};
 use knoa_ai::ProviderKind;
@@ -15,10 +16,12 @@ use knoa_browser::{Browser, Profile};
 use knoa_core::Ink;
 
 use crate::{
+    i18n::{self, t},
     services::ai,
     state::{library::Library, settings::SettingsFile},
     ui::theme::Theme,
 };
+use key_check::KeyCheck;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Step {
@@ -49,15 +52,6 @@ impl Step {
     }
 }
 
-/// Where the key check stands.
-enum KeyCheck {
-    Idle,
-    /// Holds the running check; dropping it cancels the check.
-    Checking(#[allow(dead_code)] Task<()>),
-    Failed(String),
-    Passed,
-}
-
 pub struct Onboarding {
     library: Entity<Library>,
     step: Step,
@@ -74,6 +68,7 @@ pub struct Onboarding {
     sign_in: FocusHandle,
     /// Setup was skipped to sign in, so the main screen opens on the Account page.
     wants_account: bool,
+    _language: Subscription,
 }
 
 impl Onboarding {
@@ -95,21 +90,14 @@ impl Onboarding {
             Some(w) if !w.browsers.is_empty() => w.browsers.clone(),
             _ => default_profiles(&profiles),
         };
-        let key = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Paste your key: sk-or-v1-…")
-                .masked(true)
-        });
-        let name = cx.new(|cx| InputState::new(window, cx).placeholder("Personal"));
+        let key = cx.new(|cx| InputState::new(window, cx).masked(true));
+        let name = cx.new(|cx| InputState::new(window, cx));
         if let Some(workspace) = &workspace {
             name.update(cx, |input, cx| {
                 input.set_value(workspace.name.clone(), window, cx);
             });
         }
-        let instructions = cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .placeholder("Optional. Write it like you'd tell a friend.")
-        });
+        let instructions = cx.new(|cx| TextareaState::new(window, cx));
         if let Some(workspace) = &workspace {
             instructions.update(cx, |input, cx| {
                 input.set_value(workspace.instructions.clone(), window, cx);
@@ -117,7 +105,10 @@ impl Onboarding {
         }
         let focus = cx.focus_handle();
         focus.focus(window, cx);
-        Onboarding {
+        let language = i18n::on_change(window, cx, |this, window, cx| {
+            this.set_placeholders(window, cx);
+        });
+        let onboarding = Onboarding {
             library,
             step: Step::Hello,
             profiles,
@@ -131,7 +122,24 @@ impl Onboarding {
             focus,
             sign_in: cx.focus_handle().tab_stop(true),
             wants_account: false,
-        }
+            _language: language,
+        };
+        onboarding.set_placeholders(window, cx);
+        onboarding
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
+        self.key.update(cx, |input, cx| {
+            input.set_placeholder(t!("onboarding-ai-key-placeholder"), window, cx);
+        });
+        self.instructions.update(cx, |input, cx| {
+            let placeholder = t!("onboarding-library-instructions-placeholder");
+            input.set_placeholder(placeholder, window, cx);
+        });
+        self.name.update(cx, |input, cx| {
+            input.set_placeholder(t!("onboarding-library-default-name"), window, cx);
+        });
     }
 
     /// Whether setup was skipped to sign in to an existing account.
@@ -150,56 +158,20 @@ impl Onboarding {
         cx.notify();
     }
 
-    /// Checks the pasted key, then moves on.
-    fn check_key(&mut self, window: &mut Window, cx: &mut Context<'_, Onboarding>) {
-        let key = self.key.read(cx).value().trim().to_owned();
-        if key.is_empty() {
-            self.key_check = KeyCheck::Failed("Paste a key first, or skip this step.".into());
-            cx.notify();
-            return;
-        }
-        let check = ai::check_key(ProviderKind::OpenRouter, key, cx);
-        let window_handle = window.window_handle();
-        self.key_check = KeyCheck::Checking(cx.spawn(async move |this, cx| {
-            let result = check.await;
-            let _ = cx.update_window(window_handle, |_, window, cx| {
-                let _ = this.update(cx, |this, cx| match result {
-                    Ok(()) => {
-                        this.key_check = KeyCheck::Passed;
-                        this.go(Step::Library, window, cx);
-                    }
-                    Err(err) => {
-                        this.key_check = KeyCheck::Failed(match err {
-                            knoa_ai::Error::Unauthorized => {
-                                "OpenRouter doesn't recognise that key. Double-check it?".into()
-                            }
-                            other => format!("Couldn't check the key: {other}"),
-                        });
-                        cx.notify();
-                    }
-                });
-            });
-        }));
-        cx.notify();
-    }
-
     /// Saves everything chosen so far into the current workspace, which starts syncing.
     /// Shown on the last step, which stays up until the user opens the library.
     fn apply(&mut self, cx: &mut Context<'_, Onboarding>) {
         let name = self.name.read(cx).value().trim().to_owned();
         let instructions = self.instructions.read(cx).value().trim().to_owned();
         let (browsers, color) = (self.chosen.clone(), self.color);
+        let default_name = t!("onboarding-library-default-name");
         self.library.update(cx, |library, cx| {
             let id = library.workspace_id();
             library.change(cx, move |store| {
                 let Some(mut workspace) = store.workspace(id)? else {
                     return Ok(());
                 };
-                workspace.name = if name.is_empty() {
-                    "Personal".into()
-                } else {
-                    name
-                };
+                workspace.name = if name.is_empty() { default_name } else { name };
                 workspace.color = color;
                 workspace.instructions = instructions;
                 workspace.browsers = browsers;
@@ -324,7 +296,7 @@ impl Render for Onboarding {
                         .text_color(theme.muted)
                         .cursor_pointer()
                         .hover(|s| s.bg(theme.soft).text_color(theme.text))
-                        .child("Skip setup →")
+                        .child(t!("onboarding-skip-setup"))
                         .on_click(cx.listener(|this, _, _, cx| this.skip_all(cx))),
                 )
             })

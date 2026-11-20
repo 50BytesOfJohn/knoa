@@ -17,7 +17,7 @@ use knoa_fetch::Fetcher;
 use knoa_store::Store;
 use knoa_sync::Api;
 
-use super::{Cloud, SyncStatus, Wake, thumbnails::Thumbnails};
+use super::{Cloud, SyncError, SyncStatus, Wake, thumbnails::Thumbnails};
 use crate::{
     services::network::Network,
     state::{database::Database, library::Library},
@@ -172,15 +172,15 @@ fn status_of(failure: &Failure) -> SyncStatus {
         }
         Failure::Sync(err) => {
             tracing::warn!("cloud sync failed: {err}");
-            SyncStatus::Error(err.to_string())
+            SyncStatus::Error(SyncError::Failed(err.to_string()))
         }
         Failure::Store(err) => {
             tracing::error!("cloud sync can't use the library: {err}");
-            SyncStatus::Error(err.to_string())
+            SyncStatus::Error(SyncError::Failed(err.to_string()))
         }
         Failure::Unanswered => {
             tracing::warn!("cloud sync failed: the server answered none of the changes sent");
-            SyncStatus::Error("The server didn't take the latest changes.".into())
+            SyncStatus::Error(SyncError::Unanswered)
         }
         Failure::Stopped => SyncStatus::Starting,
     }

@@ -14,7 +14,10 @@ use knoa_core::{
 };
 use knoa_store::{AddedLink, Counts, NewLink, Store};
 
-use crate::state::{batch::Batch, database::Database, settings::SettingsFile};
+use crate::{
+    i18n,
+    state::{batch::Batch, database::Database, settings::SettingsFile},
+};
 
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
@@ -34,6 +37,7 @@ pub struct Library {
     workspaces: Vec<Workspace>,
     workspace_sync_ids: BTreeMap<WorkspaceId, String>,
     place: Place,
+    /// The search with `kind:` filters as slugs, whatever language they were typed in.
     search: String,
     kind: Option<Kind>,
     results: Arc<Vec<Bookmark>>,
@@ -200,9 +204,12 @@ impl Library {
         }
     }
 
+    /// Kind names are read in the language of the moment and kept as slugs, so the
+    /// search means the same after a language switch.
     pub fn set_search(&mut self, text: &str, cx: &mut Context<'_, Library>) {
-        if self.search != text {
-            text.clone_into(&mut self.search);
+        let search = i18n::with_kind_slugs(text);
+        if self.search != search {
+            self.search = search;
             self.refresh(cx);
         }
     }

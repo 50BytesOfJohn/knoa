@@ -7,14 +7,14 @@
 
 mod browsers;
 mod edits;
+mod footer;
 mod identity;
 mod organizing;
 mod tag_list;
 
 use gpui::{
-    AppContext as _, Context, Div, Entity, EventEmitter, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Task, TaskExt as _, Window, div,
-    prelude::FluentBuilder as _,
+    AppContext as _, Context, Entity, EventEmitter, IntoElement, ParentElement as _, Render,
+    Styled as _, Subscription, Task, TaskExt as _, Window, div,
 };
 use gpui_component::input::{InputEvent, InputState, TextareaState};
 use knoa_browser::{Browser, Profile};
@@ -28,12 +28,10 @@ use super::{
     reorganize::{Reorganize, Scope},
 };
 use crate::{
+    i18n::{self, t},
     services::organizer::Organizer,
     state::library::Library,
-    ui::{
-        components::{Tone, button},
-        theme::Theme,
-    },
+    ui::theme::Theme,
 };
 use edits::keep_stored_where_refused;
 use tag_list::{TagListChanged, TagListEditor};
@@ -81,19 +79,17 @@ impl WorkspacePage {
         let next_color = Ink::nth(library.read(cx).workspaces().len());
         let workspace = existing.unwrap_or_else(|| blank_workspace(next_color));
         let name = cx.new(|cx| {
-            let mut input = InputState::new(window, cx).placeholder("Work, Personal…");
+            let mut input = InputState::new(window, cx);
             input.set_value(workspace.name.clone(), window, cx);
             input
         });
         let instructions = cx.new(|cx| {
-            let mut input = TextareaState::new(window, cx)
-                .placeholder("e.g. Tag recipes by cuisine. Short summaries, no fluff.");
+            let mut input = TextareaState::new(window, cx);
             input.set_value(workspace.instructions.clone(), window, cx);
             input
         });
         let guideline = cx.new(|cx| {
-            let mut input = TextareaState::new(window, cx)
-                .placeholder("e.g. Only things about work: engineering, design and our clients.");
+            let mut input = TextareaState::new(window, cx);
             input.set_value(workspace.screening.guideline.clone(), window, cx);
             input
         });
@@ -116,6 +112,9 @@ impl WorkspacePage {
             cx.observe(&guideline, |_, _, cx| cx.notify()),
             // Organizing again is offered only while AI is on.
             cx.observe(&Organizer::entity(cx), |_, _, cx| cx.notify()),
+            i18n::on_change(window, cx, |this, window, cx| {
+                this.set_placeholders(window, cx);
+            }),
         ];
         cx.on_release(|this: &mut WorkspacePage, _| {
             if let Some(saves) = this.saves.take() {
@@ -124,7 +123,7 @@ impl WorkspacePage {
         })
         .detach();
         let reorganize = (!is_new).then(|| new_reorganize(workspace.id, &library, cx));
-        WorkspacePage {
+        let page = WorkspacePage {
             existing: (!is_new).then_some(workspace.id),
             baseline: workspace.clone().normalized(),
             saves: None,
@@ -144,7 +143,24 @@ impl WorkspacePage {
             reorganize,
             library,
             _subscriptions: subscriptions,
-        }
+        };
+        page.set_placeholders(window, cx);
+        page
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, WorkspacePage>) {
+        self.name.update(cx, |input, cx| {
+            input.set_placeholder(t!("settings-workspace-name-placeholder"), window, cx);
+        });
+        self.instructions.update(cx, |input, cx| {
+            let placeholder = t!("settings-workspace-instructions-placeholder");
+            input.set_placeholder(placeholder, window, cx);
+        });
+        self.guideline.update(cx, |input, cx| {
+            let placeholder = t!("settings-workspace-guideline-placeholder");
+            input.set_placeholder(placeholder, window, cx);
+        });
     }
 
     fn save_on_blur(
@@ -205,18 +221,6 @@ impl WorkspacePage {
         .detach_and_log_err(cx);
     }
 
-    fn delete(&mut self, id: WorkspaceId, cx: &mut Context<'_, WorkspacePage>) {
-        if !self.confirm_delete {
-            self.confirm_delete = true;
-            cx.notify();
-            return;
-        }
-        self.deleted = true;
-        self.library.update(cx, |library, cx| {
-            library.change(cx, move |store| store.delete_workspace(id).map(drop));
-        });
-    }
-
     fn toggle_browser(&mut self, id: String, cx: &mut Context<'_, WorkspacePage>) {
         if let Some(at) = self.browsers.iter().position(|b| *b == id) {
             self.browsers.remove(at);
@@ -241,38 +245,6 @@ impl Render for WorkspacePage {
             .child(self.organizing_group(&theme, cx))
             .child(self.tag_list.clone())
             .children(self.footer(&theme, cx))
-    }
-}
-
-impl WorkspacePage {
-    /// Create for a new workspace; Delete for an existing one, unless it's the last.
-    fn footer(&self, theme: &Theme, cx: &mut Context<'_, WorkspacePage>) -> Option<Div> {
-        let Some(id) = self.existing else {
-            return Some(
-                div().flex().justify_end().child(
-                    button("create-workspace", "Create workspace", Tone::Primary, cx)
-                        .on_click(cx.listener(|this, _, window, cx| this.create(window, cx))),
-                ),
-            );
-        };
-        if self.library.read(cx).workspaces().len() < 2 {
-            return None;
-        }
-        let label = if self.confirm_delete {
-            "Delete for good"
-        } else {
-            "Delete…"
-        };
-        let delete = button("delete-workspace", label, Tone::Soft, cx)
-            .when(self.confirm_delete, |s| s.text_color(theme.danger))
-            .on_click(cx.listener(move |this, _, _, cx| this.delete(id, cx)));
-        let row = form::row(
-            "Delete this workspace",
-            Some("Its bookmarks and folders go with it. Your browsers keep their bookmarks."),
-            delete,
-            theme,
-        );
-        Some(form::group("Delete", vec![row], theme))
     }
 }
 

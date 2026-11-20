@@ -8,9 +8,12 @@ use gpui::{
 use knoa_core::FolderId;
 
 use super::{MainView, overlay::Overlay};
-use crate::ui::{
-    components::{Tone, button},
-    theme::{SERIF, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::{Tone, button},
+        theme::{SERIF, Theme},
+    },
 };
 
 impl MainView {
@@ -38,15 +41,10 @@ impl MainView {
         let theme = Theme::get(cx);
         let tree = self.library.read(cx).folder_tree();
         let name = tree.get(id).map(|f| f.name.clone()).unwrap_or_default();
-        let detail = match tree.descendants(id).len() {
-            0 => "Its bookmarks stay in your library.".to_owned(),
-            1 => {
-                "Its subfolder is deleted with it. Their bookmarks stay in your library.".to_owned()
-            }
-            n => format!(
-                "Its {n} subfolders are deleted with it. Their bookmarks stay in your library."
-            ),
-        };
+        let detail = t!(
+            "main-delete-folder-detail",
+            count = (tree.descendants(id).len())
+        );
         div()
             .w(px(360.))
             .p_5()
@@ -58,7 +56,7 @@ impl MainView {
                     .font_family(SERIF)
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("Delete “{name}”?")),
+                    .child(t!("main-delete-folder-title", name = name)),
             )
             .child(div().text_sm().text_color(theme.muted).child(detail))
             .child(
@@ -68,14 +66,17 @@ impl MainView {
                     .gap_2()
                     .child(div().flex_1())
                     .child(
-                        button("cancel-delete-folder", "Cancel", Tone::Ghost, cx).on_click(
-                            cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
-                        ),
+                        button("cancel-delete-folder", t!("main-cancel"), Tone::Ghost, cx)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
+                            ),
                     )
                     .child(
-                        button("delete-folder", "Delete", Tone::Primary, cx).on_click(cx.listener(
-                            move |this, _, window, cx| this.delete_folder(id, window, cx),
-                        )),
+                        button("delete-folder", t!("main-delete"), Tone::Primary, cx).on_click(
+                            cx.listener(move |this, _, window, cx| {
+                                this.delete_folder(id, window, cx);
+                            }),
+                        ),
                     ),
             )
     }

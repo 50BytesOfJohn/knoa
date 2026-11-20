@@ -1,10 +1,10 @@
 //! The extraction prompt. Message order is fixed, most stable first, so providers can cache
-//! the prefix: rules, then the user's instructions and folders, then the kind, then the
-//! bookmark.
+//! the prefix: rules and the language, then the user's instructions and folders, then the
+//! kind, then the bookmark.
 
 use std::fmt::Write as _;
 
-use knoa_core::{AnalysisImage, Kind, TagList};
+use knoa_core::{AnalysisImage, Kind, Language, TagList};
 use url::Url;
 
 use super::{FolderInput, OrganizeInput};
@@ -21,15 +21,15 @@ the browser, evidence from fetching the page, and its kind. Answer with JSON mat
 
 Rules:
 - summary: one or two plain sentences, at most 240 characters, saying what this is and why someone \
-would keep it. Write it in English. If the page could not be read, describe what the URL, title and \
+would keep it. If the page could not be read, describe what the URL, title and \
 folder tell you, and say nothing you can't support.
 - fields: values for the kind's fields that the evidence supports. Use null rather than guess. \
 Durations are whole minutes, dates YYYY-MM-DD, date-times YYYY-MM-DDTHH:MM with the UTC offset \
 (+01:00) when the page gives one, lists comma-separated.
 - extras: other short useful facts as name/value pairs (awards, price range, platform). Few and \
 concrete; no URLs or IDs.
-- tags: describe what the bookmark is about, using the simplest, most common English words, singular \
-(\"cooking\", not \"culinary-arts\"; \"movie\", not \"films\"). Lowercase, hyphens between words. No names \
+- tags: describe what the bookmark is about, using the simplest, most common words, singular \
+(in English: \"cooking\", not \"culinary-arts\"; \"movie\", not \"films\"). Lowercase, hyphens between words. No names \
 of products, companies, people or sites: those go in fields or extras. Add no tags only if no \
 information about the page could be loaded.
 - title, only when the schema asks for one: the bookmark has no title yet, and its browser title is \
@@ -45,7 +45,7 @@ browser title and browser folder, which are the strongest signals for login-wall
 /// prefix before it stays shared with every other request.
 const IMAGE_RULES: &str =
     "The bookmark is this image, shown after its details. Describe only what is \
-visible:
+visible, in the language the rules name:
 - summary: the subject, the medium (photo, illustration, screenshot, ...), the setting and the mood.
 - tags: the subject and the medium rather than praise (\"mountain\", \"photo\", not \"beautiful\").
 - Never say who a real person is from their face. Name a person, place or source only when the \
@@ -60,7 +60,7 @@ pub fn messages(
     folders_in_answer: bool,
     image: Option<&AnalysisImage>,
 ) -> Vec<Message> {
-    let mut messages = vec![Message::system(RULES)];
+    let mut messages = vec![Message::system(rules(input.language))];
     let mut context = instructions_text(input);
     if let Some(guideline) = input.guideline {
         let _ = writeln!(
@@ -90,6 +90,18 @@ pub fn messages(
         None => messages.push(Message::user(bookmark)),
     }
     messages
+}
+
+/// The rules with the language last, so each language keeps one cacheable prefix.
+fn rules(language: Language) -> String {
+    let name = language.english_name();
+    format!(
+        "{RULES}- Language: write the summary, tags, title, extras (names and values), fit_reason \
+         and free-text field values in {name}, whatever language the page is in. Keep names, \
+         titles of works and other proper nouns as written. Dates, durations, numbers and \
+         codes keep the formats above. Tags from the user's tag list stay spelled exactly as \
+         listed.\n"
+    )
 }
 
 fn kind_text(kind: Kind, input: &OrganizeInput<'_>) -> String {
@@ -218,7 +230,38 @@ pub fn redact(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use knoa_core::{Date, Fields};
+
     use super::*;
+    use crate::{BookmarkInput, Content};
+
+    #[test]
+    fn the_rules_ask_for_the_users_language() {
+        let input = OrganizeInput {
+            bookmark: BookmarkInput {
+                title: "Pierogi ruskie",
+                url: "https://example.pl/pierogi",
+                browser_folder: None,
+                evidence: None,
+                page_kind: None,
+                page_fields: &Fields::new(),
+                image: None,
+            },
+            instructions: "",
+            guideline: None,
+            folders: &[],
+            tag_list: &TagList::default(),
+            today: Date::new(2026, 11, 20).expect("a real date"),
+            language: Language::Pl,
+        };
+
+        let messages = messages(&input, Kind::Recipe, false, None);
+
+        let Content::Text(rules) = &messages[0].content else {
+            panic!("the rules are text");
+        };
+        assert!(rules.contains("in Polish"), "{rules}");
+    }
 
     #[test]
     fn secret_query_parameters_are_redacted() {

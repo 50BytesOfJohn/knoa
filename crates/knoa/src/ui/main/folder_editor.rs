@@ -24,9 +24,10 @@ use knoa_core::{
 
 use super::MainView;
 use crate::{
+    i18n::{self, t},
     state::library::{Library, LibraryChanged},
     ui::{
-        components::{Tone, button, problem, too_long},
+        components::{Tone, button, over_limit, problem},
         theme::Theme,
     },
 };
@@ -58,11 +59,8 @@ impl FolderEditor {
         window: &mut Window,
         cx: &mut Context<'_, FolderEditor>,
     ) -> FolderEditor {
-        let name = cx.new(|cx| InputState::new(window, cx).placeholder("Folder name"));
-        let description = cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .placeholder("What belongs here? The AI uses this to file bookmarks.")
-        });
+        let name = cx.new(|cx| InputState::new(window, cx));
+        let description = cx.new(|cx| TextareaState::new(window, cx));
         if let Some(folder) = &existing {
             name.update(cx, |input, cx| {
                 input.set_value(folder.name.clone(), window, cx);
@@ -77,7 +75,7 @@ impl FolderEditor {
         let hue = color_picker::hue_state(color, cx);
         let icon = existing.as_ref().and_then(|f| f.icon.clone());
         let emoji = emoji_picker::emoji_state(icon.as_ref(), window, cx);
-        FolderEditor {
+        let editor = FolderEditor {
             auto_assign: existing.as_ref().is_none_or(|f| f.auto_assign),
             color,
             icon,
@@ -93,6 +91,9 @@ impl FolderEditor {
                 ),
                 cx.observe(&name, |_, _, cx| cx.notify()),
                 cx.observe(&description, |_, _, cx| cx.notify()),
+                i18n::on_change(window, cx, |this, window, cx| {
+                    this.set_placeholders(window, cx);
+                }),
             ],
             hue,
             emoji,
@@ -101,7 +102,22 @@ impl FolderEditor {
             description,
             library,
             main,
-        }
+        };
+        editor.set_placeholders(window, cx);
+        editor
+    }
+
+    /// Inputs keep the placeholder they're given, so they get it again in a new language.
+    fn set_placeholders(&self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
+        self.name.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-folder-name-placeholder"), window, cx);
+        });
+        self.description.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-folder-description-placeholder"), window, cx);
+        });
+        self.emoji.update(cx, |input, cx| {
+            input.set_placeholder(t!("main-folder-emoji-placeholder"), window, cx);
+        });
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<'_, FolderEditor>) {
@@ -174,22 +190,19 @@ impl Render for FolderEditor {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let title = if self.existing.is_some() {
-            "Edit folder"
+            t!("main-folder-edit-title")
         } else {
-            "New folder"
+            t!("main-folder-new-title")
         };
         let existing = self.existing.as_ref().map(|f| f.id);
         // Why Save does nothing: text the server would refuse.
-        let name_too_long = too_long(
-            "A name",
-            self.name.read(cx).value().trim(),
-            max_chars::folder::NAME,
-        );
-        let description_too_long = too_long(
-            "A description",
+        let name_too_long = over_limit(self.name.read(cx).value().trim(), max_chars::folder::NAME)
+            .map(|max| t!("main-folder-name-too-long", max = max));
+        let description_too_long = over_limit(
             self.description.read(cx).value().trim(),
             max_chars::folder::DESCRIPTION,
-        );
+        )
+        .map(|max| t!("main-folder-description-too-long", max = max));
         div()
             .w(px(380.))
             .p_5()
@@ -217,12 +230,12 @@ impl Render for FolderEditor {
                             .flex_1()
                             .flex()
                             .flex_col()
-                            .child(div().text_sm().child("Let the AI add bookmarks"))
+                            .child(div().text_sm().child(t!("main-folder-auto-assign")))
                             .child(
                                 div()
                                     .text_xs()
                                     .text_color(theme.muted)
-                                    .child("New bookmarks that fit go here on their own."),
+                                    .child(t!("main-folder-auto-assign-about")),
                             ),
                     )
                     .child(
@@ -243,17 +256,19 @@ impl Render for FolderEditor {
                     .flex()
                     .gap_2()
                     .when_some(existing, |s, id| {
-                        s.child(button("delete-folder", "Delete", Tone::Ghost, cx).on_click(
-                            cx.listener(move |this, _, window, cx| this.delete(id, window, cx)),
-                        ))
+                        s.child(
+                            button("delete-folder", t!("main-delete"), Tone::Ghost, cx).on_click(
+                                cx.listener(move |this, _, window, cx| this.delete(id, window, cx)),
+                            ),
+                        )
                     })
                     .child(div().flex_1())
                     .child(
-                        button("cancel-folder", "Cancel", Tone::Ghost, cx)
+                        button("cancel-folder", t!("main-cancel"), Tone::Ghost, cx)
                             .on_click(cx.listener(|this, _, window, cx| this.close(window, cx))),
                     )
                     .child(
-                        button("save-folder", "Save", Tone::Primary, cx)
+                        button("save-folder", t!("main-save"), Tone::Primary, cx)
                             .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                     ),
             )

@@ -15,6 +15,10 @@ pub struct FieldDef {
     #[serde(rename = "type")]
     pub ty: FieldType,
     pub description: String,
+    /// Its values are words the AI writes in the user's language, such as a genre, rather
+    /// than names, titles, numbers or codes.
+    #[serde(default)]
+    pub translated: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -214,6 +218,7 @@ mod tests {
             name: "f".into(),
             ty,
             description: String::new(),
+            translated: false,
         }
     }
 

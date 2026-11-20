@@ -7,7 +7,7 @@ use std::{
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
-use knoa_core::{Ink, protocol::Account};
+use knoa_core::{Ink, Language, protocol::Account, unknown_language_as_default};
 use knoa_store::Store;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +21,12 @@ pub struct Settings {
     /// `None` when the user runs Knoa without AI.
     pub ai: Option<ProviderConfig>,
     pub theme: String,
+    /// The UI's language and the AI's. Signed in, the account's language wins.
+    #[serde(deserialize_with = "unknown_language_as_default")]
+    pub language: Language,
+    /// Whether the account has the language the user picked here while signed in. Until
+    /// it does, the account's language doesn't replace it.
+    pub language_delivery: Delivery,
     pub show_up_next: bool,
     pub show_summaries: bool,
     /// How the Events place shows events on this Mac.
@@ -56,6 +62,15 @@ impl Legacy {
     }
 }
 
+/// Whether a change made here has reached the account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Delivery {
+    #[default]
+    Sent,
+    Unsent,
+}
+
 /// How the Events place lays out its events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -82,6 +97,8 @@ impl Default for Settings {
             current_workspace: None,
             ai: None,
             theme: crate::ui::theme::DEFAULT_THEME.into(),
+            language: Language::default(),
+            language_delivery: Delivery::default(),
             show_up_next: true,
             show_summaries: true,
             events_view: EventsView::default(),

@@ -7,7 +7,7 @@ use gpui::{
     ParentElement as _, Pixels, Radians, SharedString, StatefulInteractiveElement as _,
     Styled as _, Transformation, div,
 };
-use knoa_core::Place;
+use knoa_core::{Language, Place};
 use knoa_store::Counts;
 
 use super::{
@@ -16,6 +16,8 @@ use super::{
 };
 use crate::{
     assets::line_icon,
+    format,
+    i18n::{self, t},
     services::organizer::AiStatus,
     ui::{components::svg_icon, motion, theme::Theme},
 };
@@ -28,10 +30,11 @@ struct PlaceRow {
     count: SharedString,
 }
 
-/// The places shown for the current counts, kept until the counts or the place change.
+/// The places shown for the current counts, kept until the counts, the place or the
+/// language change.
 #[derive(Default)]
 pub(super) struct PlaceRows {
-    made_for: Option<(PlaceCounts, Place)>,
+    made_for: Option<(PlaceCounts, Place, Language)>,
     rows: Rc<[PlaceRow]>,
 }
 
@@ -51,9 +54,10 @@ impl PlaceCounts {
 
 impl PlaceRows {
     fn rows(&mut self, counts: PlaceCounts, current: Place) -> Rc<[PlaceRow]> {
-        if self.made_for != Some((counts, current)) {
+        let made_for = Some((counts, current, i18n::language()));
+        if self.made_for != made_for {
             self.rows = visible_places(counts.0, current).into();
-            self.made_for = Some((counts, current));
+            self.made_for = made_for;
         }
         self.rows.clone()
     }
@@ -69,47 +73,52 @@ fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
     let places = [
         (
             Place::Everything,
-            "Everything",
+            t!("sidebar-place-everything"),
             line_icon!("layers"),
             counts.everything,
         ),
         (
             Place::Gallery,
-            "Gallery",
+            t!("sidebar-place-gallery"),
             line_icon!("image"),
             counts.gallery,
         ),
         (
             Place::Events,
-            "Events",
+            t!("sidebar-place-events"),
             line_icon!("calendar"),
             counts.events,
         ),
         (
             Place::UpNext,
-            "Up next",
+            t!("sidebar-place-up-next"),
             line_icon!("bookmark"),
             counts.up_next,
         ),
         (
             Place::Unsorted,
-            "Unsorted",
+            t!("sidebar-place-unsorted"),
             line_icon!("inbox"),
             counts.unsorted,
         ),
         (
             Place::NotOrganized,
-            "Not organized",
+            t!("sidebar-place-not-organized"),
             line_icon!("circle-dashed"),
             counts.not_organized,
         ),
         (
             Place::SetAside,
-            "Set aside",
+            t!("sidebar-place-set-aside"),
             line_icon!("archive"),
             counts.set_aside,
         ),
-        (Place::Trash, "Trash", line_icon!("trash"), counts.trash),
+        (
+            Place::Trash,
+            t!("sidebar-place-trash"),
+            line_icon!("trash"),
+            counts.trash,
+        ),
     ];
     places
         .into_iter()
@@ -123,11 +132,11 @@ fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
         })
         .map(|(place, label, icon, n)| PlaceRow {
             place,
-            label: SharedString::new_static(label),
+            label: label.into(),
             icon,
             count: match n {
                 0 => SharedString::default(),
-                n => SharedString::from(n.to_string()),
+                n => SharedString::from(format::number(n as f64)),
             },
         })
         .collect()

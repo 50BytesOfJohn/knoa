@@ -2,13 +2,39 @@
 
 use knoa_core::protocol::{McpAccess, McpSettings, McpSettingsResponse};
 
+use crate::i18n::t;
+
 /// A connection's settings, keeping the previous values until a save succeeds.
 #[derive(Debug, Default)]
 pub struct McpState {
     settings: Option<McpSettingsResponse>,
     operation: Operation,
-    problem: Option<String>,
+    problem: Option<Problem>,
     failed_change: Option<Change>,
+}
+
+/// Why AI access settings couldn't load or save. Kept as data and put in words when
+/// shown, so it follows the app's language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpError {
+    /// AI access needs Pro, and the account doesn't have it.
+    NeedsPro,
+    Failed(String),
+}
+
+impl McpError {
+    fn cause(&self) -> String {
+        match self {
+            McpError::NeedsPro => t!("error-mcp-needs-pro"),
+            McpError::Failed(cause) => cause.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Problem {
+    Load(McpError),
+    Save(McpError),
 }
 
 #[derive(Debug, Default)]
@@ -41,8 +67,16 @@ impl McpState {
         matches!(self.operation, Operation::Saving { .. })
     }
 
-    pub fn problem(&self) -> Option<&str> {
-        self.problem.as_deref()
+    /// What went wrong, in the current language.
+    pub fn problem(&self) -> Option<String> {
+        Some(match self.problem.as_ref()? {
+            Problem::Load(error) => t!("error-mcp-load", problem = (error.cause())),
+            Problem::Save(error) => t!("error-mcp-save", problem = (error.cause())),
+        })
+    }
+
+    pub fn has_problem(&self) -> bool {
+        self.problem.is_some()
     }
 
     pub fn save_failed(&self) -> bool {
@@ -95,19 +129,18 @@ impl McpState {
         Some(body)
     }
 
-    pub(super) fn finish(&mut self, result: Result<McpSettingsResponse, String>) {
+    pub(super) fn finish(&mut self, result: Result<McpSettingsResponse, McpError>) {
         let operation = std::mem::take(&mut self.operation);
         match result {
             Ok(settings) => self.settings = Some(settings),
-            Err(problem) => {
-                let action = if let Operation::Saving { previous, change } = operation {
+            Err(error) => {
+                self.problem = Some(if let Operation::Saving { previous, change } = operation {
                     self.settings = Some(previous);
                     self.failed_change = Some(change);
-                    "save"
+                    Problem::Save(error)
                 } else {
-                    "load"
-                };
-                self.problem = Some(format!("Couldn't {action} AI access: {problem}"));
+                    Problem::Load(error)
+                });
             }
         }
     }
@@ -143,9 +176,12 @@ mod tests {
             McpAccess::Full
         );
 
-        state.finish(Err("Offline".into()));
+        state.finish(Err(McpError::Failed("Offline".into())));
         assert_eq!(state.settings(), previous.as_ref());
-        assert_eq!(state.problem(), Some("Couldn't save AI access: Offline"));
+        assert_eq!(
+            state.problem(),
+            Some("Couldn't save AI access: Offline".to_owned())
+        );
         let retry = state.failed_change().unwrap();
         assert!(state.begin_save(retry).is_some());
         assert_eq!(
@@ -153,11 +189,11 @@ mod tests {
             McpAccess::Full
         );
         assert_eq!(state.problem(), None);
-        state.finish(Err("Offline".into()));
+        state.finish(Err(McpError::Failed("Offline".into())));
         assert!(!state.busy());
         assert!(state.begin_save(Change::Default(McpAccess::Off)).is_some());
         assert_eq!(state.problem(), None);
-        state.finish(Err("Offline".into()));
+        state.finish(Err(McpError::Failed("Offline".into())));
         assert_eq!(state.settings(), previous.as_ref());
     }
 
@@ -165,8 +201,11 @@ mod tests {
     fn failed_load_reports_loading_and_allows_retry() {
         let mut state = McpState::default();
         assert!(state.begin_load());
-        state.finish(Err("Offline".into()));
-        assert_eq!(state.problem(), Some("Couldn't load AI access: Offline"));
+        state.finish(Err(McpError::Failed("Offline".into())));
+        assert_eq!(
+            state.problem(),
+            Some("Couldn't load AI access: Offline".to_owned())
+        );
         assert!(state.failed_change().is_none());
         assert!(state.begin_load());
         assert_eq!(state.problem(), None);
@@ -196,7 +235,7 @@ mod tests {
         assert!(state.begin_load());
         assert!(!state.begin_load());
         assert!(state.begin_save(Change::Default(McpAccess::Full)).is_none());
-        state.finish(Err("Offline".into()));
+        state.finish(Err(McpError::Failed("Offline".into())));
         assert!(!state.busy());
         assert!(state.begin_load());
 

@@ -1,14 +1,16 @@
 //! The Account page's plan, billing action, and usage summary.
 
 use gpui::{AnyElement, App, IntoElement, StatefulInteractiveElement as _};
-use jiff::{Timestamp, tz::TimeZone};
+use jiff::Timestamp;
 use knoa_core::protocol::{Account, BillingStatus, Organizer, Plan};
 
 use super::form;
 use crate::{
+    format,
+    i18n::t,
     services::cloud::CloudConfig,
     ui::{
-        components::{self, Tone, grouped},
+        components::{self, Tone},
         theme::Theme,
     },
 };
@@ -26,13 +28,16 @@ pub(super) fn button(
                 .as_ref()
                 .is_some_and(|billing| billing.trial_available)
             {
-                "Start free trial"
+                t!("settings-account-start-trial")
             } else {
-                "Upgrade"
+                t!("settings-account-upgrade")
             },
             config.pricing.clone(),
         ),
-        Plan::Pro => ("Manage subscription", config.billing.clone()),
+        Plan::Pro => (
+            t!("settings-account-manage-subscription"),
+            config.billing.clone(),
+        ),
     };
     components::button(id, label, Tone::Soft, cx)
         .on_click(move |_, _, cx| cx.open_url(url.as_str()))
@@ -40,52 +45,54 @@ pub(super) fn button(
 
 pub(super) fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
     let (usage, limits) = (account.usage, account.limits);
-    let bookmarks = format!(
-        "{} of {} bookmarks",
-        grouped(usage.bookmarks),
-        grouped(limits.bookmarks)
-    );
+    let (used, limit) = (usage.bookmarks, limits.bookmarks);
     let about = match account.organizer {
-        Organizer::Device => bookmarks,
-        Organizer::Cloud => format!(
-            "{bookmarks}, {} of {} organized this month",
-            grouped(usage.organized_this_month),
-            grouped(limits.organized_per_month)
+        Organizer::Device => t!("settings-account-usage-device", used = used, limit = limit),
+        Organizer::Cloud => t!(
+            "settings-account-usage-cloud",
+            used = used,
+            limit = limit,
+            organized = (usage.organized_this_month),
+            allowance = (limits.organized_per_month)
         ),
     };
-    form::row("Usage", Some(&about), gpui::Empty, theme)
+    form::row(
+        &t!("settings-account-usage"),
+        Some(&about),
+        gpui::Empty,
+        theme,
+    )
 }
 
+/// Sentences on the plan, when it renews or ends, and who organizes.
 pub(super) fn description(account: &Account) -> String {
-    use std::fmt::Write as _;
-
-    let mut about = match (
+    let plan = match (
         account.plan,
         account.billing.as_ref().map(|billing| billing.status),
     ) {
-        (Plan::Free, _) => "Free plan.".to_owned(),
-        (Plan::Pro, Some(BillingStatus::Trialing)) => "Pro trial.".to_owned(),
-        (Plan::Pro, _) => "Pro plan.".to_owned(),
+        (Plan::Free, _) => t!("settings-account-plan-free"),
+        (Plan::Pro, Some(BillingStatus::Trialing)) => t!("settings-account-plan-trial"),
+        (Plan::Pro, _) => t!("settings-account-plan-pro"),
     };
+    let mut sentences = vec![plan];
     if let Some(billing) = &account.billing
         && billing.status != BillingStatus::None
         && let Some(end) = billing
             .period_end
             .and_then(|end| Timestamp::from_second(end).ok())
     {
-        let date = end.to_zoned(TimeZone::system()).strftime("%b %-d, %Y");
-        let action = if billing.cancel_at_period_end {
-            "Ends"
+        let date = format::instant(end, format::DATE);
+        sentences.push(if billing.cancel_at_period_end {
+            t!("settings-account-plan-ends", date = date)
         } else if billing.status == BillingStatus::Trialing {
-            "Trial ends"
+            t!("settings-account-plan-trial-ends", date = date)
         } else {
-            "Renews"
-        };
-        let _ = write!(about, " {action} {date}.");
+            t!("settings-account-plan-renews", date = date)
+        });
     }
-    about.push_str(match account.organizer {
-        Organizer::Device => " Organizing uses your own AI key, on this Mac.",
-        Organizer::Cloud => " Knoa organizes your bookmarks in the cloud.",
+    sentences.push(match account.organizer {
+        Organizer::Device => t!("settings-account-organized-on-device"),
+        Organizer::Cloud => t!("settings-account-organized-in-cloud"),
     });
-    about
+    sentences.join(" ")
 }

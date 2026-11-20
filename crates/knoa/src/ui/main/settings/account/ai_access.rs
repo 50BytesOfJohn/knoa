@@ -1,7 +1,8 @@
 //! The Account page's AI access URL, default, and workspace exceptions.
 
 use gpui::{
-    ClipboardItem, Context, Div, IntoElement as _, SharedString, StatefulInteractiveElement as _,
+    AnyElement, ClipboardItem, Context, Div, IntoElement as _, SharedString,
+    StatefulInteractiveElement as _,
 };
 use gpui_component::radio::{Radio, RadioGroup};
 use knoa_core::{
@@ -11,6 +12,7 @@ use knoa_core::{
 
 use super::{AccountPage, form, plan};
 use crate::{
+    i18n::t,
     services::cloud::{Cloud, McpState},
     ui::{
         components::{Tone, button},
@@ -18,12 +20,7 @@ use crate::{
     },
 };
 
-const ABOUT: &str = "Let AI apps like Claude and ChatGPT read and manage your bookmarks.";
-const ACCESS: [(McpAccess, &str); 3] = [
-    (McpAccess::Off, "Off"),
-    (McpAccess::Read, "Read only"),
-    (McpAccess::Full, "Full access"),
-];
+const ACCESS: [McpAccess; 3] = [McpAccess::Off, McpAccess::Read, McpAccess::Full];
 
 impl AccountPage {
     pub(super) fn ai_access_group(&self, theme: &Theme, cx: &mut Context<'_, Self>) -> Div {
@@ -33,23 +30,33 @@ impl AccountPage {
         let pro = cloud.can_change_mcp();
         let busy = state.is_some_and(McpState::busy);
         let disabled = !pro || busy || settings.is_none();
-        let mut rows = vec![form::note(ABOUT, theme.text)];
+        let mut rows = vec![form::note(t!("settings-ai-access-about"), theme.text)];
         if let Some(settings) = settings {
             let url = settings.url.clone();
             let copy = if pro {
-                button("copy-mcp-url", "Copy", Tone::Soft, cx)
-                    .on_click(move |_, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(url.clone()));
-                    })
-                    .into_any_element()
+                button(
+                    "copy-mcp-url",
+                    t!("settings-ai-access-copy"),
+                    Tone::Soft,
+                    cx,
+                )
+                .on_click(move |_, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(url.clone()));
+                })
+                .into_any_element()
             } else {
                 gpui::Empty.into_any_element()
             };
-            rows.push(form::row("MCP URL", Some(&settings.url), copy, theme));
+            rows.push(form::row(
+                &t!("settings-ai-access-url"),
+                Some(&settings.url),
+                copy,
+                theme,
+            ));
         }
         rows.push(form::stacked(
-            "Default access",
-            Some("Applies to workspaces set to Same as default."),
+            &t!("settings-ai-access-default"),
+            Some(&t!("settings-ai-access-default-about")),
             choices(
                 None,
                 settings.map(|s| Choice::Access(s.access)),
@@ -68,50 +75,65 @@ impl AccountPage {
             rows.push(form::stacked(
                 &workspace.name,
                 id.is_none()
-                    .then_some("Available once this workspace is linked to the cloud."),
+                    .then(|| t!("settings-ai-access-not-linked"))
+                    .as_deref(),
                 choices(Some(workspace.id), selected, disabled || id.is_none(), cx),
                 theme,
             ));
         }
         if let Some(state) = state {
-            if busy {
-                rows.push(form::note(
-                    if state.saving() {
-                        "Saving…"
-                    } else {
-                        "Loading AI access…"
-                    },
-                    theme.muted,
-                ));
-            }
-            if let Some(problem) = state.problem() {
-                rows.push(form::problem_note(problem, theme));
-                rows.push(form::row(
-                    if state.save_failed() && pro {
-                        "Save AI access again"
-                    } else {
-                        "Load AI access again"
-                    },
-                    None,
-                    button("retry-mcp-settings", "Retry", Tone::Soft, cx).on_click(cx.listener(
-                        |this, _, _, cx| this.cloud.update(cx, Cloud::retry_mcp_settings),
-                    )),
-                    theme,
-                ));
-            }
+            rows.extend(self.progress_rows(state, pro, theme, cx));
         }
         if let Some(account) = cloud.account()
             && account.plan == Plan::Free
             && let Some(config) = cloud.config()
         {
             rows.push(form::row(
-                "AI access needs Knoa Pro",
+                &t!("settings-ai-access-needs-pro"),
                 None,
                 plan::button("mcp-upgrade", account, config, cx),
                 theme,
             ));
         }
-        form::group("AI access", rows, theme)
+        form::group(&t!("settings-ai-access-title"), rows, theme)
+    }
+
+    /// What AI access is waiting on, or what went wrong with a way to try again.
+    fn progress_rows(
+        &self,
+        state: &McpState,
+        pro: bool,
+        theme: &Theme,
+        cx: &Context<'_, Self>,
+    ) -> Vec<AnyElement> {
+        let mut rows = Vec::new();
+        if state.busy() {
+            let text = if state.saving() {
+                t!("settings-ai-access-saving")
+            } else {
+                t!("settings-ai-access-loading")
+            };
+            rows.push(form::note(text, theme.muted));
+        }
+        if let Some(problem) = state.problem() {
+            let again = if state.save_failed() && pro {
+                t!("settings-ai-access-save-again")
+            } else {
+                t!("settings-ai-access-load-again")
+            };
+            let retry = button(
+                "retry-mcp-settings",
+                t!("settings-ai-access-retry"),
+                Tone::Soft,
+                cx,
+            )
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.cloud.update(cx, Cloud::retry_mcp_settings);
+            }));
+            rows.push(form::problem_note(problem, theme));
+            rows.push(form::row(&again, None, retry, theme));
+        }
+        rows
     }
 }
 
@@ -133,9 +155,9 @@ fn choices(
     });
     let mut options = Vec::new();
     if workspace.is_some() {
-        options.push((Choice::Default, "Same as default"));
+        options.push((Choice::Default, t!("settings-ai-access-same-as-default")));
     }
-    options.extend(ACCESS.map(|(access, label)| (Choice::Access(access), label)));
+    options.extend(ACCESS.map(|access| (Choice::Access(access), access_label(access))));
     let index =
         selected.and_then(|selected| options.iter().position(|(access, _)| *access == selected));
     RadioGroup::horizontal(id)
@@ -143,7 +165,7 @@ fn choices(
             options
                 .iter()
                 .enumerate()
-                .map(|(index, (_, label))| Radio::new(index).label(*label)),
+                .map(|(index, (_, label))| Radio::new(index).label(label.clone())),
         )
         .selected_index(index)
         .disabled(disabled)
@@ -165,4 +187,12 @@ fn choices(
                     });
             }
         }))
+}
+
+fn access_label(access: McpAccess) -> String {
+    match access {
+        McpAccess::Off => t!("settings-ai-access-off"),
+        McpAccess::Read => t!("settings-ai-access-read"),
+        McpAccess::Full => t!("settings-ai-access-full"),
+    }
 }

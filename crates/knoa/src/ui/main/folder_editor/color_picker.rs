@@ -9,7 +9,10 @@ use gpui_component::slider::{Slider, SliderEvent, SliderState};
 use knoa_core::{FolderColor, Hue, Ink};
 
 use super::FolderEditor;
-use crate::ui::{components::tip, theme::Theme};
+use crate::{
+    i18n::t,
+    ui::{components::tip, theme::Theme},
+};
 
 const SWATCH: f32 = 22.;
 /// Enough steps that the track reads as a smooth band; GPUI gradients take only two stops.
@@ -51,7 +54,7 @@ impl FolderEditor {
             let selected = self.color == FolderColor::Ink(ink);
             inks = inks.child(
                 swatch(("ink", ink.index()), theme.ink(ink), selected, theme)
-                    .tooltip(tip(ink.label(), None, theme))
+                    .tooltip(tip(crate::i18n::ink_label(ink), None, theme))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.color = FolderColor::Ink(ink);
                         cx.notify();
@@ -77,7 +80,7 @@ impl FolderEditor {
             .gap_3()
             .child(
                 swatch("custom-hue", theme.hue(hue), selected, theme)
-                    .tooltip(tip("Custom", None, theme))
+                    .tooltip(tip(t!("main-folder-custom-color"), None, theme))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.color = FolderColor::Hue(hue);
                         cx.notify();

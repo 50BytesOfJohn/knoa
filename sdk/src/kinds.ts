@@ -17,6 +17,8 @@ export interface FieldDef {
 	name: string;
 	type: FieldType;
 	description: string;
+	/** Its values are words the AI writes in the user's language, such as a genre. */
+	translated?: boolean;
 }
 
 export interface KindDef {

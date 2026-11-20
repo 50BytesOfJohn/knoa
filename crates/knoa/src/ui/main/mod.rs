@@ -14,7 +14,7 @@ mod folder_editor;
 mod groups;
 mod keys;
 mod masonry;
-mod menu_trigger;
+pub(super) mod menu_trigger;
 mod navigation;
 mod opening;
 mod overlay;
@@ -39,6 +39,7 @@ use gpui_component::input::{InputEvent, InputState};
 use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
+    i18n::{self, t},
     services::thumbnails::Thumbnails,
     state::{
         library::{Library, LibraryChanged},
@@ -93,7 +94,7 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> MainView {
         let search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Just start typing to search"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t!("main-search-placeholder")));
         let sidebar = cx.new(|cx| SidebarView::new(library.clone(), cx));
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &InputEvent, cx| {
@@ -111,6 +112,7 @@ impl MainView {
             cx.subscribe_in(&sidebar, window, Self::on_sidebar_event),
             cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
+            i18n::on_change(window, cx, Self::translate),
         ];
         let cards_focus = cx.focus_handle();
         cards_focus.focus(window, cx);

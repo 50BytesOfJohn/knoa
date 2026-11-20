@@ -78,7 +78,7 @@ impl Engine {
         let unsent = self.store(cx, |store| store.unsent_bookmarks()).await?;
         let notices = refused.notices(limit, unsent);
         for notice in &notices {
-            tracing::warn!("{notice}");
+            tracing::warn!("sync kept changes on this Mac: {notice:?}");
         }
         self.this
             .update(cx, |this, cx| this.set_push_notices(notices, cx))

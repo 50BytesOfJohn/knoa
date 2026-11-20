@@ -9,6 +9,7 @@ use gpui::{
 use knoa_paths::{Channel, Paths};
 
 use crate::{
+    i18n,
     paths::AppPaths,
     services::{
         ai, bridge, cloud::Cloud, credentials::Credentials, housekeeping, network::Network,
@@ -30,7 +31,13 @@ pub fn app_name() -> &'static str {
 pub fn init(cx: &mut App) -> anyhow::Result<()> {
     gpui_component::init(cx);
     let paths = Paths::new()?;
+    let first_launch = !paths.settings().exists();
     cx.set_global(SettingsFile::load(paths.settings()));
+    if first_launch {
+        // Existing users keep English; someone new starts in their Mac's language.
+        SettingsFile::update(cx, |s| s.language = i18n::system_language());
+    }
+    i18n::init(SettingsFile::get(cx).language);
     skip_onboarding_in_dev(cx);
     Theme::apply(&SettingsFile::get(cx).theme.clone(), cx);
     crate::ui::motion::follow_system_setting(cx);

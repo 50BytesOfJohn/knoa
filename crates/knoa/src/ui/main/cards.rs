@@ -10,10 +10,13 @@ use gpui_component::tooltip::Tooltip;
 use knoa_core::{Bookmark, Kind, Status};
 
 use super::field_display;
-use crate::ui::{
-    components::{chip, icon, kind_icon, site_mark},
-    mascot::ai_mark,
-    theme::{CARD_RADIUS, Theme},
+use crate::{
+    i18n::t,
+    ui::{
+        components::{chip, icon, kind_icon, site_mark},
+        mascot::ai_mark,
+        theme::{CARD_RADIUS, Theme},
+    },
 };
 
 const PADDING: f32 = 12.;
@@ -158,9 +161,11 @@ fn meta(bookmark: &Bookmark, theme: &Theme, cx: &App) -> Div {
 
 fn pending(bookmark: &Bookmark, width: f32, theme: &Theme, cx: &App) -> Div {
     let (label, color, bg) = match bookmark.status {
-        Status::Queued | Status::Organizing => ("Organizing…", theme.ai_text, theme.ai_soft),
-        Status::Failed => ("Couldn't organize", theme.danger, theme.soft),
-        _ => ("Not organized yet", theme.muted, theme.soft),
+        Status::Queued | Status::Organizing => {
+            (t!("main-organizing"), theme.ai_text, theme.ai_soft)
+        }
+        Status::Failed => (t!("main-card-failed"), theme.danger, theme.soft),
+        _ => (t!("main-card-not-organized"), theme.muted, theme.soft),
     };
     div()
         .size_full()
@@ -371,7 +376,7 @@ pub fn open_button(id: usize, theme: &Theme) -> gpui::Stateful<Div> {
         .invisible()
         .group_hover(GROUP, gpui::Styled::visible)
         .tooltip(move |window, cx| {
-            Tooltip::new("Open link")
+            Tooltip::new(t!("main-open-link"))
                 .bg(bg)
                 .text_color(fg)
                 .border_color(border)

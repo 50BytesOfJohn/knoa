@@ -10,18 +10,16 @@ use gpui::{
 };
 use jiff::Zoned;
 
-use super::{form, updates::when};
+use super::{form, updates::When};
 use crate::{
-    services::cloud::{Cloud, Notice, Phase, SyncStatus},
+    i18n::t,
+    services::cloud::{Cloud, Notice, Phase, Problem, Rejection, SyncError, SyncStatus},
     state::library::Library,
     ui::{
         components::{Tone, button},
         theme::Theme,
     },
 };
-
-const WHAT_IT_IS: &str = "Cloud mode syncs your library across your devices and with Knoa on the web. With Pro, Knoa also organizes your bookmarks in the cloud, with no key of your own.";
-const PRIVACY: &str = "In Cloud mode your library is kept on Knoa's servers, which read your pages to organize them. It isn't end-to-end encrypted. Signed out, everything stays on this Mac.";
 
 pub struct AccountPage {
     cloud: Entity<Cloud>,
@@ -46,20 +44,25 @@ impl Render for AccountPage {
         self.cloud.update(cx, Cloud::ensure_mcp_settings);
         let theme = Theme::get(cx).clone();
         let cloud = self.cloud.read(cx);
-        let header = form::header("Account", "Sync your library with a Knoa account.", &theme);
+        let header = form::header(
+            t!("settings-account-title"),
+            &t!("settings-account-about"),
+            &theme,
+        );
         let mut page = div().flex().flex_col().gap_8().child(header);
         if cloud.config().is_none() {
-            let mut rows = vec![form::note(
-                "Cloud sync isn't available in this build.",
-                theme.muted,
-            )];
+            let mut rows = vec![form::note(t!("settings-account-unavailable"), theme.muted)];
             if let Some(reason) = cloud.unavailable() {
                 rows.push(form::problem_note(
-                    format!("It couldn't start: {reason}"),
+                    t!("settings-account-couldnt-start", reason = reason),
                     &theme,
                 ));
             }
-            return page.child(form::group("Cloud mode", rows, &theme));
+            return page.child(form::group(
+                &t!("settings-account-cloud-mode"),
+                rows,
+                &theme,
+            ));
         }
         page = match cloud.phase() {
             Phase::SignedOut | Phase::SigningIn(_) => page.child(self.signed_out(&theme, cx)),
@@ -78,53 +81,63 @@ impl AccountPage {
         let cloud = self.cloud.read(cx);
         let waiting = matches!(cloud.phase(), Phase::SigningIn(_));
         let mut rows = vec![
-            form::note(WHAT_IT_IS, theme.text),
-            form::note(PRIVACY, theme.muted),
+            form::note(t!("settings-account-what-it-is"), theme.text),
+            form::note(t!("settings-account-privacy"), theme.muted),
         ];
         if let Some(problem) = cloud.problem() {
-            rows.push(form::problem_note(problem.to_owned(), theme));
+            rows.push(form::problem_note(problem_text(problem), theme));
         }
         rows.push(if waiting {
             form::row(
-                "Finish signing in in your browser…",
-                Some("Knoa opened the sign-in page in your browser."),
-                button("cancel-sign-in", "Cancel", Tone::Soft, cx).on_click(
+                &t!("settings-account-finish-signing-in"),
+                Some(&t!("settings-account-finish-signing-in-about")),
+                button(
+                    "cancel-sign-in",
+                    t!("settings-account-cancel"),
+                    Tone::Soft,
+                    cx,
+                )
+                .on_click(
                     cx.listener(|this, _, _, cx| this.cloud.update(cx, Cloud::cancel_sign_in)),
                 ),
                 theme,
             )
         } else {
             form::row(
-                "Knoa account",
-                Some("Sign in or create an account in your browser."),
-                button("sign-in", "Sign in", Tone::Primary, cx)
+                &t!("settings-account-knoa-account"),
+                Some(&t!("settings-account-sign-in-about")),
+                button("sign-in", t!("settings-account-sign-in"), Tone::Primary, cx)
                     .on_click(cx.listener(|this, _, _, cx| this.cloud.update(cx, Cloud::sign_in))),
                 theme,
             )
         });
-        form::group("Cloud mode", rows, theme)
+        form::group(&t!("settings-account-cloud-mode"), rows, theme)
     }
 
     fn other_account(&self, theme: &Theme, cx: &mut Context<'_, AccountPage>) -> Div {
-        let email = self.email(cx);
+        let sync_with = match self.email(cx) {
+            Some(email) => t!("settings-account-sync-with", email = email),
+            None => t!("settings-account-sync-with-this-account"),
+        };
         let rows = vec![
-            form::problem_note(
-                "This library is synced with another Knoa account. Nothing syncs until you choose.",
-                theme,
-            ),
+            form::problem_note(t!("settings-account-other-account"), theme),
             form::row(
-                &format!("Sync with {email} instead"),
-                Some("The library is merged into this account. The other account keeps its copy."),
-                button("replace-account", "Use this account", Tone::Primary, cx).on_click(
-                    cx.listener(|this, _, _, cx| {
-                        this.cloud.update(cx, Cloud::replace_other_account);
-                    }),
-                ),
+                &sync_with,
+                Some(&t!("settings-account-sync-with-about")),
+                button(
+                    "replace-account",
+                    t!("settings-account-use-this-account"),
+                    Tone::Primary,
+                    cx,
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.cloud.update(cx, Cloud::replace_other_account);
+                })),
                 theme,
             ),
             self.sign_out_row(theme, cx),
         ];
-        form::group("Account", rows, theme)
+        form::group(&t!("settings-account-title"), rows, theme)
     }
 
     fn account_group(&self, theme: &Theme, cx: &mut Context<'_, AccountPage>) -> Div {
@@ -134,17 +147,15 @@ impl AccountPage {
         let plan_row = match (&account, config) {
             (Some(account), Some(config)) => {
                 let about = plan::description(account);
+                let email = self.email(cx);
                 form::row(
-                    &self.email(cx),
+                    &email.unwrap_or_else(|| t!("settings-account-this-account")),
                     Some(&about),
                     plan::button("plan", account, &config, cx),
                     theme,
                 )
             }
-            _ => form::note(
-                "Signed in. Asking the server about the account…",
-                theme.muted,
-            ),
+            _ => form::note(t!("settings-account-asking"), theme.muted),
         };
         let mut rows = vec![plan_row];
         rows.extend(
@@ -153,46 +164,80 @@ impl AccountPage {
                 .map(|account| plan::usage_row(account, theme)),
         );
         rows.push(self.sign_out_row(theme, cx));
-        form::group("Account", rows, theme)
+        form::group(&t!("settings-account-title"), rows, theme)
     }
 
     fn sync_group(&self, theme: &Theme, cx: &mut Context<'_, AccountPage>) -> Div {
         let cloud = self.cloud.read(cx);
         let status = match cloud.sync() {
-            SyncStatus::Starting => "Connecting…".to_owned(),
-            SyncStatus::UpToDate => "Up to date".to_owned(),
-            SyncStatus::Syncing(changes) => format!("Syncing {changes} changes…"),
-            SyncStatus::Offline => "Offline. Changes sync when Knoa can reach the server.".into(),
-            SyncStatus::Error(err) => format!("Sync stopped: {err}"),
+            SyncStatus::Starting => t!("settings-account-connecting"),
+            SyncStatus::UpToDate => t!("settings-account-up-to-date"),
+            SyncStatus::Syncing(changes) => t!("settings-account-syncing", count = (*changes)),
+            SyncStatus::Offline => t!("settings-account-offline"),
+            SyncStatus::Error(err) => {
+                t!(
+                    "settings-account-sync-stopped",
+                    error = (sync_error_text(err))
+                )
+            }
         };
-        let last = match cloud.last_synced() {
-            Some(at) => format!("Last synced {}", when(at, &Zoned::now())),
-            None => "Not synced yet".to_owned(),
+        let last = match cloud.last_synced().map(|at| When::of(at, &Zoned::now())) {
+            Some(When::Today(time)) => t!("settings-account-synced-today", time = time),
+            Some(When::Yesterday(time)) => t!("settings-account-synced-yesterday", time = time),
+            Some(When::On(date)) => t!("settings-account-synced-on", date = date),
+            None => t!("settings-account-not-synced"),
         };
         let mut rows = vec![form::row(&status, Some(&last), gpui::Empty, theme)];
         let notices = cloud.notices();
         if !notices.is_empty() {
-            let text: Vec<String> = notices.iter().map(Notice::to_string).collect();
+            let text: Vec<String> = notices.iter().map(notice_text).collect();
             rows.push(form::problem_note(text.join(" "), theme));
         }
-        form::group("Sync", rows, theme)
+        form::group(&t!("settings-account-sync"), rows, theme)
     }
 
     fn sign_out_row(&self, theme: &Theme, cx: &mut Context<'_, AccountPage>) -> AnyElement {
         form::row(
-            "Sign out",
-            Some("Your library stays on this Mac. Sign in again to carry on syncing."),
-            button("sign-out", "Sign out", Tone::Soft, cx)
+            &t!("settings-account-sign-out"),
+            Some(&t!("settings-account-sign-out-about")),
+            button("sign-out", t!("settings-account-sign-out"), Tone::Soft, cx)
                 .on_click(cx.listener(|this, _, _, cx| this.cloud.update(cx, Cloud::sign_out))),
             theme,
         )
     }
 
-    fn email(&self, cx: &Context<'_, AccountPage>) -> String {
+    fn email(&self, cx: &Context<'_, AccountPage>) -> Option<String> {
         self.cloud
             .read(cx)
             .account()
             .and_then(|account| account.email.clone())
-            .unwrap_or_else(|| "this account".to_owned())
+    }
+}
+
+fn problem_text(problem: &Problem) -> String {
+    match problem {
+        Problem::SignInFailed(problem) => problem.clone(),
+        Problem::SignedOut => t!("error-signed-out"),
+        Problem::UnlinkFailed(error) => t!("error-unlink-library", error = error.as_str()),
+    }
+}
+
+fn sync_error_text(error: &SyncError) -> String {
+    match error {
+        SyncError::Unanswered => t!("error-sync-unanswered"),
+        SyncError::Failed(error) => error.clone(),
+    }
+}
+
+fn notice_text(notice: &Notice) -> String {
+    match *notice {
+        Notice::PlanLimit { limit, unsent } => t!(
+            "settings-account-notice-plan-limit",
+            limit = (limit),
+            unsent = (unsent)
+        ),
+        Notice::Rejected(Rejection::Invalid) => t!("settings-account-notice-rejected"),
+        Notice::Rejected(Rejection::TooLarge) => t!("settings-account-notice-too-large"),
+        Notice::AllowanceUsedUp => t!("settings-account-notice-allowance-used-up"),
     }
 }

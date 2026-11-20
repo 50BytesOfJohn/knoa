@@ -1,6 +1,5 @@
-//! What sync has to tell the user that isn't an error of the sync itself.
-
-use std::fmt;
+//! What Cloud mode has to tell the user, as data the UI puts in words when it shows it,
+//! so it follows the app's language.
 
 /// Something the plan or the server holds back. Each kind needs a different fix, so the
 /// sidebar's status card tells them apart.
@@ -14,6 +13,24 @@ pub enum Notice {
     AllowanceUsedUp,
 }
 
+/// Why signing in, or staying signed in, didn't work.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Problem {
+    SignInFailed(String),
+    /// The cloud refused the sign-in, which signed this Mac out.
+    SignedOut,
+    /// Unlinking the library from the other account failed.
+    UnlinkFailed(String),
+}
+
+/// Why sync stopped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncError {
+    /// The server answered none of the changes sent.
+    Unanswered,
+    Failed(String),
+}
+
 /// Why the server refused a change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rejection {
@@ -21,24 +38,4 @@ pub enum Rejection {
     Invalid,
     /// It was too large for the server even alone.
     TooLarge,
-}
-
-impl fmt::Display for Notice {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Notice::PlanLimit { limit, unsent } => write!(
-                f,
-                "Your plan holds {limit} bookmarks, so {unsent} new bookmarks stayed on this Mac only."
-            ),
-            Notice::Rejected(Rejection::Invalid) => {
-                f.write_str("Some changes couldn't be synced and stayed on this Mac only.")
-            }
-            Notice::Rejected(Rejection::TooLarge) => {
-                f.write_str("Some changes were too large to sync and stayed on this Mac only.")
-            }
-            Notice::AllowanceUsedUp => f.write_str(
-                "This month's organizing allowance is used up. Knoa keeps your organizing requests and resumes them automatically when allowance becomes available.",
-            ),
-        }
-    }
 }

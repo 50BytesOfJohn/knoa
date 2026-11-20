@@ -23,7 +23,10 @@ use super::{
     filing::{pill, removable},
     sections::section,
 };
-use crate::ui::{components::icon, mascot::ai_mark, theme::Theme};
+use crate::{
+    i18n::t,
+    ui::{components::icon, mascot::ai_mark, theme::Theme},
+};
 
 /// Enough suggestions to find a tag without the list crowding the panel.
 const MAX_SUGGESTIONS: usize = 6;
@@ -78,7 +81,7 @@ impl MainView {
             })
             .unwrap_or_default();
         Some(
-            section("Tags", &theme)
+            section(&t!("detail-tags"), &theme)
                 .child(row)
                 .when(!suggestions.is_empty(), |s| {
                     s.child(self.suggestion_row(bookmark.id, suggestions, &theme, cx))
@@ -132,7 +135,7 @@ impl MainView {
             .text_color(theme.text)
             .child(removable(mark, theme))
             .child(tag.name.clone())
-            .tooltip(super::tip("Remove tag", None, theme))
+            .tooltip(super::tip(t!("detail-remove-tag"), None, theme))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.remove_tag(bookmark, name.clone(), origin, cx);
             }))
@@ -156,7 +159,7 @@ impl MainView {
             .hover(move |s| s.bg(hover))
             .child(icon("undo-2", px(12.), theme.muted))
             .child(div().line_through().child(tag.name.clone()))
-            .tooltip(super::tip("Put back", None, theme))
+            .tooltip(super::tip(t!("detail-put-back"), None, theme))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.put_back_tag(bookmark, name.clone(), origin, cx);
             }))
@@ -179,9 +182,9 @@ impl MainView {
             .text_color(theme.muted)
             .hover(move |s| s.bg(hover))
             .child(icon("plus", px(12.), theme.muted))
-            .when(spelled_out, |s| s.child("Add tag"))
+            .when(spelled_out, |s| s.child(t!("detail-add-tag")))
             .when(!spelled_out, |s| {
-                s.tooltip(super::tip("Add a tag", None, theme))
+                s.tooltip(super::tip(t!("detail-add-a-tag"), None, theme))
             })
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.open_tag_field(bookmark, window, cx);
