@@ -1,0 +1,5 @@
+# Read by `fl!` at compile time to check message IDs against the English file.
+fallback_language = "en"
+
+[fluent]
+assets_dir = "i18n"

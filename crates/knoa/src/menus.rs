@@ -3,7 +3,7 @@
 use gpui::{App, KeyBinding, Menu, MenuItem, SystemMenuType, actions};
 use objc2_foundation::NSProcessInfo;
 
-use crate::{app::app_name, services::updates::Updates, ui::OpenSettings};
+use crate::{app::app_name, i18n::t, services::updates::Updates, ui::OpenSettings};
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -46,32 +46,40 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("alt-cmd-h", HideOthers, None),
         KeyBinding::new("cmd-q", Quit, None),
     ]);
+    set(cx);
+}
+
+/// Sets the menu bar in the current language.
+pub fn set(cx: &mut App) {
     cx.set_menus(vec![app_menu(), help_menu()]);
 }
 
 fn app_menu() -> Menu {
     let name = app_name();
     Menu::new(name).items([
-        MenuItem::action(format!("About {name}"), About),
-        MenuItem::action("Check for Updates…", CheckForUpdates),
+        MenuItem::action(t!("menu-about", name = name), About),
+        MenuItem::action(t!("menu-check-for-updates"), CheckForUpdates),
         MenuItem::separator(),
-        MenuItem::action("Settings…", OpenSettings),
+        MenuItem::action(t!("menu-settings"), OpenSettings),
         MenuItem::separator(),
-        MenuItem::os_submenu("Services", SystemMenuType::Services),
+        MenuItem::os_submenu(t!("menu-services"), SystemMenuType::Services),
         MenuItem::separator(),
-        MenuItem::action(format!("Hide {name}"), Hide),
-        MenuItem::action("Hide Others", HideOthers),
-        MenuItem::action("Show All", ShowAll),
+        MenuItem::action(t!("menu-hide", name = name), Hide),
+        MenuItem::action(t!("menu-hide-others"), HideOthers),
+        MenuItem::action(t!("menu-show-all"), ShowAll),
         MenuItem::separator(),
-        MenuItem::action(format!("Quit {name}"), Quit),
+        MenuItem::action(t!("menu-quit", name = name), Quit),
     ])
 }
 
 fn help_menu() -> Menu {
     let name = app_name();
-    Menu::new("Help").items([
-        MenuItem::action(format!("What's New in {name} {VERSION}"), ReleaseNotes),
-        MenuItem::action("Report an Issue…", ReportIssue),
+    Menu::new(t!("menu-help")).items([
+        MenuItem::action(
+            t!("menu-whats-new", name = name, version = VERSION),
+            ReleaseNotes,
+        ),
+        MenuItem::action(t!("menu-report-issue"), ReportIssue),
     ])
 }
 

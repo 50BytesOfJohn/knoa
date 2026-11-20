@@ -42,6 +42,10 @@ base64 = "0.23"
 dirs = "6"
 futures = "0.3"
 getrandom = "0.4"
+# The Mac app's translations: Fluent files embedded in the binary, checked at compile time.
+i18n-embed = { version = "0.16", features = ["fluent-system"] }
+i18n-embed-fl = "0.10"
+fluent-syntax = "0.12"
 # Decoding, resizing and encoding linked images, also in the cloud organizer's Worker:
 # only the codecs Knoa reads, and no rayon, since a Worker has one thread. `jpeg` is
 # for its encoder; JPEGs are decoded by jpeg-decoder.
@@ -75,6 +79,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
 objc2-foundation = "0.3"
 # Already in the tree through `url`; decodes a link's file name for saving.
 percent-encoding = "2"
+rust-embed = "8"
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "json",

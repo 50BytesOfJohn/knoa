@@ -2,6 +2,8 @@
 
 mod app;
 mod assets;
+mod format;
+mod i18n;
 mod menus;
 mod paths;
 mod services;
