@@ -2,6 +2,8 @@
 
 use knoa_core::protocol::{McpAccess, McpSettings, McpSettingsResponse};
 
+use crate::i18n::t;
+
 /// A connection's settings, keeping the previous values until a save succeeds.
 #[derive(Debug, Default)]
 pub struct McpState {
@@ -100,14 +102,13 @@ impl McpState {
         match result {
             Ok(settings) => self.settings = Some(settings),
             Err(problem) => {
-                let action = if let Operation::Saving { previous, change } = operation {
+                self.problem = Some(if let Operation::Saving { previous, change } = operation {
                     self.settings = Some(previous);
                     self.failed_change = Some(change);
-                    "save"
+                    t!("error-mcp-save", problem = problem)
                 } else {
-                    "load"
-                };
-                self.problem = Some(format!("Couldn't {action} AI access: {problem}"));
+                    t!("error-mcp-load", problem = problem)
+                });
             }
         }
     }

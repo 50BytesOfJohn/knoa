@@ -6,6 +6,7 @@ use knoa_core::{
     protocol::{McpAccess, McpSettings, Plan},
 };
 
+use crate::i18n::t;
 use crate::services::{
     cloud::{Cloud, McpState, Phase, Wake, mcp::Change},
     network::Network,
@@ -107,9 +108,7 @@ impl Cloud {
             let (result, refresh_account) = match task.await {
                 Ok(Err(knoa_sync::Error::Server {
                     status: 403, code, ..
-                })) if code == "subscription_required" => {
-                    (Err("AI access needs Knoa Pro.".to_owned()), true)
-                }
+                })) if code == "subscription_required" => (Err(t!("error-mcp-needs-pro")), true),
                 Ok(result) => (result.map_err(|err| err.to_string()), false),
                 Err(err) => (Err(err.to_string()), false),
             };

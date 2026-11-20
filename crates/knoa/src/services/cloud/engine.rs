@@ -19,6 +19,7 @@ use knoa_sync::Api;
 
 use super::{Cloud, SyncStatus, Wake, thumbnails::Thumbnails};
 use crate::{
+    i18n::t,
     services::network::Network,
     state::{database::Database, library::Library},
 };
@@ -180,7 +181,7 @@ fn status_of(failure: &Failure) -> SyncStatus {
         }
         Failure::Unanswered => {
             tracing::warn!("cloud sync failed: the server answered none of the changes sent");
-            SyncStatus::Error("The server didn't take the latest changes.".into())
+            SyncStatus::Error(t!("error-sync-unanswered"))
         }
         Failure::Stopped => SyncStatus::Starting,
     }

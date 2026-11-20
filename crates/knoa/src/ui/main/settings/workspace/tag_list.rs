@@ -16,6 +16,7 @@ use knoa_core::{
 };
 
 use super::form;
+use crate::i18n::t;
 use crate::ui::{
     components::{icon, tip},
     theme::Theme,
@@ -41,7 +42,8 @@ struct TagRow {
 
 impl TagListEditor {
     pub fn new(list: &TagList, window: &mut Window, cx: &mut Context<'_, TagListEditor>) -> Self {
-        let new_tag = cx.new(|cx| InputState::new(window, cx).placeholder("Add a tag"));
+        let new_tag = cx
+            .new(|cx| InputState::new(window, cx).placeholder(t!("settings-tags-add-placeholder")));
         let new_tag_events = cx.subscribe_in(&new_tag, window, Self::on_new_tag_event);
         let mut editor = TagListEditor {
             rows: Vec::new(),
@@ -117,7 +119,8 @@ impl TagListEditor {
         cx: &mut Context<'_, TagListEditor>,
     ) {
         let description = cx.new(|cx| {
-            let mut input = InputState::new(window, cx).placeholder("When to use it (optional)");
+            let mut input =
+                InputState::new(window, cx).placeholder(t!("settings-tags-hint-placeholder"));
             input.set_value(tag.description.clone(), window, cx);
             input
         });
@@ -194,7 +197,11 @@ impl TagListEditor {
         for (index, row) in self.rows.iter().enumerate() {
             list = list.child(self.tag_row(index, row, theme, cx));
         }
-        let count = format!("{} of {MAX_LISTED_TAGS}", self.rows.len());
+        let count = t!(
+            "settings-tags-count",
+            count = (self.rows.len()),
+            max = MAX_LISTED_TAGS
+        );
         let field = div()
             .flex()
             .items_center()
@@ -242,7 +249,7 @@ impl TagListEditor {
             .cursor_pointer()
             .hover(move |s| s.bg(hover))
             .child(icon("x", px(13.), faint))
-            .tooltip(tip("Remove from list", None, theme))
+            .tooltip(tip(t!("settings-tags-remove"), None, theme))
             .on_click(cx.listener(move |this, _, _, cx| this.remove(&name, cx)));
         div()
             .flex()
@@ -269,23 +276,20 @@ impl Render for TagListEditor {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let mut rows = vec![form::stacked(
-            "Tags the AI should use",
-            Some(
-                "When one of these fits a bookmark, the AI uses it instead of a word of its own. A short hint tells it when one fits. You can also right-click a tag on a bookmark to list it.",
-            ),
+            &t!("settings-tags-label"),
+            Some(&t!("settings-tags-about")),
             self.list(&theme, cx),
             &theme,
         )];
         let empty = self.rows.is_empty();
         // Shown even with nothing listed, so the choice is known before the first tag.
-        let choice = "Off: the AI adds its own tags for what the list doesn't cover. On: bookmarks get only listed tags, or none when nothing fits.";
         let about = if empty {
-            format!("Add a tag first. {choice}")
+            t!("settings-tags-only-listed-about-empty")
         } else {
-            choice.to_owned()
+            t!("settings-tags-only-listed-about")
         };
         rows.push(form::row(
-            "Only use tags from this list",
+            &t!("settings-tags-only-listed"),
             Some(&about),
             Switch::new("only-listed-tags")
                 .checked(self.only_these)
@@ -298,11 +302,8 @@ impl Render for TagListEditor {
             &theme,
         ));
         if !empty {
-            rows.push(form::note(
-                "Bookmarks organized from now on get these tags. To bring them to the ones already organized, organize again.",
-                theme.muted,
-            ));
+            rows.push(form::note(t!("settings-tags-note"), theme.muted));
         }
-        form::group("Tag list", rows, &theme)
+        form::group(&t!("settings-tags-title"), rows, &theme)
     }
 }

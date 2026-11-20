@@ -161,6 +161,171 @@ settings-account-plan-trial-ends = Trial ends { $date }.
 settings-account-plan-renews = Renews { $date }.
 settings-account-organized-on-device = Organizing uses your own AI key, on this Mac.
 settings-account-organized-in-cloud = { -knoa } organizes your bookmarks in the cloud.
+settings-account-title = Account
+settings-account-about = Sync your library with a { -knoa } account.
+settings-account-unavailable = Cloud sync isn't available in this build.
+settings-account-couldnt-start = It couldn't start: { $reason }
+settings-account-cloud-mode = Cloud mode
+settings-account-what-it-is = Cloud mode syncs your library across your devices and with { -knoa } on the web. With Pro, { -knoa } also organizes your bookmarks in the cloud, with no key of your own.
+settings-account-privacy = In Cloud mode your library is kept on { -knoa }'s servers, which read your pages to organize them. It isn't end-to-end encrypted. Signed out, everything stays on this Mac.
+settings-account-finish-signing-in = Finish signing in in your browser…
+settings-account-finish-signing-in-about = { -knoa } opened the sign-in page in your browser.
+settings-account-cancel = Cancel
+settings-account-knoa-account = { -knoa } account
+settings-account-sign-in-about = Sign in or create an account in your browser.
+settings-account-sign-in = Sign in
+settings-account-other-account = This library is synced with another { -knoa } account. Nothing syncs until you choose.
+settings-account-sync-with = Sync with { $email } instead
+settings-account-sync-with-this-account = Sync with this account instead
+settings-account-sync-with-about = The library is merged into this account. The other account keeps its copy.
+settings-account-use-this-account = Use this account
+settings-account-this-account = this account
+settings-account-asking = Signed in. Asking the server about the account…
+settings-account-sync = Sync
+settings-account-connecting = Connecting…
+settings-account-up-to-date = Up to date
+settings-account-syncing =
+    { $count ->
+        [one] Syncing { $count } change…
+       *[other] Syncing { $count } changes…
+    }
+settings-account-offline = Offline. Changes sync when { -knoa } can reach the server.
+settings-account-sync-stopped = Sync stopped: { $error }
+settings-account-notice-plan-limit =
+    { $unsent ->
+        [one] Your plan holds { $limit } bookmarks, so { $unsent } new bookmark stayed on this Mac only.
+       *[other] Your plan holds { $limit } bookmarks, so { $unsent } new bookmarks stayed on this Mac only.
+    }
+settings-account-notice-rejected = Some changes couldn't be synced and stayed on this Mac only.
+settings-account-notice-too-large = Some changes were too large to sync and stayed on this Mac only.
+settings-account-notice-allowance-used-up = This month's organizing allowance is used up. { -knoa } keeps your organizing requests and resumes them automatically when allowance becomes available.
+settings-account-sign-out = Sign out
+settings-account-sign-out-about = Your library stays on this Mac. Sign in again to carry on syncing.
+settings-ai-access-title = AI access
+settings-ai-access-about = Let AI apps like Claude and ChatGPT read and manage your bookmarks.
+settings-ai-access-copy = Copy
+settings-ai-access-url = MCP URL
+settings-ai-access-default = Default access
+settings-ai-access-default-about = Applies to workspaces set to Same as default.
+settings-ai-access-same-as-default = Same as default
+settings-ai-access-off = Off
+settings-ai-access-read = Read only
+settings-ai-access-full = Full access
+settings-ai-access-not-linked = Available once this workspace is linked to the cloud.
+settings-ai-access-saving = Saving…
+settings-ai-access-loading = Loading AI access…
+settings-ai-access-save-again = Save AI access again
+settings-ai-access-load-again = Load AI access again
+settings-ai-access-retry = Retry
+settings-ai-access-needs-pro = AI access needs { -knoa } Pro
+settings-ai-title = AI
+settings-ai-about = { -knoa } works without AI too. With it, new bookmarks get a kind, a summary, tags and folders.
+settings-ai-provider = Provider
+settings-ai-cloud-note = With Pro, { -knoa } organizes your bookmarks in the cloud. A key you connected stays on this Mac for when you're not signed in.
+settings-ai-key = OpenRouter key
+settings-ai-key-about = Your own key; requests go from this Mac straight to OpenRouter.
+settings-ai-connect = Connect
+settings-ai-checking = Checking the key…
+settings-ai-key-connected = Connected. New bookmarks get organized from now on.
+settings-ai-key-failed = That didn't work: { $error }.
+settings-ai-no-key = No key yet?
+settings-ai-no-key-about = A few dollars of credit organizes thousands of bookmarks.
+settings-ai-get-key = Get a key
+settings-ai-connected = Connected
+settings-ai-disconnect = Disconnect
+settings-ai-openrouter-says = OpenRouter says: { $problem }. Check your key or credits.
+settings-ai-models = Models
+settings-ai-existing = Existing bookmarks
+settings-ai-all-organized = Everything in { $workspace } is organized.
+settings-ai-not-organized =
+    { $count ->
+        [one] { $count } bookmark in { $workspace } isn't organized yet
+       *[other] { $count } bookmarks in { $workspace } aren't organized yet
+    }
+settings-ai-included-in-pro = Included in Pro, within its monthly allowance.
+settings-ai-cost = About ${ $cost } to do them all.
+settings-ai-organize = Organize
+settings-ai-pro-title = Let { -knoa } do it with Pro
+settings-ai-pro-pitch = { -knoa } organizes your bookmarks in the cloud. No key to set up, no bill per request, and your library syncs across your devices.
+settings-ai-pro-get = Get Pro
+settings-ai-pro-upgrade = Upgrade
+settings-ai-pro-have = I have Pro
+settings-ai-usage = Usage
+settings-ai-usage-none = No AI requests yet.
+settings-ai-usage-recent =
+    { $days ->
+        [one] Last { $days } day
+       *[other] Last { $days } days
+    }
+settings-ai-usage-all-time = All time
+settings-ai-usage-by-model =
+    { $days ->
+        [one] By model, last { $days } day
+       *[other] By model, last { $days } days
+    }
+settings-ai-usage-records = { $provider }'s own records
+settings-ai-usage-records-about = Every request, with the exact amount charged.
+settings-ai-usage-open = Open
+settings-ai-usage-requests =
+    { $count ->
+        [one] { $count } request
+       *[other] { $count } requests
+    }
+settings-ai-usage-tokens = { $input } tokens in, { $output } out
+settings-ai-usage-unmetered =
+    { $count ->
+        [one] { $count } without token counts
+       *[other] { $count } without token counts
+    }
+settings-ai-usage-unpriced =
+    { $count ->
+        [one] { $count } without a price
+       *[other] { $count } without a price
+    }
+settings-workspace-new = New workspace
+settings-workspace-new-about = A separate library, like Work or Personal, with its own browsers and folders.
+settings-workspace-shown-now = Shown now
+settings-workspace-show-it = Show it
+settings-workspace-name-and-color = Name and color
+settings-workspace-name = Name
+settings-workspace-name-too-long = A name can be at most { $max } characters.
+settings-workspace-color = Color
+settings-workspace-sync-from = Sync bookmarks from
+settings-workspace-no-browser = No Chromium-based browser found. { -knoa } reads Helium, Chrome, Brave, Edge, Vivaldi and Chromium.
+settings-workspace-browsers-note = With none on, links are only added by hand (⌘N). One browser can feed several workspaces.
+settings-workspace-open-in = Open bookmarks in
+settings-workspace-default-browser = Default browser
+settings-workspace-by-hand = Links added by hand only.
+settings-workspace-synced-from-one = Synced from { $browser }.
+settings-workspace-synced-from-many = Synced from { $browsers } and { $last }.
+settings-workspace-organizing = Organizing
+settings-workspace-instructions = Instructions
+settings-workspace-instructions-about = How the AI should sort, tag and summarize what lands here.
+settings-workspace-instructions-too-long = Instructions can be at most { $max } characters.
+settings-workspace-screening = Only keep bookmarks that fit
+settings-workspace-screening-about = Off: everything from the browser lands here. On: the AI sets aside what doesn't fit, and you can keep it anyway.
+settings-workspace-guideline = What belongs here
+settings-workspace-guideline-too-long = A guideline can be at most { $max } characters.
+settings-workspace-name-placeholder = Work, Personal…
+settings-workspace-instructions-placeholder = e.g. Tag recipes by cuisine. Short summaries, no fluff.
+settings-workspace-guideline-placeholder = e.g. Only things about work: engineering, design and our clients.
+settings-workspace-create = Create workspace
+settings-workspace-delete = Delete
+settings-workspace-delete-label = Delete this workspace
+settings-workspace-delete-about = Its bookmarks and folders go with it. Your browsers keep their bookmarks.
+settings-workspace-delete-button = Delete…
+settings-workspace-delete-confirm = Delete for good
+settings-tags-title = Tag list
+settings-tags-label = Tags the AI should use
+settings-tags-about = When one of these fits a bookmark, the AI uses it instead of a word of its own. A short hint tells it when one fits. You can also right-click a tag on a bookmark to list it.
+settings-tags-add-placeholder = Add a tag
+settings-tags-hint-placeholder = When to use it (optional)
+settings-tags-remove = Remove from list
+settings-tags-only-listed = Only use tags from this list
+settings-tags-only-listed-about = Off: the AI adds its own tags for what the list doesn't cover. On: bookmarks get only listed tags, or none when nothing fits.
+settings-tags-only-listed-about-empty = Add a tag first. Off: the AI adds its own tags for what the list doesn't cover. On: bookmarks get only listed tags, or none when nothing fits.
+settings-tags-note = Bookmarks organized from now on get these tags. To bring them to the ones already organized, organize again.
+settings-tags-count = { $count } of { $max }
 
 ## Sidebar
 
@@ -352,3 +517,9 @@ ink-slate = Slate
 
 error-cant-start = { $name } can't start
 error-quit = Quit
+error-signed-out = You were signed out. Sign in again to keep syncing.
+error-sync-unanswered = The server didn't take the latest changes.
+error-unlink-library = Couldn't unlink the library: { $error }
+error-mcp-load = Couldn't load AI access: { $problem }
+error-mcp-save = Couldn't save AI access: { $problem }
+error-mcp-needs-pro = AI access needs { -knoa } Pro.
