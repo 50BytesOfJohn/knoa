@@ -36,6 +36,14 @@ impl Language {
             .find(|language| language.code().eq_ignore_ascii_case(primary))
     }
 
+    /// The first of the user's preferred locale tags, most preferred first, that Knoa
+    /// speaks, else English.
+    pub fn first_spoken(tags: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        tags.into_iter()
+            .find_map(|tag| Self::parse(tag.as_ref()))
+            .unwrap_or_default()
+    }
+
     /// The name in English, for prompts: models follow "Write in Polish" best.
     pub fn english_name(self) -> &'static str {
         match self {
@@ -88,6 +96,15 @@ mod tests {
         assert_eq!(Language::parse("pt"), None);
         assert_eq!(Language::parse("pt-BR"), None);
         assert_eq!(Language::parse(""), None);
+    }
+
+    #[test]
+    fn first_spoken_skips_languages_knoa_does_not_speak() {
+        assert_eq!(
+            Language::first_spoken(["it-IT", "de-DE", "pl-PL"]),
+            Language::De
+        );
+        assert_eq!(Language::first_spoken(["it-IT", "pt-BR"]), Language::En);
     }
 
     #[test]
