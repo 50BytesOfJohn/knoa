@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.9.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.9.0) - 2026-11-21
+
+### Changed
+
+- Give MCP and organizing their own settings pages ([#51](https://github.com/50BytesOfJohn/knoa/pull/51))
 ## [0.8.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.8.1) - 2026-11-20
 
 ### Changed
