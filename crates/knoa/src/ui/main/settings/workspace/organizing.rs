@@ -1,18 +1,21 @@
 //! The workspace page's organizing section: instructions for the AI, screening by a
-//! guideline, and organizing the workspace again.
+//! guideline, and the way to organizing the workspace again.
 
-use gpui::{Context, Div, IntoElement as _, px};
+use gpui::{Context, Div, StatefulInteractiveElement as _, px};
 use gpui_component::{input::Textarea, switch::Switch};
 use knoa_core::protocol::max_chars::{
     fits,
     workspace::{GUIDELINE, INSTRUCTIONS},
 };
 
-use super::{WorkspacePage, form};
+use super::{WorkspacePage, WorkspacePageEvent, form};
 use crate::{
     i18n::t,
     services::organizer::{AiStatus, Organizer},
-    ui::theme::Theme,
+    ui::{
+        components::{Tone, button},
+        theme::Theme,
+    },
 };
 
 impl WorkspacePage {
@@ -60,8 +63,22 @@ impl WorkspacePage {
             }
         }
         let ai_on = *Organizer::entity(cx).read(cx).status() != AiStatus::Off;
-        if let Some(reorganize) = self.reorganize.clone().filter(|_| ai_on) {
-            rows.push(reorganize.into_any_element());
+        if let Some(id) = self.existing.filter(|_| ai_on) {
+            rows.push(form::row(
+                &t!("settings-reorganize-title"),
+                Some(&t!("settings-workspace-organize-again-about")),
+                button(
+                    "workspace-open-organize",
+                    t!("settings-workspace-open-organize"),
+                    Tone::Soft,
+                    cx,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.save(cx);
+                    cx.emit(WorkspacePageEvent::OpenOrganize(id));
+                })),
+                theme,
+            ));
         }
         form::group(&t!("settings-workspace-organizing"), rows, theme)
     }

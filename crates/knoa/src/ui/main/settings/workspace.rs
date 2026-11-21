@@ -23,10 +23,7 @@ use knoa_core::{
     protocol::max_chars::{self, fits},
 };
 
-use super::{
-    form,
-    reorganize::{Reorganize, Scope},
-};
+use super::form;
 use crate::{
     i18n::{self, t},
     services::organizer::Organizer,
@@ -39,6 +36,8 @@ use tag_list::{TagListChanged, TagListEditor};
 pub enum WorkspacePageEvent {
     /// The new workspace exists now, and this page edits it.
     Created(WorkspaceId),
+    /// Show the Organize page for this workspace.
+    OpenOrganize(WorkspaceId),
 }
 
 impl EventEmitter<WorkspacePageEvent> for WorkspacePage {}
@@ -62,8 +61,6 @@ pub struct WorkspacePage {
     /// Delete takes a second click: it removes every bookmark in the workspace.
     confirm_delete: bool,
     deleted: bool,
-    /// `None` while creating a workspace.
-    reorganize: Option<Entity<Reorganize>>,
     library: Entity<Library>,
     _subscriptions: Vec<Subscription>,
 }
@@ -122,7 +119,6 @@ impl WorkspacePage {
             }
         })
         .detach();
-        let reorganize = (!is_new).then(|| new_reorganize(workspace.id, &library, cx));
         let page = WorkspacePage {
             existing: (!is_new).then_some(workspace.id),
             baseline: workspace.clone().normalized(),
@@ -140,7 +136,6 @@ impl WorkspacePage {
             blocked: knoa_browser::blocked_browsers(),
             confirm_delete: false,
             deleted: false,
-            reorganize,
             library,
             _subscriptions: subscriptions,
         };
@@ -212,7 +207,6 @@ impl WorkspacePage {
             this.update(cx, |this, cx| {
                 this.existing = Some(id);
                 this.baseline = workspace.normalized();
-                this.reorganize = Some(new_reorganize(id, &this.library, cx));
                 cx.emit(WorkspacePageEvent::Created(id));
                 cx.notify();
             })?;
@@ -241,20 +235,10 @@ impl Render for WorkspacePage {
             .child(self.header(&theme, cx))
             .child(self.identity_group(&theme, cx))
             .child(self.browsers_group(&theme, cx))
-            .child(self.opens_in_group(&theme, cx))
             .child(self.organizing_group(&theme, cx))
             .child(self.tag_list.clone())
             .children(self.footer(&theme, cx))
     }
-}
-
-fn new_reorganize(
-    id: WorkspaceId,
-    library: &Entity<Library>,
-    cx: &mut Context<'_, WorkspacePage>,
-) -> Entity<Reorganize> {
-    let library = library.clone();
-    cx.new(|_| Reorganize::new(Scope::Workspace(id), library))
 }
 
 fn blank_workspace(color: Ink) -> Workspace {

@@ -1,9 +1,9 @@
-//! The "organize again" row: queues bookmarks that were already organized, so new
-//! folders, changed instructions or a new language reach them. Either just their folders
-//! or everything. Both cost AI credit, so each takes a second click.
+//! Organizing again: queues bookmarks that were already organized, so new folders, changed
+//! instructions or a new language reach them. Either just their folders or everything,
+//! one row each. Both cost AI credit, so each takes a second click.
 
 use gpui::{
-    App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
+    AnyElement, App, AppContext as _, Context, Entity, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div,
     prelude::FluentBuilder as _,
 };
@@ -46,9 +46,9 @@ impl Mode {
 
     fn label(self, offer: Offer, confirming: bool) -> String {
         match (self, offer, confirming) {
-            (Mode::Folders, _, false) => t!("settings-reorganize-folders"),
+            (Mode::Folders, _, false) => t!("settings-reorganize-folders-start"),
             (Mode::Folders, _, true) => t!("settings-reorganize-folders-confirm"),
-            (Mode::Everything, Offer::Both, false) => t!("settings-reorganize-everything"),
+            (Mode::Everything, Offer::Both, false) => t!("settings-reorganize-everything-start"),
             (Mode::Everything, Offer::Both, true) => t!("settings-reorganize-everything-confirm"),
             (Mode::Everything, Offer::NewLanguage, false) => {
                 t!("settings-general-language-organize")
@@ -58,9 +58,23 @@ impl Mode {
             }
         }
     }
+
+    fn title(self) -> String {
+        match self {
+            Mode::Folders => t!("settings-reorganize-folders-label"),
+            Mode::Everything => t!("settings-reorganize-everything-label"),
+        }
+    }
+
+    fn about(self) -> String {
+        match self {
+            Mode::Folders => t!("settings-reorganize-folders-about"),
+            Mode::Everything => t!("settings-reorganize-everything-about"),
+        }
+    }
 }
 
-/// What the row offers, and why.
+/// What the rows offer, and why.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Offer {
     /// Folders only, or everything.
@@ -196,27 +210,35 @@ impl Render for Reorganize {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let theme = &theme;
-        let (label, about) = match (self.offer, self.scope) {
-            (Offer::NewLanguage, _) => (t!("settings-general-language-note"), None),
-            (Offer::Both, Scope::Workspace(_)) => (
-                t!("settings-reorganize-title"),
-                Some(t!("settings-reorganize-about")),
-            ),
-            (Offer::Both, Scope::AllWorkspaces) => (
-                t!("settings-reorganize-all-title"),
-                Some(t!("settings-reorganize-all-about")),
-            ),
-        };
-        let waiting = self.waits_for_language(cx);
-        let about = match self.queued {
-            Some(count) => Some(t!("settings-reorganize-queued", count = count)),
-            None if waiting => Some(t!("settings-general-language-waiting")),
-            None => about,
-        };
-        let modes = if waiting { &[] } else { self.offer.modes() };
-        let controls = modes.iter().fold(div().flex().gap_2(), |row, &mode| {
-            row.child(self.mode_button(mode, theme, cx))
-        });
-        form::row(&label, about.as_deref(), controls, theme)
+        let queued = self
+            .queued
+            .map(|count| t!("settings-reorganize-queued", count = count));
+        if self.offer == Offer::NewLanguage {
+            let waiting = self.waits_for_language(cx);
+            let about = queued.or_else(|| waiting.then(|| t!("settings-general-language-waiting")));
+            let controls = div().when(!waiting, |s| {
+                s.child(self.mode_button(Mode::Everything, theme, cx))
+            });
+            return form::row(
+                &t!("settings-general-language-note"),
+                about.as_deref(),
+                controls,
+                theme,
+            );
+        }
+        let mut rows: Vec<AnyElement> = self
+            .offer
+            .modes()
+            .iter()
+            .map(|&mode| {
+                let button = self.mode_button(mode, theme, cx);
+                form::row(&mode.title(), Some(&mode.about()), button, theme)
+            })
+            .collect();
+        rows.push(form::note(
+            queued.unwrap_or_else(|| t!("settings-reorganize-kept")),
+            theme.muted,
+        ));
+        form::divided(rows, theme).into_any_element()
     }
 }

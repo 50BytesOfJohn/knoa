@@ -1,8 +1,7 @@
 //! The Account page: what Cloud mode is and signing in, or the signed-in account, its
-//! plan, AI access, how sync is doing, and signing out.
+//! plan, how sync is doing, and signing out.
 
-mod ai_access;
-mod plan;
+pub(super) mod plan;
 
 use gpui::{
     AnyElement, Context, Div, Entity, IntoElement, ParentElement as _, Render,
@@ -14,7 +13,6 @@ use super::{form, updates::When};
 use crate::{
     i18n::t,
     services::cloud::{Cloud, Notice, Phase, Problem, Rejection, SyncError, SyncStatus},
-    state::library::Library,
     ui::{
         components::{Tone, button},
         theme::Theme,
@@ -23,25 +21,18 @@ use crate::{
 
 pub struct AccountPage {
     cloud: Entity<Cloud>,
-    library: Entity<Library>,
 }
 
 impl AccountPage {
-    pub fn new(library: Entity<Library>, cx: &mut Context<'_, AccountPage>) -> AccountPage {
+    pub fn new(cx: &mut Context<'_, AccountPage>) -> AccountPage {
         let cloud = Cloud::entity(cx);
         cx.observe(&cloud, |_, _, cx| cx.notify()).detach();
-        cx.observe(&library, |_, _, cx| cx.notify()).detach();
-        AccountPage { cloud, library }
-    }
-
-    pub fn load(&mut self, cx: &mut Context<'_, AccountPage>) {
-        self.cloud.update(cx, Cloud::load_mcp_settings);
+        AccountPage { cloud }
     }
 }
 
 impl Render for AccountPage {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
-        self.cloud.update(cx, Cloud::ensure_mcp_settings);
         let theme = Theme::get(cx).clone();
         let cloud = self.cloud.read(cx);
         let header = form::header(
@@ -69,8 +60,7 @@ impl Render for AccountPage {
             Phase::OtherAccount(_) => page.child(self.other_account(&theme, cx)),
             Phase::SignedIn(_) => page
                 .child(self.account_group(&theme, cx))
-                .child(self.sync_group(&theme, cx))
-                .child(self.ai_access_group(&theme, cx)),
+                .child(self.sync_group(&theme, cx)),
         };
         page
     }

@@ -1,5 +1,5 @@
-//! The AI page: connecting OpenRouter, the models in use, organizing the bookmarks that
-//! came in before AI was on, and what AI has cost.
+//! The AI page: connecting OpenRouter or using Pro, the models in use, and what AI has
+//! cost. Organizing existing bookmarks is on the Organize page.
 
 mod key;
 mod pro;
@@ -11,12 +11,8 @@ use gpui::{
 };
 use gpui_component::input::InputState;
 
-use super::{
-    form,
-    reorganize::{Reorganize, Scope},
-};
+use super::form;
 use crate::{
-    format,
     i18n::t,
     services::{
         ai,
@@ -36,12 +32,8 @@ use crate::{
 };
 use key::KeyCheck;
 
-/// About $0.17 per 1,000 bookmarks with the default models (enrichment research).
-const DOLLARS_PER_BOOKMARK: f64 = 0.000_17;
-
 pub struct AiPage {
     library: Entity<Library>,
-    reorganize: Entity<Reorganize>,
     key: Entity<InputState>,
     /// Where the last key check got to.
     key_check: Option<KeyCheck>,
@@ -72,10 +64,8 @@ impl AiPage {
             this.load_usage(cx);
         })
         .detach();
-        let reorganize = cx.new(|_| Reorganize::new(Scope::AllWorkspaces, library.clone()));
         let mut page = AiPage {
             library,
-            reorganize,
             key,
             key_check: None,
             checking: None,
@@ -98,16 +88,6 @@ impl AiPage {
                 Err(err) => tracing::error!("can't load AI usage: {err}"),
             });
         }));
-    }
-
-    fn organize_existing(&mut self, cx: &mut Context<'_, AiPage>) {
-        self.library.update(cx, |library, cx| {
-            let workspace = library.workspace_id();
-            library.change(cx, move |store| {
-                store.queue_not_organized(workspace).map(drop)
-            });
-        });
-        Organizer::wake(cx);
     }
 }
 
@@ -138,16 +118,14 @@ impl Render for AiPage {
         }
         page = match &status {
             AiStatus::Off => page.child(self.connect_group(&theme, cx)),
-            AiStatus::Ready | AiStatus::NeedsAttention(_) => page
-                .child(self.provider_group(&status, &theme, cx))
-                .child(self.backlog_group(&theme, cx)),
-            AiStatus::Cloud => page
-                .child(form::group(
-                    &t!("settings-ai-provider"),
-                    vec![form::note(t!("settings-ai-cloud-note"), theme.muted)],
-                    &theme,
-                ))
-                .child(self.backlog_group(&theme, cx)),
+            AiStatus::Ready | AiStatus::NeedsAttention(_) => {
+                page.child(self.provider_group(&status, &theme, cx))
+            }
+            AiStatus::Cloud => page.child(form::group(
+                &t!("settings-ai-provider"),
+                vec![form::note(t!("settings-ai-cloud-note"), theme.muted)],
+                &theme,
+            )),
         };
         // Usage from before a disconnect still counts, so it stays visible while AI is off.
         let connected = SettingsFile::get(cx).ai.as_ref().map(|c| c.kind);
@@ -201,48 +179,5 @@ impl AiPage {
             theme,
         ));
         form::group(&t!("settings-ai-provider"), rows, theme)
-    }
-
-    fn backlog_group(&self, theme: &Theme, cx: &mut Context<'_, AiPage>) -> Div {
-        let library = self.library.read(cx);
-        let not_organized = library.counts().not_organized;
-        let name = library
-            .workspace()
-            .map(|w| w.name.clone())
-            .unwrap_or_default();
-        let row = if not_organized == 0 {
-            form::note(
-                t!("settings-ai-all-organized", workspace = name),
-                theme.muted,
-            )
-        } else {
-            let cost = not_organized as f64 * DOLLARS_PER_BOOKMARK;
-            let about = if *Organizer::entity(cx).read(cx).status() == AiStatus::Cloud {
-                t!("settings-ai-included-in-pro")
-            } else {
-                t!("settings-ai-cost", cost = (format::usd(cost, 2)))
-            };
-            form::row(
-                &t!(
-                    "settings-ai-not-organized",
-                    count = (not_organized),
-                    workspace = name
-                ),
-                Some(&about),
-                button(
-                    "organize-all",
-                    t!("settings-ai-organize"),
-                    Tone::Primary,
-                    cx,
-                )
-                .on_click(cx.listener(|this, _, _, cx| this.organize_existing(cx))),
-                theme,
-            )
-        };
-        let mut rows = vec![row];
-        if library.workspaces().len() > 1 {
-            rows.push(self.reorganize.clone().into_any_element());
-        }
-        form::group(&t!("settings-ai-existing"), rows, theme)
     }
 }
