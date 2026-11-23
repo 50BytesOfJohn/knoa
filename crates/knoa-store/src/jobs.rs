@@ -171,7 +171,8 @@ impl Store {
     }
 
     /// Stores what the page fetch found. Values read from the page fill in kind, fields and
-    /// summary until the AI provides its own, and the title of a link added by hand.
+    /// summary until the AI provides its own, and the title of a link added by hand. A
+    /// summary the user wrote stays.
     pub fn save_page(&mut self, id: BookmarkId, page: &Page, now: i64) -> Result<()> {
         let tx = self.write()?;
         let recorder = Recorder::ai(&tx)?;
@@ -185,7 +186,8 @@ impl Store {
                 image_height = coalesce(?7, image_height),
                 image_key = CASE WHEN ?5 IS NULL THEN image_key END,
                 pending_image = CASE WHEN ?5 IS NULL THEN pending_image ELSE hex(randomblob(16)) END,
-                summary = CASE WHEN model IS NULL THEN coalesce(?8, summary) ELSE summary END,
+                summary = CASE WHEN model IS NULL AND summary_origin = 'ai'
+                    THEN coalesce(?8, summary) ELSE summary END,
                 kind = CASE WHEN model IS NULL THEN coalesce(?9, kind) ELSE kind END,
                 fields = CASE WHEN model IS NULL THEN ?10 ELSE fields END,
                 title = CASE WHEN source IS NULL AND title = url THEN coalesce(?11, title) ELSE title END
@@ -216,7 +218,8 @@ impl Store {
 
     /// Stores the AI's answer and takes the bookmark off the queue. A bookmark the user kept
     /// is never set aside. A bookmark deleted for good while it was organized is skipped.
-    /// The AI's title replaces only the URL standing in for one, as the page's does.
+    /// The AI's title replaces only the URL standing in for one, as the page's does, and
+    /// its summary never replaces the user's.
     pub fn finish_organized(
         &mut self,
         id: BookmarkId,
@@ -227,7 +230,8 @@ impl Store {
         let recorder = Recorder::ai(&tx)?;
         let updated = recorder.on_bookmark(id.0, || {
             Ok(tx.execute(
-            "UPDATE bookmarks SET kind = ?2, summary = ?3, fields = ?4, extras = ?5, model = ?6,
+            "UPDATE bookmarks SET kind = ?2, fields = ?4, extras = ?5, model = ?6,
+                summary = CASE WHEN summary_origin = 'user' THEN summary ELSE ?3 END,
                 status = 'organized', organized_at = ?7, error = NULL,
                 set_aside = CASE WHEN kept = 1 THEN NULL ELSE ?8 END,
                 title = CASE WHEN source IS NULL AND title = url THEN coalesce(?9, title) ELSE title END

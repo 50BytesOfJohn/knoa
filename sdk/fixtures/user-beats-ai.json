@@ -1,6 +1,6 @@
 {
 	"$comment": "Sync protocol fixture, shared by the TypeScript and Rust cores. Each fixture starts from an empty library on the free plan; run the steps in order and compare each response exactly.",
-	"about": "The AI can't change or delete a user's tag, never sets aside a kept bookmark, and a retried mutation gets its first answer.",
+	"about": "The AI can't change or delete a user's tag, never sets aside a kept bookmark or writes over the user's summary, and a retried mutation gets its first answer.",
 	"steps": [
 		{
 			"push": {
@@ -151,6 +151,7 @@
 							"status": "organized",
 							"kind": "article",
 							"summary": null,
+							"summary_origin": "ai",
 							"fields": {},
 							"extras": [],
 							"set_aside": null,
@@ -164,6 +165,93 @@
 					}
 				],
 				"cursor": 4,
+				"more": false
+			}
+		},
+		{
+			"push": {
+				"mutations": [
+					{
+						"mid": "m7",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "user",
+						"op": "put",
+						"data": {
+							"title": "My title",
+							"summary": "My summary",
+							"summary_origin": "user"
+						}
+					},
+					{
+						"mid": "m8",
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"actor": "ai",
+						"op": "put",
+						"data": {
+							"kind": "video",
+							"summary": "The AI's summary",
+							"summary_origin": "ai"
+						}
+					}
+				]
+			},
+			"expect": {
+				"results": [
+					{
+						"mid": "m7",
+						"status": "applied"
+					},
+					{
+						"mid": "m8",
+						"status": "applied"
+					}
+				],
+				"version": 6
+			}
+		},
+		{
+			"pull": {
+				"cursor": 4,
+				"limit": 1000,
+				"texts": false
+			},
+			"expect": {
+				"changes": [
+					{
+						"entity": "bookmark",
+						"key": "33333333-3333-4333-8333-333333333333",
+						"version": 6,
+						"deleted": false,
+						"data": {
+							"id": "33333333-3333-4333-8333-333333333333",
+							"workspace_id": "11111111-1111-4111-8111-111111111111",
+							"url": "https://example.com/a",
+							"title": "My title",
+							"site": "example.com",
+							"added_at": 1,
+							"up_next": false,
+							"kept": true,
+							"deleted_at": null,
+							"browser_folder": null,
+							"status": "organized",
+							"kind": "video",
+							"summary": "My summary",
+							"summary_origin": "user",
+							"fields": {},
+							"extras": [],
+							"set_aside": null,
+							"model": null,
+							"organized_at": null,
+							"error": null,
+							"image_key": null,
+							"image_width": null,
+							"image_height": null
+						}
+					}
+				],
+				"cursor": 6,
 				"more": false
 			}
 		}

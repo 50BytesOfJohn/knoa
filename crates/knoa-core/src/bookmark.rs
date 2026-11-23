@@ -63,9 +63,10 @@ impl Status {
 }
 
 /// Who set a value. User values always win over the AI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
+    #[default]
     Ai,
     User,
 }
@@ -116,6 +117,8 @@ pub struct Bookmark {
     pub added_at: i64,
     pub kind: Option<Kind>,
     pub summary: Option<String>,
+    /// Who wrote the summary. The AI never writes over the user's.
+    pub summary_origin: Origin,
     pub fields: Fields,
     pub extras: Vec<(String, String)>,
     pub tags: Vec<(String, Origin)>,

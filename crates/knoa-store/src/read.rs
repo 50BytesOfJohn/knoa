@@ -31,7 +31,7 @@ const COLUMNS: &str = "b.id, b.url, b.title, b.site, b.added_at, b.kind, b.summa
     b.up_next, b.image_path, b.image_width, b.image_height, b.browser_folder, b.removed_from_browser, b.model,
     (SELECT json_group_array(json_array(tag, origin)) FROM bookmark_tags WHERE bookmark_id = b.id),
     (SELECT json_group_array(json_array(folder_id, origin, probability)) FROM bookmark_folders WHERE bookmark_id = b.id),
-    b.workspace_id, b.set_aside, b.deleted_at";
+    b.workspace_id, b.set_aside, b.deleted_at, b.summary_origin";
 
 impl Store {
     /// Bookmarks matching `query`, best match first when there is text, newest first otherwise.
@@ -210,6 +210,7 @@ struct RawBookmark {
     added_at: i64,
     kind: Option<String>,
     summary: Option<String>,
+    summary_origin: String,
     fields: String,
     extras: String,
     status: String,
@@ -236,6 +237,7 @@ impl RawBookmark {
             added_at: row.get(4)?,
             kind: row.get(5)?,
             summary: row.get(6)?,
+            summary_origin: row.get(22)?,
             fields: row.get(7)?,
             extras: row.get(8)?,
             status: row.get(9)?,
@@ -266,6 +268,7 @@ impl RawBookmark {
             added_at: self.added_at,
             kind: kind_from_column(self.kind.as_deref()),
             summary: self.summary,
+            summary_origin: Origin::from_slug(&self.summary_origin),
             fields: serde_json::from_str(&self.fields)?,
             extras: serde_json::from_str(&self.extras)?,
             tags: tags

@@ -96,6 +96,9 @@ row_with_patch! {
         pub status: BookmarkStatus,
         pub kind: Option<String>,
         pub summary: Option<String>,
+        /// Who wrote `summary`; an API from before this column leaves it out.
+        #[serde(default)]
+        pub summary_origin: Origin,
         pub fields: Fields,
         pub extras: Vec<(String, String)>,
         pub set_aside: Option<String>,

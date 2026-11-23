@@ -72,6 +72,7 @@ const DEFAULTS: { [E in Entity]: Partial<Rows[E]> } = {
 		status: "new",
 		kind: null,
 		summary: null,
+		summary_origin: "ai",
 		fields: {},
 		extras: [],
 		set_aside: null,

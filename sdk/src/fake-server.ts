@@ -279,7 +279,8 @@ export class FakeServer {
 			return { status: "rejected", reason: "quota" };
 		}
 		// As the API does, a row's id is its key.
-		const keyed = ID_KEYED.has(m.entity) ? { ...m.data, id: m.key } : m.data;
+		const data = this.withoutOverruledSummary(m);
+		const keyed = ID_KEYED.has(m.entity) ? { ...data, id: m.key } : data;
 		if (!putRow(this.tables, m.entity, m.key, keyed)) {
 			return { status: "rejected", reason: "invalid" };
 		}
@@ -294,6 +295,14 @@ export class FakeServer {
 			this.tables.folder.set(key, { ...folder, parent_id: parent });
 			this.bump("folder", key, false);
 		}
+	}
+
+	/** The AI's summary gives way to the user's; the rest of its put still applies. */
+	private withoutOverruledSummary(m: Mutation & { op: "put" }): typeof m.data {
+		if (m.actor !== "ai" || m.entity !== "bookmark") return m.data;
+		if (this.tables.bookmark.get(m.key)?.summary_origin !== "user") return m.data;
+		const { summary: _, summary_origin: __, ...rest } = m.data;
+		return rest;
 	}
 
 	private userOwns(m: Mutation): boolean {

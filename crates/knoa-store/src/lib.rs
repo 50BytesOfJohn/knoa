@@ -5,6 +5,7 @@
 //! thread, with one read-write connection and one read-only connection to the same file.
 
 mod add_link;
+mod edits;
 mod folders;
 mod identity;
 mod import;

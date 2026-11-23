@@ -131,6 +131,9 @@ impl MainView {
         if let Some(edits) = &self.tag_edits {
             edits.translate(window, cx);
         }
+        if let Some(edit) = &self.heading_edit {
+            edit.translate(window, cx);
+        }
     }
 
     /// The search itself doesn't change: its kinds are kept as slugs.

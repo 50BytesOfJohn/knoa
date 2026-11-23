@@ -123,7 +123,7 @@ pub(crate) fn bookmark(conn: &Connection, id: i64) -> Result<Option<Synced<Bookm
         .query_row(
             "SELECT b.sync_id, w.sync_id, b.url, b.title, b.site, b.added_at, b.up_next, b.kept,
                     b.deleted_at, b.browser_folder, b.status, b.kind, b.summary, b.fields,
-                    b.extras, b.set_aside, b.model, b.organized_at, b.error
+                    b.extras, b.set_aside, b.model, b.organized_at, b.error, b.summary_origin
              FROM bookmarks b JOIN workspaces w ON w.id = b.workspace_id
              WHERE b.id = ?1 AND b.sync_id IS NOT NULL AND w.sync_id IS NOT NULL",
             [id],
@@ -149,6 +149,7 @@ pub(crate) fn bookmark(conn: &Connection, id: i64) -> Result<Option<Synced<Bookm
                     model: Some(row.get(16)?),
                     organized_at: Some(row.get(17)?),
                     error: Some(row.get(18)?),
+                    summary_origin: user_summary(&row.get::<_, String>(19)?),
                     ..BookmarkPatch::default()
                 };
                 Ok((key, row, json))
@@ -161,6 +162,12 @@ pub(crate) fn bookmark(conn: &Connection, id: i64) -> Result<Option<Synced<Bookm
     row.fields = Some(serde_json::from_str::<Fields>(&fields)?);
     row.extras = Some(serde_json::from_str(&extras)?);
     Ok(Some(Synced { key, row }))
+}
+
+/// Only a user's summary sends its origin. An API from before the column refuses a
+/// mutation with a column it doesn't know, and the AI's origin is every row's default.
+fn user_summary(origin: &str) -> Option<Origin> {
+    (Origin::from_slug(origin) == Origin::User).then_some(Origin::User)
 }
 
 /// The protocol's status for a local one. Queued and organizing belong to this Mac's
