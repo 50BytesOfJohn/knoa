@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.10.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.10.0) - 2026-11-23
+
+### Changed
+
+- Edit bookmark titles and descriptions ([#52](https://github.com/50BytesOfJohn/knoa/pull/52))
 ## [0.9.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.9.0) - 2026-11-21
 
 ### Changed
