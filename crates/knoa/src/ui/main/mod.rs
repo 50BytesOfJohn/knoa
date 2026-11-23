@@ -48,7 +48,7 @@ use crate::{
     ui::theme::Theme,
 };
 use content::{DecodedImages, LayoutCache};
-use detail::TagEdits;
+use detail::{HeadingEdit, TagEdits};
 use events::EventsPage;
 use keys::{
     CloseViewer, CopyImage, CopyLink, DeleteSelected, Dismiss, FocusSearch, MoveDown, MoveLeft,
@@ -74,6 +74,9 @@ pub struct MainView {
     /// The bookmark whose folder chips show every folder, to add it to another.
     folder_picker: Option<BookmarkId>,
     tag_edits: Option<TagEdits>,
+    /// The title and description fields, while they're open. Left on a bookmark no longer
+    /// selected, they save once the blur that took focus away is handled.
+    heading_edit: Option<HeadingEdit>,
     /// The bookmark whose link was just copied, until the task clears the confirmation.
     copied: Option<(BookmarkId, Task<()>)>,
     overlay: Option<Overlay>,
@@ -127,6 +130,7 @@ impl MainView {
             detail_open: false,
             folder_picker: None,
             tag_edits: None,
+            heading_edit: None,
             copied: None,
             overlay: None,
             confirm_empty_trash: false,

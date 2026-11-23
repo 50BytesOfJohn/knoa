@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, StyledText, div, prelude::FluentBuilder as _, px,
 };
 use jiff::{Timestamp, tz::TimeZone};
-use knoa_core::{Bookmark, Status};
+use knoa_core::{Bookmark, Origin, Status};
 
 use super::MainView;
 use crate::{
@@ -30,7 +30,8 @@ pub(super) fn summary(bookmark: &Bookmark, theme: &Theme) -> Option<Div> {
         .text_sm()
         .line_height(px(21.))
         .text_color(theme.text);
-    if !bookmark.status.is_organized() {
+    let by_ai = bookmark.status.is_organized() && bookmark.summary_origin == Origin::Ai;
+    if !by_ai {
         return Some(text.child(summary.clone()));
     }
     let marked = format!("{summary} {AI_MARK}");

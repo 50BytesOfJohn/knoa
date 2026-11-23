@@ -67,7 +67,9 @@ See [ADR 0005](adr/0005-typed-bookmarks-and-folders.md) and, for folders,
 - A workspace can have a tag list: up to 40 tags, each with an optional hint of at most
   60 characters, and a switch that holds the AI to the list. Empty by default.
 - Every AI-set value and folder link records its origin (AI or user). AI re-runs never
-  overwrite user values.
+  overwrite user values. The summary records who wrote it too (`summary_origin`): once
+  the user edits it in place in the detail panel, the organizer leaves it alone. A title
+  the user sets is safe already, since the AI only replaces a URL standing in for one.
 - Folders have a name, an optional description, an `auto_assign` flag (default on), a
   color, an icon (a glyph or one emoji) and an optional parent, at most three levels
   deep. `FolderTree` in `knoa-core` (mirrored in `sdk/src/folder-tree.ts`) turns the

@@ -152,7 +152,12 @@ impl MainView {
             .tag_edits
             .as_ref()
             .is_some_and(|edits| edits.is_typing(window, cx));
-        if typing_tag || self.search.read(cx).focus_handle(cx).is_focused(window) {
+        let typing_heading = self
+            .heading_edit
+            .as_ref()
+            .is_some_and(|edit| edit.is_typing(window, cx));
+        if typing_tag || typing_heading || self.search.read(cx).focus_handle(cx).is_focused(window)
+        {
             return;
         }
         let text = text.clone();

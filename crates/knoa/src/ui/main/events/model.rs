@@ -144,6 +144,7 @@ mod tests {
             added_at: 0,
             kind: Some(knoa_core::Kind::Event),
             summary: None,
+            summary_origin: knoa_core::Origin::Ai,
             fields: knoa_core::Fields::new(),
             extras: Vec::new(),
             tags: Vec::new(),

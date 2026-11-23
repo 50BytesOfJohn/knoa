@@ -319,6 +319,11 @@ CREATE INDEX bookmark_folders_folder ON bookmark_folders (folder_id);
 -- page. It lives and dies with the job, and never leaves this Mac.
 ALTER TABLE jobs ADD COLUMN snapshot TEXT;
 ",
+    r"
+-- Who wrote the summary: once the user has, the organizer leaves it alone.
+ALTER TABLE bookmarks ADD COLUMN summary_origin TEXT NOT NULL DEFAULT 'ai'
+    CHECK (summary_origin IN ('ai', 'user'));
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

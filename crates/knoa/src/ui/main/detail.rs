@@ -2,14 +2,16 @@
 
 mod cover;
 mod filing;
+mod heading;
 mod more;
 mod sections;
 mod tags;
 
+pub(super) use heading::HeadingEdit;
 pub(super) use tags::TagEdits;
 
 use gpui::{
-    Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Stateful,
+    Context, Div, InteractiveElement as _, IntoElement, ParentElement as _, Stateful,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 use knoa_browser::Activation;
@@ -21,14 +23,14 @@ use crate::{
     i18n::t,
     ui::{
         components::{Tone, button, icon, kind_icon, site_mark, tip},
-        theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, SERIF, Theme},
+        theme::{DETAIL_WIDTH, MARGIN, PANEL_RADIUS, Theme},
     },
 };
 
 impl MainView {
     pub(super) fn render_detail(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
@@ -43,7 +45,7 @@ impl MainView {
             .id("detail-body")
             .flex_1()
             .overflow_y_scroll()
-            .child(self.detail_header(&bookmark, cx))
+            .child(self.detail_header(&bookmark, window, cx))
             .child(
                 div()
                     .px_5()
@@ -83,8 +85,12 @@ impl MainView {
     }
 
     /// Cover image, site and kind, title and summary: what the bookmark is, at a glance.
-    fn detail_header(&self, bookmark: &Bookmark, cx: &mut Context<'_, MainView>) -> Div {
-        let theme = Theme::get(cx).clone();
+    fn detail_header(
+        &self,
+        bookmark: &Bookmark,
+        window: &Window,
+        cx: &mut Context<'_, MainView>,
+    ) -> Div {
         let has_cover = bookmark.image.is_some();
         let mut header = div()
             .relative()
@@ -106,16 +112,7 @@ impl MainView {
                 // Without an image, the close button sits on the byline's row.
                 .child(self.byline(bookmark, cx).when(!has_cover, |s| s.pr(px(36.))))
                 .children(under_byline.map(|pill| div().flex().child(pill)))
-                .child(
-                    div()
-                        .font_family(SERIF)
-                        .text_size(px(21.))
-                        .line_height(px(27.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.text)
-                        .child(bookmark.title.clone()),
-                )
-                .children(sections::summary(bookmark, &theme)),
+                .child(self.detail_heading(bookmark, window, cx)),
         );
         header
             .children(on_cover.map(|pill| div().absolute().top_3().left_3().child(pill)))

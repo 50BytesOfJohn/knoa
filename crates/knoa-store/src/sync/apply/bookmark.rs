@@ -100,6 +100,10 @@ fn columns(patch: BookmarkPatch) -> Result<Columns> {
     columns.add("kind", patch.kind);
     columns.add("summary", patch.summary);
     columns.add(
+        "summary_origin",
+        patch.summary_origin.map(|o| o.slug().to_owned()),
+    );
+    columns.add(
         "fields",
         patch
             .fields

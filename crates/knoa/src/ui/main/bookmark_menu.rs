@@ -169,12 +169,24 @@ fn opening_items(menu: PopupMenu, view: &WeakEntity<MainView>, target: &Target) 
         .item(target.shortcut(open, OpenSelected))
         .item(target.shortcut(open_behind, OpenSelectedInBackground))
         .item(target.shortcut(copy, CopyLink))
-        .item(target.shortcut(details, ShowDetails));
+        .item(target.shortcut(details, ShowDetails))
+        .item(edit_item(view, id));
     if has_picture(&target.bookmark) {
         picture_items(menu, view, target)
     } else {
         menu
     }
+}
+
+/// Opens the detail panel with the title being edited, for anyone who doesn't know a
+/// double-click does it.
+fn edit_item(view: &WeakEntity<MainView>, id: BookmarkId) -> PopupMenuItem {
+    let view = view.clone();
+    PopupMenuItem::new(t!("detail-edit"))
+        .icon(icon_asset("pencil"))
+        .on_click(move |_, window, cx| {
+            let _ = view.update(cx, |this, cx| this.edit_title_of(id, window, cx));
+        })
 }
 
 /// Copy and save show no keys: theirs belong to the viewer, where ⌘C copies the picture.

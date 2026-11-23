@@ -157,6 +157,7 @@ export function addLink(
 		status: "new",
 		kind: null,
 		summary: null,
+		summary_origin: "ai",
 		fields: {},
 		extras: [],
 		set_aside: null,
@@ -168,6 +169,27 @@ export function addLink(
 		image_height: null,
 	};
 	return { id, url, mutations: [put("bookmark", id, row)] };
+}
+
+/**
+ * The user's own title and description, sending only what changed, so fixing a title
+ * leaves the AI's description to the AI. `null` when nothing changed or the title is
+ * empty. An emptied description stays empty: the AI never writes over the user's.
+ */
+export function editBookmark(
+	bookmark: Bookmark,
+	edit: { title: string; summary: string },
+): Mutation | null {
+	const title = edit.title.trim();
+	const summary = edit.summary.trim() || null;
+	if (title === "") return null;
+	const data: Partial<Bookmark> = {};
+	if (title !== bookmark.title) data.title = title;
+	if (summary !== bookmark.summary) {
+		data.summary = summary;
+		data.summary_origin = "user";
+	}
+	return Object.keys(data).length > 0 ? put("bookmark", bookmark.id, data) : null;
 }
 
 export function setUpNext(id: BookmarkId, upNext: boolean): Mutation {

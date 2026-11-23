@@ -93,6 +93,11 @@ export interface Bookmark {
 	status: BookmarkStatus;
 	kind: string | null;
 	summary: string | null;
+	/**
+	 * Who wrote `summary`. Once the user has, an `ai` mutation's `summary` is left out: an
+	 * API from before this column leaves it out of pulled rows, which read it as `ai`.
+	 */
+	summary_origin: Origin;
 	fields: Record<string, unknown>;
 	extras: [name: string, value: string][];
 	set_aside: string | null;
@@ -219,7 +224,9 @@ export const MAX_TAGS_PER_BOOKMARK = 100;
  *
  * A user's value beats the AI's: an `ai` mutation never changes or deletes a tag or folder
  * link whose origin is `user` or that is excluded, and never adds a link to a folder that
- * is gone. Such a mutation is answered `ignored`.
+ * is gone. Such a mutation is answered `ignored`. An `ai` mutation's `summary` and
+ * `summary_origin` are dropped once the bookmark's `summary_origin` is `user`, and its other
+ * columns applied.
  */
 export type Mutation = {
 	[E in Entity]: {
