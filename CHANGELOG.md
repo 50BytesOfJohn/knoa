@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.11.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.11.0) - 2026-11-24
+
+### Changed
+
+- Build the top bar v2 ([#53](https://github.com/50BytesOfJohn/knoa/pull/53))
 ## [0.10.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.10.0) - 2026-11-23
 
 ### Changed
