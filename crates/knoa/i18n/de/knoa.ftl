@@ -544,8 +544,6 @@ main-search-found =
         [one] { $count } gefunden
        *[other] { $count } gefunden
     }
-main-kind-all = Alle
-main-kind-chip = { $kind } { $count }
 main-trash-empty = Papierkorb entleeren
 main-trash-delete-count =
     { $count ->
@@ -585,6 +583,9 @@ main-suggest-fields = Details
 main-suggest-bookmarks = Lesezeichen
 main-suggest-field = { $field }: { $value }
 main-suggest-footer = ↑↓ wählen · ↵ anwenden · ⇥ ergänzen · ⌫ letzten entfernen
+main-refine-narrow = Eingrenzen
+main-refine-more = Mehr
+main-refine-clear = Zurücksetzen
 main-view-options-title = Darstellung
 main-view-options-summaries = Zusammenfassungen auf Karten anzeigen
 main-view-options-up-next = Leiste „Als Nächstes“ anzeigen

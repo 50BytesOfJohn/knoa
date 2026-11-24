@@ -1,27 +1,21 @@
-//! The search at the top of the library: the pill with its tokens, and the kind chips
-//! under it. Every change to the search goes through [`MainView::set_search`].
+//! The search at the top of the library: the pill with its tokens and suggestions, and
+//! the refine row under it. Every change to the search goes through [`MainView::set_search`].
 
 mod folded;
 mod keys;
 mod labels;
 mod pill;
+mod refine;
 mod suggest;
 mod suggestions;
 mod tokens;
 
-use gpui::{
-    Context, Entity, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
-};
+use gpui::{Context, Entity, IntoElement, ParentElement as _, Styled as _, Window, div, px};
 use gpui_component::input::{InputEvent, InputState};
-use knoa_core::{Filter, Kind, Place};
+use knoa_core::Place;
 
 use super::MainView;
-use crate::{
-    i18n::{self, t},
-    state::search::{Search, Token},
-    ui::theme::{MARGIN, Theme},
-};
+use crate::{i18n::t, state::search::Search, ui::theme::MARGIN};
 
 pub const PILL_HEIGHT: f32 = 50.;
 const PILL_MAX_WIDTH: f32 = 620.;
@@ -48,6 +42,7 @@ pub(super) struct PillState {
     /// The highlighted suggestion row. Each change to the typed text starts it over on
     /// "Search for".
     highlight: usize,
+    refine_expanded: refine::Expanded,
 }
 
 impl MainView {
@@ -74,7 +69,7 @@ impl MainView {
             .items_center()
             .gap_2()
             .child(pill)
-            .child(self.kind_chips(cx))
+            .child(self.render_refine(right - left - 40., window, cx))
     }
 
     /// After a language switch, what inputs keep rather than draw: their placeholders.
@@ -180,79 +175,6 @@ impl MainView {
         self.search.update(cx, |input, cx| {
             input.set_placeholder(placeholder, window, cx);
         });
-    }
-
-    /// Adds a kind token, or takes it away when it is the kind already applied.
-    fn toggle_kind(&mut self, kind: Kind, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let mut search = self.library.read(cx).search().clone();
-        if search.kind() == Some(kind) {
-            search
-                .tokens
-                .retain(|t| *t != Token::Filter(Filter::Kind(kind)));
-        } else {
-            search.add(Token::Filter(Filter::Kind(kind)));
-        }
-        self.set_search(search, window, cx);
-    }
-
-    fn kind_chips(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
-        let theme = Theme::get(cx).clone();
-        let library = self.library.read(cx);
-        let current = library.search().kind();
-        let counts = library.base_facets().kinds.clone();
-        let chip = |id: &'static str, label: String, active: bool| {
-            div()
-                .id(id)
-                .h(px(28.))
-                .px_3()
-                .flex()
-                .items_center()
-                .rounded_full()
-                .text_xs()
-                .cursor_pointer()
-                .font_weight(FontWeight::MEDIUM)
-                .map(|s| {
-                    if active {
-                        s.bg(theme.text).text_color(theme.panel)
-                    } else {
-                        s.bg(theme.panel.opacity(0.7))
-                            .text_color(theme.muted)
-                            .hover(|s| s.bg(theme.panel))
-                    }
-                })
-                .child(label)
-        };
-        let mut row = div().flex().flex_wrap().justify_center().gap_1p5();
-        // The Gallery holds media kinds only, so choosing among them says little.
-        let in_gallery = library.place() == Place::Gallery;
-        if !in_gallery && (counts.len() > 1 || current.is_some()) {
-            row = row.child(
-                chip("kind-all", t!("main-kind-all"), current.is_none()).on_click(cx.listener(
-                    move |this, _, window, cx| {
-                        if let Some(kind) = current {
-                            this.toggle_kind(kind, window, cx);
-                        }
-                    },
-                )),
-            );
-            for (kind, count) in counts {
-                row = row.child(
-                    chip(
-                        kind.slug(),
-                        t!(
-                            "main-kind-chip",
-                            kind = (i18n::kind_plural(kind)),
-                            count = count
-                        ),
-                        current == Some(kind),
-                    )
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.toggle_kind(kind, window, cx);
-                    })),
-                );
-            }
-        }
-        row
     }
 }
 

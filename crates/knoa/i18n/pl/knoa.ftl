@@ -582,8 +582,6 @@ main-search-found =
         [many] { $count } wyników
        *[other] { $count } wyników
     }
-main-kind-all = Wszystkie
-main-kind-chip = { $kind } { $count }
 main-trash-empty = Opróżnij Kosz
 main-trash-delete-count =
     { $count ->
@@ -628,6 +626,9 @@ main-suggest-fields = Szczegóły
 main-suggest-bookmarks = Zakładki
 main-suggest-field = { $field }: { $value }
 main-suggest-footer = ↑↓ wybierz · ↵ zastosuj · ⇥ uzupełnij · ⌫ usuń ostatni
+main-refine-narrow = Zawęź
+main-refine-more = Więcej
+main-refine-clear = Wyczyść
 main-view-options-title = Widok
 main-view-options-summaries = Pokazuj podsumowania na kartach
 main-view-options-up-next = Pokazuj pasek Na później

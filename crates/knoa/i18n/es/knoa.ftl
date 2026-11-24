@@ -544,8 +544,6 @@ main-search-found =
         [one] { $count } resultado
        *[other] { $count } resultados
     }
-main-kind-all = Todos
-main-kind-chip = { $kind } { $count }
 main-trash-empty = Vaciar Papelera
 main-trash-delete-count =
     { $count ->
@@ -585,6 +583,9 @@ main-suggest-fields = Detalles
 main-suggest-bookmarks = Marcadores
 main-suggest-field = { $field }: { $value }
 main-suggest-footer = ↑↓ mover · ↵ aplicar · ⇥ completar · ⌫ quitar el último
+main-refine-narrow = Afinar
+main-refine-more = Más
+main-refine-clear = Borrar
 main-view-options-title = Vista
 main-view-options-summaries = Mostrar resúmenes en las tarjetas
 main-view-options-up-next = Mostrar la franja de A continuación

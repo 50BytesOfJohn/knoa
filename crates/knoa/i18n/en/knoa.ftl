@@ -544,8 +544,6 @@ main-search-found =
         [one] { $count } found
        *[other] { $count } found
     }
-main-kind-all = All
-main-kind-chip = { $kind } { $count }
 main-trash-empty = Empty Trash
 main-trash-delete-count =
     { $count ->
@@ -585,6 +583,9 @@ main-suggest-fields = Details
 main-suggest-bookmarks = Bookmarks
 main-suggest-field = { $field }: { $value }
 main-suggest-footer = ↑↓ move · ↵ apply · ⇥ complete · ⌫ remove last
+main-refine-narrow = Narrow
+main-refine-more = More
+main-refine-clear = Clear
 main-view-options-title = View
 main-view-options-summaries = Show summaries on cards
 main-view-options-up-next = Show the Up next strip

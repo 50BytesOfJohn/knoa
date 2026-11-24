@@ -24,6 +24,8 @@ pub const MENU_OPEN: Duration = Duration::from_millis(120);
 pub const MENU_SLIDE: f32 = 4.;
 /// The sidebar's status card fading in.
 pub const CARD_FADE: Duration = Duration::from_millis(160);
+/// The refine row's chips fading in when what they offer changes.
+pub const CHIP_FADE: Duration = Duration::from_millis(120);
 /// The organizing bar moving to its new length.
 pub const BAR: Duration = Duration::from_millis(200);
 /// One turn of the dashed circle while the AI organizes.

@@ -544,8 +544,6 @@ main-search-found =
         [one] { $count } résultat
        *[other] { $count } résultats
     }
-main-kind-all = Tout
-main-kind-chip = { $kind } { $count }
 main-trash-empty = Vider la Corbeille
 main-trash-delete-count =
     { $count ->
@@ -585,6 +583,9 @@ main-suggest-fields = Détails
 main-suggest-bookmarks = Signets
 main-suggest-field = { $field } : { $value }
 main-suggest-footer = ↑↓ choisir · ↵ appliquer · ⇥ compléter · ⌫ retirer le dernier
+main-refine-narrow = Affiner
+main-refine-more = Plus
+main-refine-clear = Effacer
 main-view-options-title = Affichage
 main-view-options-summaries = Afficher les résumés sur les cartes
 main-view-options-up-next = Afficher le bandeau « À suivre »
