@@ -45,6 +45,10 @@ pub(super) struct PillState {
     selected: Option<Slot>,
     /// How many of the oldest tokens fold into "+N", as last drawn.
     folded: usize,
+    /// Whether the search icon is gone, as last drawn, and how many times it went or came
+    /// back: each turn plays its animation once.
+    icon_hidden: bool,
+    icon_turns: usize,
     /// The highlighted suggestion row. Each change to the typed text starts it over on
     /// "Search for".
     highlight: usize,
