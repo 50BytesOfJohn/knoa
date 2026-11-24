@@ -114,7 +114,7 @@ impl Search {
     }
 
     /// The search as one line of syntax, `kind:recipe #pasta quick`, which parses back to
-    /// the same tokens. The typed text is left as typed.
+    /// the same query. The typed text is left as typed.
     pub fn typed_form(&self) -> String {
         let tokens = self.tokens.iter().map(Token::typed);
         let typed = (!self.typed.trim().is_empty()).then(|| self.typed.trim().to_owned());

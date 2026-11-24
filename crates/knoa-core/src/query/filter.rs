@@ -36,8 +36,10 @@ impl Filter {
         }
     }
 
-    /// The typed form, which [`Filter::parse`] reads back to the same filter: `kind:recipe`,
-    /// `#pasta`, `site:youtube.com`, `director:christopher_nolan`, `runtime>120`.
+    /// The typed form, which [`Filter::parse`] reads back to a filter that finds the same
+    /// bookmarks: `kind:recipe`, `#pasta`, `site:youtube.com`, `director:christopher_nolan`,
+    /// `runtime>120`. A text value's `_` reads back as a space, which the store matches
+    /// alike.
     pub fn typed(&self) -> String {
         match self {
             Filter::Kind(kind) => format!("kind:{}", kind.slug()),
@@ -86,7 +88,8 @@ fn filter_value(ty: FieldType, text: &str) -> Option<Value> {
     }
 }
 
-/// A search word ends at whitespace, so spaces in a value are typed as `_`.
+/// A search word ends at whitespace, so spaces in a value are typed as `_`. A value's own
+/// `_` stays as it is rather than being escaped: the store treats `_` and space alike.
 fn typed_value(value: &Value) -> String {
     match value {
         Value::String(text) => text.replace(' ', "_"),
