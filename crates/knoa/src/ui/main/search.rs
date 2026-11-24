@@ -14,7 +14,7 @@ use gpui::{Context, Entity, IntoElement, ParentElement as _, Styled as _, Window
 use gpui_component::input::{InputEvent, InputState};
 use knoa_core::Place;
 
-use super::MainView;
+use super::{MainView, overlay::Overlay};
 use crate::{i18n::t, state::search::Search, ui::theme::MARGIN};
 
 pub const PILL_HEIGHT: f32 = 50.;
@@ -117,6 +117,10 @@ impl MainView {
     ) {
         match event {
             InputEvent::Change => self.on_search_input(window, cx),
+            // Only one thing drops down at a time.
+            InputEvent::Focus if matches!(self.overlay, Some(Overlay::Display)) => {
+                self.set_overlay(None, cx);
+            }
             // The pill draws its focus ring and opens or closes the suggestions.
             InputEvent::Focus | InputEvent::Blur => cx.notify(),
             // The pill's keys take ↵ before the input does.

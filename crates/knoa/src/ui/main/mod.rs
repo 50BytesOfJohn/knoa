@@ -7,6 +7,7 @@ mod clipboard;
 mod content;
 mod delete_folder;
 mod detail;
+mod display;
 mod edits;
 mod events;
 mod field_display;
@@ -264,6 +265,7 @@ impl Render for MainView {
             .text_color(theme.text)
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
+            .child(self.render_capsule(show_detail, window, cx))
             .when_some(show_detail.then_some(()), |el, ()| {
                 el.child(self.render_detail(window, cx))
             })

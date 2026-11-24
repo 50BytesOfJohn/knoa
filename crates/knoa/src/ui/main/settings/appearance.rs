@@ -220,4 +220,11 @@ fn library_group(theme: &Theme, cx: &mut Context<'_, SettingsView>) -> Div {
         vec![summaries, up_next, events],
         theme,
     )
+    .child(
+        div()
+            .px_1()
+            .text_xs()
+            .text_color(theme.muted)
+            .child(t!("settings-appearance-library-order")),
+    )
 }

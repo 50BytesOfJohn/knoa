@@ -14,7 +14,7 @@ use crate::{
     i18n::t,
     ui::{
         components::{icon, text_width},
-        main::{MainView, overlay::Overlay},
+        main::MainView,
         theme::Theme,
     },
 };
@@ -45,7 +45,7 @@ impl MainView {
         let count =
             searching.then(|| t!("main-search-found", count = (library.result_facets().total)));
 
-        let mut fixed = PADDING * 2. + SEARCH_ICON + GAP + INPUT_MIN_WIDTH + GAP + CLEAR_SIZE;
+        let mut fixed = PADDING * 2. + SEARCH_ICON + GAP + INPUT_MIN_WIDTH;
         if let Some(count) = &count {
             fixed += GAP
                 + f32::from(text_width(
@@ -116,23 +116,6 @@ impl MainView {
                 )
             })
             .when(clearable, |s| s.child(self.clear_button(&theme, cx)))
-            .child(
-                div()
-                    .id("view-options")
-                    .flex_none()
-                    .size(px(CLEAR_SIZE))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover))
-                    .child(icon("sliders-horizontal", px(16.), theme.muted))
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_click(
-                        cx.listener(|this, _, _, cx| this.open_overlay(Overlay::ViewOptions, cx)),
-                    ),
-            )
     }
 
     fn clear_button(&self, theme: &Theme, cx: &mut Context<'_, MainView>) -> impl IntoElement {
