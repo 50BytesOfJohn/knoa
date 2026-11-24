@@ -1,6 +1,6 @@
 # Top bar (v2)
 
-- Status: Approved, not built
+- Status: First build done
 - Date: 2026-11-24
 - Prototype: [top-bar-explorations.html](top-bar-explorations.html), section "Prototype"
   (`#prototype`). Open the file in a browser; the windows are live. The same page is
