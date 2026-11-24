@@ -100,18 +100,22 @@ impl MainView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("main-search-placeholder")));
         let sidebar = cx.new(|cx| SidebarView::new(library.clone(), cx));
         let subscriptions = vec![
-            cx.subscribe(&search, |this, input, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    let text = input.read(cx).value().to_string();
-                    this.library
-                        .update(cx, |library, cx| library.set_search(&text, cx));
-                    this.scroll
-                        .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
-                }
-            }),
-            cx.subscribe(&library, |this, _, _: &LibraryChanged, cx| {
-                this.on_library_changed(cx);
-            }),
+            cx.subscribe_in(
+                &search,
+                window,
+                |this, _, event: &InputEvent, window, cx| {
+                    if matches!(event, InputEvent::Change) {
+                        this.on_search_input(window, cx);
+                    }
+                },
+            ),
+            cx.subscribe_in(
+                &library,
+                window,
+                |this, _, _: &LibraryChanged, window, cx| {
+                    this.on_library_changed(window, cx);
+                },
+            ),
             cx.subscribe_in(&sidebar, window, Self::on_sidebar_event),
             cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
@@ -144,7 +148,14 @@ impl MainView {
 
     /// The selection outlives filing it elsewhere, so it can be filed again or opened. It
     /// ends when the bookmark is deleted, or trashed or restored: those send it away.
-    fn on_library_changed(&mut self, cx: &mut Context<'_, MainView>) {
+    /// The input follows the search when the library changed it, as switching workspaces
+    /// does.
+    fn on_library_changed(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let typed = self.library.read(cx).search().typed.clone();
+        if self.search.read(cx).value() != typed.as_str() {
+            self.search
+                .update(cx, |input, cx| input.set_value(typed, window, cx));
+        }
         let library = self.library.read(cx);
         let in_trash = library.place() == Place::Trash;
         let still_here = |id| {
@@ -215,11 +226,8 @@ impl MainView {
     fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<'_, MainView>) {
         if self.overlay.is_some() {
             self.close_overlay(window, cx);
-        } else if !self.search.read(cx).value().is_empty() {
-            self.search
-                .update(cx, |input, cx| input.set_value("", window, cx));
-            self.library
-                .update(cx, |library, cx| library.set_search("", cx));
+        } else if !self.library.read(cx).search().is_empty() {
+            self.clear_search(window, cx);
         } else {
             self.detail_open = false;
             cx.notify();

@@ -37,14 +37,6 @@ pub fn with_kind_slugs(input: &str) -> String {
     })
 }
 
-/// The reverse of [`with_kind_slugs`]: a search's `kind:` filters in the current language,
-/// to show it again after a switch.
-pub fn with_kind_names(search: &str) -> String {
-    map_kinds(search, |value| {
-        Kind::parse(value).map(|kind| kind_label(kind).to_lowercase())
-    })
-}
-
 /// Rewrites the value of each `kind:` token that `rename` knows, leaving the rest as is.
 fn map_kinds(input: &str, rename: impl Fn(&str) -> Option<String>) -> String {
     let tokens: Vec<String> = input

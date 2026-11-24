@@ -5,11 +5,12 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::input::Input;
-use knoa_core::{Kind, Place};
+use knoa_core::{Filter, Kind, Place};
 
 use super::{MainView, Overlay};
 use crate::{
     i18n::{self, t},
+    state::search::{Search, Token},
     ui::{
         components::icon,
         theme::{MARGIN, Theme},
@@ -136,21 +137,71 @@ impl MainView {
         }
     }
 
-    /// The search itself doesn't change: its kinds are kept as slugs.
+    /// Tokens draw their labels each frame, so only the placeholder needs translating.
     fn translate_search(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let search = self.library.read(cx).search().to_owned();
+        self.sync_placeholder(window, cx);
+    }
+
+    /// The one way the UI changes the search: the input shows its typed text, the
+    /// placeholder shows only without tokens, and the cards scroll back to the top.
+    pub(super) fn set_search(
+        &mut self,
+        search: Search,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        if self.search.read(cx).value() != search.typed.as_str() {
+            let typed = search.typed.clone();
+            self.search
+                .update(cx, |input, cx| input.set_value(typed, window, cx));
+        }
+        self.library
+            .update(cx, |library, cx| library.set_search(search, cx));
+        self.sync_placeholder(window, cx);
+        self.scroll.set_offset(gpui::point(px(0.), px(0.)));
+    }
+
+    /// Reads what was typed into the search, turning complete syntax words into tokens.
+    pub(super) fn on_search_input(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let text = self.search.read(cx).value().to_string();
+        let mut search = self.library.read(cx).search().clone();
+        search.take_input(&text);
+        self.set_search(search, window, cx);
+    }
+
+    /// Clears the typed text and every token; the place stays.
+    pub(super) fn clear_search(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.set_search(Search::default(), window, cx);
+    }
+
+    fn sync_placeholder(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let placeholder = if self.library.read(cx).search().tokens.is_empty() {
+            t!("main-search-placeholder")
+        } else {
+            String::new()
+        };
         self.search.update(cx, |input, cx| {
-            input.set_placeholder(t!("main-search-placeholder"), window, cx);
-            if i18n::with_kind_slugs(&input.value()) != search {
-                input.set_value(i18n::with_kind_names(&search), window, cx);
-            }
+            input.set_placeholder(placeholder, window, cx);
         });
+    }
+
+    /// Adds a kind token, or takes it away when it is the kind already applied.
+    fn toggle_kind(&mut self, kind: Kind, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let mut search = self.library.read(cx).search().clone();
+        if search.kind() == Some(kind) {
+            search
+                .tokens
+                .retain(|t| *t != Token::Filter(Filter::Kind(kind)));
+        } else {
+            search.add(Token::Filter(Filter::Kind(kind)));
+        }
+        self.set_search(search, window, cx);
     }
 
     fn kind_chips(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let library = self.library.read(cx);
-        let current = library.kind();
+        let current = library.search().kind();
         let counts = library.kind_counts().to_vec();
         let chip = |id: &'static str, label: String, active: bool| {
             div()
@@ -180,9 +231,10 @@ impl MainView {
         if !in_gallery && (counts.len() > 1 || current.is_some()) {
             row = row.child(
                 chip("kind-all", t!("main-kind-all"), current.is_none()).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.library
-                            .update(cx, |library, cx| library.set_kind(None, cx));
+                    move |this, _, window, cx| {
+                        if let Some(kind) = current {
+                            this.toggle_kind(kind, window, cx);
+                        }
                     },
                 )),
             );
@@ -197,11 +249,8 @@ impl MainView {
                         ),
                         current == Some(kind),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        let kind: Option<Kind> =
-                            (this.library.read(cx).kind() != Some(kind)).then_some(kind);
-                        this.library
-                            .update(cx, |library, cx| library.set_kind(kind, cx));
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.toggle_kind(kind, window, cx);
                     })),
                 );
             }
@@ -223,13 +272,10 @@ impl MainView {
                 cx.stop_propagation();
             }
             "escape" => {
-                if self.search.read(cx).value().is_empty() {
+                if self.library.read(cx).search().is_empty() {
                     self.cards_focus.focus(window, cx);
                 } else {
-                    self.search
-                        .update(cx, |input, cx| input.set_value("", window, cx));
-                    self.library
-                        .update(cx, |library, cx| library.set_search("", cx));
+                    self.clear_search(window, cx);
                 }
                 cx.stop_propagation();
             }

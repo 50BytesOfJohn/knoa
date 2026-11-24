@@ -14,10 +14,7 @@ use knoa_core::{
 };
 use knoa_store::{AddedLink, Counts, NewLink, Store};
 
-use crate::{
-    i18n,
-    state::{batch::Batch, database::Database, settings::SettingsFile},
-};
+use crate::state::{batch::Batch, database::Database, search::Search, settings::SettingsFile};
 
 /// Enough for any personal library to stay fully browsable; masonry layout of this many
 /// cards is a few milliseconds.
@@ -37,9 +34,7 @@ pub struct Library {
     workspaces: Vec<Workspace>,
     workspace_sync_ids: BTreeMap<WorkspaceId, String>,
     place: Place,
-    /// The search with `kind:` filters as slugs, whatever language they were typed in.
-    search: String,
-    kind: Option<Kind>,
+    search: Search,
     results: Arc<Vec<Bookmark>>,
     kind_counts: Vec<(Kind, usize)>,
     counts: Counts,
@@ -82,8 +77,7 @@ impl Library {
             workspaces: Vec::new(),
             workspace_sync_ids: BTreeMap::new(),
             place: Place::Everything,
-            search: String::new(),
-            kind: None,
+            search: Search::default(),
             results: Arc::default(),
             kind_counts: Vec::new(),
             counts: Counts::default(),
@@ -127,7 +121,8 @@ impl Library {
         if self.workspace != id {
             self.workspace = id;
             self.place = Place::Everything;
-            self.kind = None;
+            // Tags and folders differ per workspace, so the search wouldn't carry over.
+            self.search = Search::default();
             SettingsFile::update(cx, |s| s.current_workspace = Some(id.0));
             self.refresh(cx);
         }
@@ -137,12 +132,8 @@ impl Library {
         self.place
     }
 
-    pub fn search(&self) -> &str {
+    pub fn search(&self) -> &Search {
         &self.search
-    }
-
-    pub fn kind(&self) -> Option<Kind> {
-        self.kind
     }
 
     pub fn results(&self) -> Arc<Vec<Bookmark>> {
@@ -196,37 +187,23 @@ impl Library {
         }
     }
 
+    /// Keeps the search: the place is its scope, one part of it.
     pub fn set_place(&mut self, place: Place, cx: &mut Context<'_, Library>) {
         if self.place != place {
             self.place = place;
-            self.kind = None;
             self.refresh(cx);
         }
     }
 
-    /// Kind names are read in the language of the moment and kept as slugs, so the
-    /// search means the same after a language switch.
-    pub fn set_search(&mut self, text: &str, cx: &mut Context<'_, Library>) {
-        let search = i18n::with_kind_slugs(text);
+    pub fn set_search(&mut self, search: Search, cx: &mut Context<'_, Library>) {
         if self.search != search {
             self.search = search;
             self.refresh(cx);
         }
     }
 
-    pub fn set_kind(&mut self, kind: Option<Kind>, cx: &mut Context<'_, Library>) {
-        if self.kind != kind {
-            self.kind = kind;
-            self.refresh(cx);
-        }
-    }
-
     fn query(&self) -> Query {
-        let mut query = Query::parse(&self.search, Some(self.workspace), self.place);
-        if self.kind.is_some() {
-            query.kind = self.kind;
-        }
-        query
+        self.search.query(self.workspace, self.place)
     }
 
     /// Re-runs the query now. The previous refresh, if still running, is dropped.
