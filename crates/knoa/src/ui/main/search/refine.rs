@@ -66,9 +66,6 @@ impl Choice {
     }
 }
 
-/// The row expanded by "More", until the search or place changes.
-pub(super) type Expanded = Option<(Search, Place)>;
-
 impl MainView {
     pub(super) fn render_refine(
         &mut self,
@@ -88,11 +85,7 @@ impl MainView {
             .clone();
         let narrowing = !search.is_empty();
         let clearable = !search.tokens.is_empty();
-        let expanded = self
-            .pill
-            .refine_expanded
-            .as_ref()
-            .is_some_and(|(s, p)| s == search && *p == place);
+        let expanded = self.pill.refine_expanded;
 
         let mut fixed = 0.;
         if narrowing && !choices.is_empty() {
@@ -120,6 +113,10 @@ impl MainView {
                     .border_1()
                     .border_color(theme.hairline)
                     .shadow_lg()
+                    .occlude()
+                    .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                        this.collapse_refine(cx);
+                    }))
             });
         if narrowing && !choices.is_empty() {
             row = row.child(
@@ -132,8 +129,8 @@ impl MainView {
         for (index, choice) in choices.iter().take(shown).enumerate() {
             row = row.child(self.choice_chip(index, choice, &theme, cx));
         }
-        if shown < choices.len() {
-            row = row.child(self.more_chip(&theme, cx));
+        if expanded || shown < choices.len() {
+            row = row.child(self.more_chip(expanded, &theme, cx));
         }
         if clearable {
             row = row.child(self.clear_chip(&theme, cx));
@@ -145,7 +142,6 @@ impl MainView {
             .w(px(width))
             .flex()
             .justify_center()
-            .when(expanded, InteractiveElement::occlude)
             .child(row)
             .with_animation(
                 ("refine-fade", hasher.finish() as usize),
@@ -180,13 +176,23 @@ impl MainView {
             .into_any_element()
     }
 
-    fn more_chip(&self, theme: &Theme, cx: &mut Context<'_, MainView>) -> AnyElement {
+    /// "More" to show every choice, "Less" to go back to one line.
+    fn more_chip(
+        &self,
+        expanded: bool,
+        theme: &Theme,
+        cx: &mut Context<'_, MainView>,
+    ) -> AnyElement {
+        let label = if expanded {
+            t!("main-refine-less")
+        } else {
+            t!("main-refine-more")
+        };
         chip("refine-more", theme)
             .hover(|s| s.bg(theme.panel.opacity(0.7)))
-            .child(t!("main-refine-more"))
-            .on_click(cx.listener(|this, _, _, cx| {
-                let library = this.library.read(cx);
-                this.pill.refine_expanded = Some((library.search().clone(), library.place()));
+            .child(label)
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.pill.refine_expanded = !expanded;
                 cx.notify();
             }))
             .into_any_element()

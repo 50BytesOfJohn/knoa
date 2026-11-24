@@ -586,6 +586,7 @@ main-suggest-field = { $field } : { $value }
 main-suggest-footer = ↑↓ choisir · ↵ appliquer · ⇥ compléter · ⌫ retirer le dernier
 main-refine-narrow = Affiner
 main-refine-more = Plus
+main-refine-less = Moins
 main-refine-clear = Effacer
 main-display = Affichage
 main-display-summaries = Afficher les résumés sur les cartes

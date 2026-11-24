@@ -586,6 +586,7 @@ main-suggest-field = { $field }: { $value }
 main-suggest-footer = ↑↓ move · ↵ apply · ⇥ complete · ⌫ remove last
 main-refine-narrow = Narrow
 main-refine-more = More
+main-refine-less = Less
 main-refine-clear = Clear
 main-display = Display
 main-display-summaries = Show summaries on cards

@@ -187,6 +187,9 @@ impl MainView {
     /// [`MainView::set_place`] without moving focus, for the search pill.
     fn show_place(&mut self, place: Place, cx: &mut Context<'_, MainView>) {
         self.confirm_empty_trash = false;
+        if self.library.read(cx).place() != place {
+            self.collapse_refine(cx);
+        }
         if let Place::Folder(id) = place {
             self.sidebar
                 .update(cx, |sidebar, cx| sidebar.reveal(id, cx));
@@ -213,6 +216,7 @@ impl MainView {
         self.library
             .update(cx, |library, cx| library.set_workspace(id, cx));
         self.set_selected(None, cx);
+        self.collapse_refine(cx);
         self.detail_open = false;
         self.scroll
             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
@@ -220,6 +224,9 @@ impl MainView {
     }
 
     fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        if self.collapse_refine(cx) {
+            return;
+        }
         if self.overlay.is_some() {
             self.close_overlay(window, cx);
         } else if !self.library.read(cx).search().is_empty() {

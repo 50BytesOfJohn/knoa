@@ -586,6 +586,7 @@ main-suggest-field = { $field }: { $value }
 main-suggest-footer = ↑↓ wählen · ↵ anwenden · ⇥ ergänzen · ⌫ letzten Filter entfernen
 main-refine-narrow = Eingrenzen
 main-refine-more = Mehr
+main-refine-less = Weniger
 main-refine-clear = Zurücksetzen
 main-display = Darstellung
 main-display-summaries = Zusammenfassungen auf Karten anzeigen

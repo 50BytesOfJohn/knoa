@@ -38,7 +38,9 @@ impl MainView {
         }))
         .capture_action(cx.listener(|this, _: &Escape, window, cx| {
             this.deselect_token(cx);
-            this.escape_pill(window, cx);
+            if !this.collapse_refine(cx) {
+                this.escape_pill(window, cx);
+            }
             cx.stop_propagation();
         }))
         .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {

@@ -48,7 +48,8 @@ pub(super) struct PillState {
     /// The highlighted suggestion row. Each change to the typed text starts it over on
     /// "Search for".
     highlight: usize,
-    refine_expanded: refine::Expanded,
+    /// Whether "More" opened the refine row, until the search or the place changes.
+    refine_expanded: bool,
     refine_choices: Derived<Rc<[refine::Choice]>>,
     suggestion_rows: Derived<Rc<[suggest::Row]>>,
     /// Whether the input shows its placeholder, as last set; `None` to set it again.
@@ -115,6 +116,9 @@ impl MainView {
         if self.library.read(cx).search().typed != search.typed {
             self.pill.highlight = 0;
         }
+        if *self.library.read(cx).search() != search {
+            self.pill.refine_expanded = false;
+        }
         self.pill.selected = None;
         self.library
             .update(cx, |library, cx| library.set_search(search, cx));
@@ -179,6 +183,15 @@ impl MainView {
                 }
             }
         }
+    }
+
+    /// Folds the refine row back to one line. Returns whether it was open.
+    pub(super) fn collapse_refine(&mut self, cx: &mut Context<'_, MainView>) -> bool {
+        let was_open = std::mem::take(&mut self.pill.refine_expanded);
+        if was_open {
+            cx.notify();
+        }
+        was_open
     }
 
     pub(super) fn focus_pill(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
