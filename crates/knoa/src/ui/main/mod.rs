@@ -46,7 +46,7 @@ use crate::{
         library::{Library, LibraryChanged},
         settings::SettingsFile,
     },
-    ui::theme::Theme,
+    ui::{backdrop, theme::Theme},
 };
 use content::{DecodedImages, LayoutCache};
 use detail::{HeadingEdit, TagEdits};
@@ -263,8 +263,9 @@ impl Render for MainView {
             .id("main")
             .size_full()
             .relative()
-            .bg(theme.canvas)
+            .bg(backdrop::canvas_color(&theme, cx))
             .text_color(theme.text)
+            .children(backdrop::picture(cx))
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
             .child(self.render_capsule(show_detail, window, cx))

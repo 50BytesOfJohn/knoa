@@ -48,4 +48,4 @@ them to agree, and the AI's summaries and tags should match the UI.
   language.
 - gpui-component's own strings fall back to English outside `en`.
 - A language this build doesn't know reads as unset in an account and as English in
-  settings (`unknown_language_as_default`), rather than making either unreadable.
+  settings (`unknown_as_default`), rather than making either unreadable.

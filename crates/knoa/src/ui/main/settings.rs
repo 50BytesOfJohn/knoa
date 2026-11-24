@@ -28,6 +28,7 @@ use crate::{
 };
 use account::AccountPage;
 use ai::AiPage;
+use appearance::BackgroundGroup;
 use mcp::{McpPage, McpPageEvent};
 use organize::{OrganizePage, OrganizePageEvent};
 use reorganize::Scope;
@@ -57,6 +58,7 @@ pub struct SettingsView {
     organize: Entity<OrganizePage>,
     mcp: Entity<McpPage>,
     account: Entity<AccountPage>,
+    background: Entity<BackgroundGroup>,
     /// The page of the workspace shown, while one is.
     workspace: Option<Entity<WorkspacePage>>,
     /// Shown under the language once the user changes it here.
@@ -76,6 +78,7 @@ impl SettingsView {
         let organize = cx.new(|cx| OrganizePage::new(library.clone(), cx));
         let mcp = cx.new(|cx| McpPage::new(library.clone(), cx));
         let account = cx.new(AccountPage::new);
+        let background = cx.new(BackgroundGroup::new);
         let focus = cx.focus_handle();
         focus.focus(window, cx);
         // However the sheet closes (Esc, a click outside, the close button), edits not yet
@@ -108,6 +111,7 @@ impl SettingsView {
             organize,
             mcp,
             account,
+            background,
             workspace: None,
             language_note: None,
             _subscriptions: subscriptions,
@@ -241,7 +245,7 @@ impl SettingsView {
     fn page_body(&self, cx: &mut Context<'_, SettingsView>) -> gpui::AnyElement {
         match (self.page, &self.workspace) {
             (Page::General, _) => general::page(self, cx).into_any_element(),
-            (Page::Appearance, _) => appearance::page(cx).into_any_element(),
+            (Page::Appearance, _) => appearance::page(&self.background, cx).into_any_element(),
             (Page::Ai, _) => self.ai.clone().into_any_element(),
             (Page::Organize, _) => self.organize.clone().into_any_element(),
             (Page::Mcp, _) => self.mcp.clone().into_any_element(),

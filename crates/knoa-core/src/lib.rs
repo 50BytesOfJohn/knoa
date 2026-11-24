@@ -28,7 +28,7 @@ pub use folder::{
     FolderTree, Hue, Ink, MAX_FOLDER_DEPTH, MoveError, NewFolder,
 };
 pub use kind::{Kind, KindDef};
-pub use language::{Language, unknown_language_as_default};
+pub use language::{Language, unknown_as_default};
 pub use query::{Comparison, FieldFilter, Filter, Place, Query};
 pub use tag::{
     ListedTag, MAX_AI_TAGS, MAX_LISTED_TAGS, MAX_TAG_CHARS, MAX_TAG_DESCRIPTION_CHARS, TagList,

@@ -1,10 +1,13 @@
-//! The Appearance page: the theme gallery and how the library shows cards.
+//! The Appearance page: the theme gallery, the window's background and how the library
+//! shows cards.
 //!
 //! Themes are tiles that wrap, split into light and dark, so the gallery grows by rows
 //! as themes are added and never needs a different control.
 
+mod background;
+
 use gpui::{
-    Context, Div, InteractiveElement as _, ParentElement as _, SharedString,
+    Context, Div, Entity, InteractiveElement as _, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 use gpui_component::{switch::Switch, tooltip::Tooltip};
@@ -16,10 +19,15 @@ use crate::{
     ui::{main::events::view_switch, theme::Theme},
 };
 
+pub(super) use background::BackgroundGroup;
+
 const TILE_WIDTH: gpui::Pixels = px(132.);
 const PREVIEW_HEIGHT: gpui::Pixels = px(84.);
 
-pub(super) fn page(cx: &mut Context<'_, SettingsView>) -> Div {
+pub(super) fn page(
+    background: &Entity<BackgroundGroup>,
+    cx: &mut Context<'_, SettingsView>,
+) -> Div {
     let theme = Theme::get(cx).clone();
     let current = SettingsFile::get(cx).theme.clone();
     let (dark, light): (Vec<Theme>, Vec<Theme>) = Theme::all().into_iter().partition(|t| t.dark);
@@ -54,6 +62,7 @@ pub(super) fn page(cx: &mut Context<'_, SettingsView>) -> Div {
                     cx,
                 )),
         )
+        .child(background.clone())
         .child(library_group(&theme, cx))
 }
 
