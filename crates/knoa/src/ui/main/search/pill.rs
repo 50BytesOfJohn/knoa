@@ -61,10 +61,8 @@ impl MainView {
         let tokens_left = left + 1. + PADDING + SEARCH_ICON + GAP;
         let tokens = self.render_tokens(tokens_left, width - fixed - GAP, window, cx);
 
-        div()
-            .id("search-pill")
-            .key_context("SearchBar")
-            .capture_key_down(cx.listener(Self::pill_keys))
+        let pill = div().id("search-pill").key_context("SearchBar");
+        self.with_pill_keys(pill, cx)
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {

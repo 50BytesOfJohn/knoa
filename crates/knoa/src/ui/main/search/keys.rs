@@ -1,55 +1,78 @@
-//! The pill's keys, caught before the input sees them: ⌫ on an empty input, Esc, the
-//! suggestion list's ↑ ↓ ↵ ⇥, and ⌘C without a selection.
+//! The pill's keys: ⌫ on an empty input, Esc, the suggestion list's ↑ ↓ ↵ ⇥, and ⌘C
+//! without a selection.
+//!
+//! GPUI runs a key's binding before any key-down listener, and the input binds every one
+//! of these keys. So they are caught as the input's own actions, in the capture phase on
+//! the way down to it: a handler that acts stops the action there, one that doesn't lets
+//! the input have it.
 
-use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
+use gpui::{ClipboardItem, Context, Div, InteractiveElement as _, KeyDownEvent, Stateful, Window};
+use gpui_component::input::{Backspace, Copy, Enter, Escape, IndentInline, MoveDown, MoveUp};
 use knoa_core::Place;
 
 use super::{MainView, Slot};
 use crate::i18n;
 
 impl MainView {
-    pub(super) fn pill_keys(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
+    pub(super) fn with_pill_keys(
+        &self,
+        pill: Stateful<Div>,
         cx: &mut Context<'_, MainView>,
-    ) {
-        let keys = &event.keystroke;
-        let plain = !keys.modifiers.modified();
-        let key = keys.key.as_str();
-        if key != "backspace" && self.pill.selected.take().is_some() {
-            cx.notify();
-        }
-        let handled = match key {
-            "backspace" if plain && self.search.read(cx).value().is_empty() => {
-                self.backspace_token(window, cx)
+    ) -> Stateful<Div> {
+        pill.capture_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            // Typing goes on past a selected token rather than removing it.
+            if event.keystroke.key != "backspace" {
+                this.deselect_token(cx);
             }
-            "escape" if plain => {
-                self.escape_pill(window, cx);
-                true
+        }))
+        .capture_action(cx.listener(|this, _: &Backspace, window, cx| {
+            if this.search.read(cx).value().is_empty() && this.backspace_token(window, cx) {
+                cx.stop_propagation();
             }
-            "up" if plain => self.move_highlight(false, window, cx),
-            "down" if plain => {
-                if !self.move_highlight(true, window, cx) {
-                    self.select_first(cx);
-                    self.cards_focus.focus(window, cx);
-                }
-                true
-            }
-            "enter" if plain => self.apply_highlighted(window, cx),
-            // Focus stays in the pill, with or without a suggestion to apply.
-            "tab" if plain => {
-                self.apply_first_filter(window, cx);
-                true
-            }
-            "c" if keys.modifiers.platform && !self.input_has_selection(cx) => {
-                self.copy_search(cx);
-                true
-            }
-            _ => false,
-        };
-        if handled {
+        }))
+        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
+            this.deselect_token(cx);
+            this.escape_pill(window, cx);
             cx.stop_propagation();
+        }))
+        .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
+            this.deselect_token(cx);
+            if this.move_highlight(false, window, cx) {
+                cx.stop_propagation();
+            }
+        }))
+        .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
+            this.deselect_token(cx);
+            if !this.move_highlight(true, window, cx) {
+                this.select_first(cx);
+                this.cards_focus.focus(window, cx);
+            }
+            cx.stop_propagation();
+        }))
+        .capture_action(cx.listener(|this, enter: &Enter, window, cx| {
+            this.deselect_token(cx);
+            if !enter.secondary && !enter.shift && this.apply_highlighted(window, cx) {
+                cx.stop_propagation();
+            }
+        }))
+        // ⇥ with nothing to apply keeps its usual meaning.
+        .capture_action(cx.listener(|this, _: &IndentInline, window, cx| {
+            this.deselect_token(cx);
+            if this.apply_first_filter(window, cx) {
+                cx.stop_propagation();
+            }
+        }))
+        .capture_action(cx.listener(|this, _: &Copy, _, cx| {
+            if !this.input_has_selection(cx) {
+                this.copy_search(cx);
+                cx.stop_propagation();
+            }
+        }))
+    }
+
+    fn deselect_token(&mut self, cx: &mut Context<'_, MainView>) {
+        if self.pill.selected.take().is_some() {
+            cx.notify();
         }
     }
 

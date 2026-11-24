@@ -248,16 +248,18 @@ impl MainView {
         true
     }
 
-    /// ⇥: the first kind, folder, tag, site or field row, if any.
+    /// ⇥: the first kind, folder, tag, site or field row. Returns whether there was one.
     pub(super) fn apply_first_filter(
         &mut self,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
-    ) {
+    ) -> bool {
         let rows = self.suggestion_rows(window, cx);
-        if let Some(index) = rows.iter().position(Row::is_filter) {
-            self.apply_suggestion(index, window, cx);
-        }
+        let Some(index) = rows.iter().position(Row::is_filter) else {
+            return false;
+        };
+        self.apply_suggestion(index, window, cx);
+        true
     }
 
     fn apply_suggestion(
