@@ -49,6 +49,12 @@ impl Search {
         })
     }
 
+    pub fn contains(&self, filter: &Filter) -> bool {
+        self.tokens
+            .iter()
+            .any(|t| matches!(t, Token::Filter(f) if f == filter))
+    }
+
     /// Adds a token at the end. A kind replaces the kind token already there, in place,
     /// since only one kind applies; a token already there isn't added twice.
     pub fn add(&mut self, token: Token) {

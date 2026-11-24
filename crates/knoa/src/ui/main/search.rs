@@ -5,6 +5,8 @@ mod folded;
 mod keys;
 mod labels;
 mod pill;
+mod suggest;
+mod suggestions;
 mod tokens;
 
 use gpui::{
@@ -43,6 +45,9 @@ pub(super) struct PillState {
     selected: Option<Slot>,
     /// How many of the oldest tokens fold into "+N", as last drawn.
     folded: usize,
+    /// The highlighted suggestion row. Each change to the typed text starts it over on
+    /// "Search for".
+    highlight: usize,
 }
 
 impl MainView {
@@ -54,6 +59,11 @@ impl MainView {
     ) -> impl IntoElement {
         let (left, right) = super::content::content_span(window, show_detail);
         let width = pill_width(right - left);
+        let pill_left = left + (right - left - width) / 2.;
+        let pill = div()
+            .relative()
+            .child(self.render_pill(pill_left, width, window, cx))
+            .children(self.render_suggestions(width, window, cx));
         div()
             .absolute()
             .top(MARGIN)
@@ -63,7 +73,7 @@ impl MainView {
             .flex_col()
             .items_center()
             .gap_2()
-            .child(self.render_pill(left + (right - left - width) / 2., width, window, cx))
+            .child(pill)
             .child(self.kind_chips(cx))
     }
 
@@ -87,6 +97,9 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
+        if self.library.read(cx).search().typed != search.typed {
+            self.pill.highlight = 0;
+        }
         if self.search.read(cx).value() != search.typed.as_str() {
             let typed = search.typed.clone();
             self.search
@@ -109,26 +122,11 @@ impl MainView {
     ) {
         match event {
             InputEvent::Change => self.on_search_input(window, cx),
-            InputEvent::PressEnter { .. } => self.lock_typed_text(window, cx),
-            // The pill draws its focus ring.
+            // The pill draws its focus ring and opens or closes the suggestions.
             InputEvent::Focus | InputEvent::Blur => cx.notify(),
+            // The pill's keys take ↵ before the input does.
+            InputEvent::PressEnter { .. } => {}
         }
-    }
-
-    /// Turns the typed text into a text token.
-    fn lock_typed_text(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let mut search = self.library.read(cx).search().clone();
-        let text = search
-            .typed
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
-        if text.is_empty() {
-            return;
-        }
-        search.typed.clear();
-        search.add(Token::Text(text));
-        self.set_search(search, window, cx);
     }
 
     /// Reads what was typed into the search, turning complete syntax words into tokens.

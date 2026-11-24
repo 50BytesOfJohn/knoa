@@ -2,11 +2,14 @@
 //! icon column and count.
 
 use gpui::{
-    Div, FontFeatures, FontWeight, InteractiveElement as _, ParentElement as _, Pixels,
-    SharedString, Styled as _, div, prelude::FluentBuilder as _, px,
+    Div, FontWeight, InteractiveElement as _, ParentElement as _, Pixels, SharedString,
+    Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::ui::theme::{ROW_RADIUS, Theme};
+use crate::ui::{
+    components::tabular_figures,
+    theme::{ROW_RADIUS, Theme},
+};
 
 /// The sidebar's rows are denser than the shared `ROW_HEIGHT`, which other lists keep.
 pub(super) const ROW_HEIGHT: Pixels = px(30.);
@@ -55,11 +58,4 @@ pub(super) fn count(text: SharedString, theme: &Theme) -> Div {
         .font_features(tabular_figures())
         .text_color(theme.muted)
         .child(text)
-}
-
-fn tabular_figures() -> FontFeatures {
-    thread_local! {
-        static TNUM: FontFeatures = FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)]));
-    }
-    TNUM.with(Clone::clone)
 }

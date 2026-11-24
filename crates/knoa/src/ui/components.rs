@@ -1,9 +1,10 @@
 //! Small building blocks shared by Knoa's views.
 
 use gpui::{
-    AnyElement, AnyView, App, Div, ElementId, FontWeight, Hsla, InteractiveElement as _,
-    IntoElement, ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Svg, Window, div, prelude::FluentBuilder as _, px, svg,
+    AnyElement, AnyView, App, Div, ElementId, FontFeatures, FontWeight, Hsla,
+    InteractiveElement as _, IntoElement, ParentElement as _, Pixels, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Svg, Window, div, prelude::FluentBuilder as _,
+    px, svg,
 };
 use gpui_component::tooltip::Tooltip;
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
@@ -32,6 +33,14 @@ pub fn text_width(text: &str, size: Pixels, weight: FontWeight, window: &Window)
         .text_system()
         .layout_line(text, size, &[run], None)
         .width
+}
+
+/// Figures of one width, so counts in a column line up.
+pub fn tabular_figures() -> FontFeatures {
+    thread_local! {
+        static TNUM: FontFeatures = FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)]));
+    }
+    TNUM.with(Clone::clone)
 }
 
 /// A Lucide icon by file name, e.g. `"bookmark"`.

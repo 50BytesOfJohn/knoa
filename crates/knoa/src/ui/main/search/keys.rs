@@ -1,5 +1,5 @@
-//! The pill's keys, caught before the input sees them: ⌫ on an empty input, Esc, ↓, ⇥
-//! and ⌘C without a selection.
+//! The pill's keys, caught before the input sees them: ⌫ on an empty input, Esc, the
+//! suggestion list's ↑ ↓ ↵ ⇥, and ⌘C without a selection.
 
 use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
 use knoa_core::Place;
@@ -28,13 +28,20 @@ impl MainView {
                 self.escape_pill(window, cx);
                 true
             }
+            "up" if plain => self.move_highlight(false, window, cx),
             "down" if plain => {
-                self.select_first(cx);
-                self.cards_focus.focus(window, cx);
+                if !self.move_highlight(true, window, cx) {
+                    self.select_first(cx);
+                    self.cards_focus.focus(window, cx);
+                }
                 true
             }
-            // Focus stays in the pill.
-            "tab" if plain => true,
+            "enter" if plain => self.apply_highlighted(window, cx),
+            // Focus stays in the pill, with or without a suggestion to apply.
+            "tab" if plain => {
+                self.apply_first_filter(window, cx);
+                true
+            }
             "c" if keys.modifiers.platform && !self.input_has_selection(cx) => {
                 self.copy_search(cx);
                 true
