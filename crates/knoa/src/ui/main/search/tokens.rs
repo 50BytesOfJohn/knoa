@@ -24,8 +24,21 @@ const INNER_GAP: f32 = 5.;
 const ICON: f32 = 12.;
 const END_ICON: f32 = 11.;
 const LABEL_SIZE: f32 = 12.5;
+/// A token's padding, mark, gaps, end icon and border: all of it but the label.
+const CHROME: f32 = PADDING_LEFT + ICON + INNER_GAP + INNER_GAP + END_ICON + PADDING_RIGHT + 2.;
 /// Between tokens, as the pill lays them out.
 pub(super) const TOKEN_GAP: f32 = 6.;
+
+/// The scope's label is cut short past this, and further, down to the minimum, when
+/// even the scope beside "+N" doesn't fit.
+const SCOPE_LABEL_MAX: f32 = 180.;
+const SCOPE_LABEL_MIN: f32 = 60.;
+
+/// The tokens as drawn in the pill, and the width they take from the first to the last.
+pub(super) struct Tokens {
+    pub chips: Vec<AnyElement>,
+    pub width: f32,
+}
 
 impl MainView {
     /// The tokens that fit in `room`, with "+N" for the oldest ones that don't. `left` is
@@ -36,7 +49,7 @@ impl MainView {
         room: f32,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
-    ) -> Vec<AnyElement> {
+    ) -> Tokens {
         let theme = Theme::get(cx).clone();
         let library = self.library.read(cx);
         let scope = scope_chip(library, &theme);
@@ -47,32 +60,41 @@ impl MainView {
             .enumerate()
             .map(|(index, token)| token_chip(index, token))
             .collect();
-        let width = |chip: &Chip| chip_width(&chip.label, window);
-        let scope_width = scope.as_ref().map_or(0., |chip| width(chip) + TOKEN_GAP);
-        let widths: Vec<f32> = tokens.iter().map(width).collect();
-        let folded = folded_count(scope_width, &widths, room, |n| {
-            chip_width(&folded_label(n), window)
+        let widths: Vec<f32> = tokens
+            .iter()
+            .map(|chip| CHROME + label_width(&chip.label, window))
+            .collect();
+        let scope_label = scope.as_ref().map(|chip| label_width(&chip.label, window));
+        // `fit` counts a gap after every token, the last one too.
+        let layout = fit(scope_label, &widths, room + TOKEN_GAP, |n| {
+            CHROME + label_width(&folded_label(n), window)
         });
-        self.pill.folded = folded;
+        self.pill.folded = layout.folded;
 
         let selected = self.pill.selected;
         let mut chips = Vec::new();
         if let Some(scope) = scope {
-            chips.push(self.token(&scope, selected == Some(scope.slot), &theme, cx));
+            let label_max = Some(layout.scope_label);
+            chips.push(self.token(&scope, label_max, selected == Some(scope.slot), &theme, cx));
         }
-        if folded > 0 {
-            let left = left + scope_width;
-            chips.push(self.folded_token(folded, left, &theme, cx));
+        if layout.folded > 0 {
+            let left = left + layout.scope_width();
+            chips.push(self.folded_token(layout.folded, left, &theme, cx));
         }
-        for chip in tokens.iter().skip(folded) {
-            chips.push(self.token(chip, selected == Some(chip.slot), &theme, cx));
+        for chip in tokens.iter().skip(layout.folded) {
+            chips.push(self.token(chip, None, selected == Some(chip.slot), &theme, cx));
         }
-        chips
+        Tokens {
+            chips,
+            width: (layout.width - TOKEN_GAP).max(0.),
+        }
     }
 
+    /// A token, its label cut short with an ellipsis past `label_max`.
     fn token(
         &self,
         chip: &Chip,
+        label_max: Option<f32>,
         selected: bool,
         theme: &Theme,
         cx: &mut Context<'_, MainView>,
@@ -94,7 +116,10 @@ impl MainView {
         frame(("token", slot_id(slot)), theme)
             .map(|s| style_for(s, slot, selected, theme))
             .child(mark)
-            .child(label(chip.label.clone()))
+            .child(
+                label(chip.label.clone())
+                    .when_some(label_max, |s, max| s.max_w(px(max)).truncate()),
+            )
             .child(remove)
             .into_any_element()
     }
@@ -119,41 +144,75 @@ impl MainView {
     }
 }
 
-/// How many of the oldest tokens fold into "+N" so the rest fit in `room` after the
-/// scope: none when all fit, every one when even the last doesn't.
-fn folded_count(
-    scope: f32,
+/// Where the tokens go in the pill: how wide the scope's label is drawn, how many of
+/// the oldest tokens fold into "+N", and the width all of it takes.
+struct Layout {
+    scope_label: f32,
+    has_scope: bool,
+    folded: usize,
+    width: f32,
+}
+
+impl Layout {
+    fn scope_width(&self) -> f32 {
+        if self.has_scope {
+            CHROME + self.scope_label + TOKEN_GAP
+        } else {
+            0.
+        }
+    }
+}
+
+/// Folds the fewest of the oldest tokens so the rest fit in `room` after the scope.
+/// When even the scope beside "+N" with every token doesn't fit, the scope's label gives
+/// way, down to its minimum; past that the tokens take more than `room`.
+fn fit(
+    scope_label: Option<f32>,
     widths: &[f32],
     room: f32,
     folded_width: impl Fn(usize) -> f32,
-) -> usize {
-    let shown = |n: usize| -> f32 {
+) -> Layout {
+    let mut layout = Layout {
+        scope_label: scope_label.unwrap_or_default().min(SCOPE_LABEL_MAX),
+        has_scope: scope_label.is_some(),
+        folded: 0,
+        width: 0.,
+    };
+    let after_scope = |n: usize| -> f32 {
         let rest: f32 = widths[n..].iter().map(|w| w + TOKEN_GAP).sum();
         let folded = if n > 0 {
             folded_width(n) + TOKEN_GAP
         } else {
             0.
         };
-        scope + folded + rest
+        folded + rest
     };
-    (0..=widths.len())
-        .find(|&n| shown(n) <= room)
-        .unwrap_or(widths.len())
+    let scope = layout.scope_width();
+    if let Some(n) = (0..=widths.len()).find(|&n| scope + after_scope(n) <= room) {
+        layout.folded = n;
+    } else {
+        layout.folded = widths.len();
+        if layout.has_scope {
+            let spare = room - after_scope(widths.len()) - CHROME - TOKEN_GAP;
+            let min = SCOPE_LABEL_MIN.min(layout.scope_label);
+            layout.scope_label = spare.clamp(min, layout.scope_label);
+        }
+    }
+    layout.width = layout.scope_width() + after_scope(layout.folded);
+    layout
 }
 
 fn folded_label(count: usize) -> String {
     format!("+{count}")
 }
 
-/// A token's width before it is drawn: its padding, mark, label and end icon.
-fn chip_width(label: &str, window: &Window) -> f32 {
-    let label = f32::from(text_width(
+fn label_width(label: &str, window: &Window) -> f32 {
+    f32::from(text_width(
         label,
         px(LABEL_SIZE),
         FontWeight::MEDIUM,
         window,
-    ));
-    PADDING_LEFT + ICON + INNER_GAP + label + INNER_GAP + END_ICON + PADDING_RIGHT + 2.
+    ))
 }
 
 fn frame(id: impl Into<gpui::ElementId>, theme: &Theme) -> gpui::Stateful<Div> {

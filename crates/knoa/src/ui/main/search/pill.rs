@@ -45,7 +45,9 @@ impl MainView {
         let count =
             searching.then(|| t!("main-search-found", count = (library.result_facets().total)));
 
-        let mut fixed = PADDING * 2. + SEARCH_ICON + GAP + INPUT_MIN_WIDTH;
+        // Everything but the tokens and the input: border, padding, icon, count, clear
+        // and the gaps after each.
+        let mut fixed = 2. + PADDING * 2. + SEARCH_ICON + GAP;
         if let Some(count) = &count {
             fixed += GAP
                 + f32::from(text_width(
@@ -59,7 +61,16 @@ impl MainView {
             fixed += GAP + CLEAR_SIZE;
         }
         let tokens_left = left + 1. + PADDING + SEARCH_ICON + GAP;
-        let tokens = self.render_tokens(tokens_left, width - fixed - GAP, window, cx);
+        let room = width - fixed - INPUT_MIN_WIDTH - GAP;
+        let tokens = self.render_tokens(tokens_left, room, window, cx);
+        let tokens_width = if tokens.chips.is_empty() {
+            0.
+        } else {
+            tokens.width + GAP
+        };
+        // Tokens that can't give way any further take from the input instead of pushing
+        // the count and the clear button out of the pill.
+        let input_min = (width - fixed - tokens_width).clamp(0., INPUT_MIN_WIDTH);
 
         let pill = div().id("search-pill").key_context("SearchBar");
         self.with_pill_keys(pill, cx)
@@ -88,20 +99,20 @@ impl MainView {
                 }
             })
             .child(icon("search", px(SEARCH_ICON), theme.muted))
-            .when(!tokens.is_empty(), |s| {
+            .when(!tokens.chips.is_empty(), |s| {
                 s.child(
                     div()
                         .flex_none()
                         .flex()
                         .items_center()
                         .gap(px(TOKEN_GAP))
-                        .children(tokens),
+                        .children(tokens.chips),
                 )
             })
             .child(
                 div()
                     .flex_1()
-                    .min_w(px(INPUT_MIN_WIDTH))
+                    .min_w(px(input_min))
                     .child(Input::new(&self.search).appearance(false).cleanable(false)),
             )
             .when_some(count, |s, count| {

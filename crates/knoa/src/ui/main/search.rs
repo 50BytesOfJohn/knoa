@@ -19,6 +19,7 @@ use crate::{i18n::t, state::search::Search, ui::theme::MARGIN};
 
 pub const PILL_HEIGHT: f32 = 50.;
 const PILL_MAX_WIDTH: f32 = 620.;
+const PILL_MIN_WIDTH: f32 = 200.;
 /// The pill, the chips under it and the space before the first card.
 pub const SEARCH_AREA_HEIGHT: f32 = PILL_HEIGHT + 52.;
 /// What the corner capsule takes at the content's right edge, with the space kept
@@ -55,8 +56,8 @@ impl MainView {
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
         let (left, right) = super::content::content_span(window, show_detail);
-        let width = pill_width(right - left);
-        let pill_left = left + (right - left - width) / 2.;
+        let (offset, width) = pill_frame(right - left);
+        let pill_left = left + offset;
         let pill = div()
             .relative()
             .child(self.render_pill(pill_left, width, window, cx))
@@ -70,7 +71,7 @@ impl MainView {
             .flex_col()
             .items_center()
             .gap_2()
-            .child(pill)
+            .child(div().w_full().pl(px(offset)).child(pill))
             .child(self.render_refine(right - left - 40., window, cx))
     }
 
@@ -190,7 +191,15 @@ impl MainView {
     }
 }
 
-/// Centred in the content span, never reaching the corner capsule.
-fn pill_width(span: f32) -> f32 {
-    PILL_MAX_WIDTH.min(span - 2. * CAPSULE_ROOM).max(240.)
+/// Where the pill goes in a content span `span` wide: its offset from the span's left
+/// and its width. Centred, with the capsule's room kept free on both sides; when that
+/// leaves too little, it gives up the room on the left first, then shrinks, but never
+/// reaches into the capsule's.
+fn pill_frame(span: f32) -> (f32, f32) {
+    let centred = PILL_MAX_WIDTH.min(span - 2. * CAPSULE_ROOM);
+    if centred >= PILL_MIN_WIDTH {
+        return ((span - centred) / 2., centred);
+    }
+    let width = PILL_MIN_WIDTH.min(span - CAPSULE_ROOM).max(0.);
+    ((span - CAPSULE_ROOM - width).max(0.), width)
 }
