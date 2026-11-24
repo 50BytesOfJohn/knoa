@@ -7,6 +7,7 @@ mod clipboard;
 mod content;
 mod delete_folder;
 mod detail;
+mod display;
 mod edits;
 mod events;
 mod field_display;
@@ -35,7 +36,7 @@ use gpui::{
     ParentElement as _, Render, ScrollHandle, Styled as _, Subscription, Task, Window, div,
     prelude::FluentBuilder as _,
 };
-use gpui_component::input::{InputEvent, InputState};
+use gpui_component::input::InputState;
 use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
@@ -58,6 +59,7 @@ use keys::{
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
 pub use screen::MainScreen;
+use search::PillState;
 pub use sidebar::traffic_light_position;
 use sidebar::{SidebarEvent, SidebarView};
 
@@ -65,6 +67,7 @@ pub struct MainView {
     library: Entity<Library>,
     sidebar: Entity<SidebarView>,
     search: Entity<InputState>,
+    pill: PillState,
     cards_focus: FocusHandle,
     /// Held by the image viewer while it is open, so its keys replace the grid's.
     viewer_focus: FocusHandle,
@@ -100,18 +103,14 @@ impl MainView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("main-search-placeholder")));
         let sidebar = cx.new(|cx| SidebarView::new(library.clone(), cx));
         let subscriptions = vec![
-            cx.subscribe(&search, |this, input, event: &InputEvent, cx| {
-                if matches!(event, InputEvent::Change) {
-                    let text = input.read(cx).value().to_string();
-                    this.library
-                        .update(cx, |library, cx| library.set_search(&text, cx));
-                    this.scroll
-                        .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
-                }
-            }),
-            cx.subscribe(&library, |this, _, _: &LibraryChanged, cx| {
-                this.on_library_changed(cx);
-            }),
+            cx.subscribe_in(&search, window, Self::on_search_event),
+            cx.subscribe_in(
+                &library,
+                window,
+                |this, _, _: &LibraryChanged, window, cx| {
+                    this.on_library_changed(window, cx);
+                },
+            ),
             cx.subscribe_in(&sidebar, window, Self::on_sidebar_event),
             cx.observe(&Thumbnails::entity(cx), |_, _, cx| cx.notify()),
             cx.observe_window_activation(window, Self::keep_focus),
@@ -123,6 +122,7 @@ impl MainView {
             library,
             sidebar,
             search,
+            pill: PillState::default(),
             cards_focus,
             viewer_focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
@@ -144,7 +144,9 @@ impl MainView {
 
     /// The selection outlives filing it elsewhere, so it can be filed again or opened. It
     /// ends when the bookmark is deleted, or trashed or restored: those send it away.
-    fn on_library_changed(&mut self, cx: &mut Context<'_, MainView>) {
+    fn on_library_changed(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.pill.forget_derived();
+        self.sync_input(window, cx);
         let library = self.library.read(cx);
         let in_trash = library.place() == Place::Trash;
         let still_here = |id| {
@@ -178,7 +180,16 @@ impl MainView {
     /// Shows `place`. A folder chosen from anywhere but its own row, such as a menu or
     /// ⌘1 to ⌘9, has its parents opened so the selection is visible.
     pub fn set_place(&mut self, place: Place, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.show_place(place, cx);
+        self.cards_focus.focus(window, cx);
+    }
+
+    /// [`MainView::set_place`] without moving focus, for the search pill.
+    fn show_place(&mut self, place: Place, cx: &mut Context<'_, MainView>) {
         self.confirm_empty_trash = false;
+        if self.library.read(cx).place() != place {
+            self.collapse_refine(cx);
+        }
         if let Place::Folder(id) = place {
             self.sidebar
                 .update(cx, |sidebar, cx| sidebar.reveal(id, cx));
@@ -187,7 +198,6 @@ impl MainView {
             .update(cx, |library, cx| library.set_place(place, cx));
         self.scroll
             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
-        self.cards_focus.focus(window, cx);
     }
 
     /// Summaries change card heights, so the masonry layout is redone.
@@ -206,6 +216,7 @@ impl MainView {
         self.library
             .update(cx, |library, cx| library.set_workspace(id, cx));
         self.set_selected(None, cx);
+        self.collapse_refine(cx);
         self.detail_open = false;
         self.scroll
             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
@@ -213,13 +224,13 @@ impl MainView {
     }
 
     fn dismiss(&mut self, _: &Dismiss, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        if self.collapse_refine(cx) {
+            return;
+        }
         if self.overlay.is_some() {
             self.close_overlay(window, cx);
-        } else if !self.search.read(cx).value().is_empty() {
-            self.search
-                .update(cx, |input, cx| input.set_value("", window, cx));
-            self.library
-                .update(cx, |library, cx| library.set_search("", cx));
+        } else if !self.library.read(cx).search().is_empty() {
+            self.clear_search(window, cx);
         } else {
             self.detail_open = false;
             cx.notify();
@@ -256,6 +267,7 @@ impl Render for MainView {
             .text_color(theme.text)
             .child(self.render_content(show_detail, window, cx))
             .child(self.render_search(show_detail, window, cx))
+            .child(self.render_capsule(show_detail, window, cx))
             .when_some(show_detail.then_some(()), |el, ()| {
                 el.child(self.render_detail(window, cx))
             })

@@ -69,54 +69,70 @@ impl PlaceRows {
     }
 }
 
+/// A place's icon, in the sidebar and on the search's scope token. Folders draw their
+/// own mark.
+pub(in crate::ui::main) fn place_icon(place: Place) -> SharedString {
+    match place {
+        Place::Everything => line_icon!("layers"),
+        Place::Gallery => line_icon!("image"),
+        Place::Events => line_icon!("calendar"),
+        Place::UpNext => line_icon!("bookmark"),
+        Place::Unsorted => line_icon!("inbox"),
+        Place::NotOrganized => line_icon!("circle-dashed"),
+        Place::SetAside => line_icon!("archive"),
+        Place::Trash => line_icon!("trash"),
+        Place::Folder(_) => line_icon!("folder"),
+    }
+}
+
 fn visible_places(counts: Counts, current: Place) -> Vec<PlaceRow> {
     let places = [
         (
             Place::Everything,
             t!("sidebar-place-everything"),
-            line_icon!("layers"),
+            place_icon(Place::Everything),
             counts.everything,
         ),
         (
             Place::Gallery,
             t!("sidebar-place-gallery"),
-            line_icon!("image"),
+            place_icon(Place::Gallery),
             counts.gallery,
         ),
         (
             Place::Events,
             t!("sidebar-place-events"),
-            line_icon!("calendar"),
+            place_icon(Place::Events),
             counts.events,
         ),
         (
             Place::UpNext,
             t!("sidebar-place-up-next"),
-            line_icon!("bookmark"),
+            place_icon(Place::UpNext),
             counts.up_next,
         ),
         (
             Place::Unsorted,
             t!("sidebar-place-unsorted"),
-            line_icon!("inbox"),
+            place_icon(Place::Unsorted),
             counts.unsorted,
         ),
         (
             Place::NotOrganized,
             t!("sidebar-place-not-organized"),
-            line_icon!("circle-dashed"),
+            place_icon(Place::NotOrganized),
             counts.not_organized,
         ),
         (
             Place::SetAside,
             t!("sidebar-place-set-aside"),
-            line_icon!("archive"),
+            place_icon(Place::SetAside),
             counts.set_aside,
         ),
         (
             Place::Trash,
             t!("sidebar-place-trash"),
-            line_icon!("trash"),
+            place_icon(Place::Trash),
             counts.trash,
         ),
     ];

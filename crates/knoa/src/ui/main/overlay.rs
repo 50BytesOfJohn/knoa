@@ -1,37 +1,36 @@
-//! Floating panels over the main screen: settings, view options, the workspace switcher,
+//! Floating panels over the main screen: settings, Display, the workspace switcher,
 //! the folder and workspace editors, and adding a link.
 //! Most sit in the middle of the window; settings is a sheet nearly as big as the window,
-//! and the workspace switcher drops down from its button. Clicking outside closes them.
+//! and the workspace switcher, Display and the folded search tokens drop down from their
+//! buttons. Clicking outside closes them.
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, AppContext as _, Context, Entity, FontWeight,
+    Animation, AnimationExt as _, AnyElement, AppContext as _, Context, Entity,
     InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Pixels, Size,
     Styled as _, Window, deferred, div, prelude::FluentBuilder as _, px, size,
 };
-use gpui_component::switch::Switch;
 use knoa_core::{Folder, FolderId, WorkspaceId};
 
 use super::{
     MainView, NewLink, OpenSettings,
     add_link::AddLink,
+    display,
     folder_editor::FolderEditor,
+    search::PILL_HEIGHT,
     settings::{Page, SettingsView},
     sidebar::{TITLEBAR_HEIGHT, workspace_menu_left},
     viewer::Viewer,
 };
-use crate::{
-    i18n::t,
-    state::settings::SettingsFile,
-    ui::{
-        motion,
-        theme::{MARGIN, PANEL_RADIUS, Theme},
-    },
+use crate::ui::{
+    motion,
+    theme::{MARGIN, PANEL_RADIUS, Theme},
 };
 
 /// What floats over the main screen, if anything.
 pub enum Overlay {
     Settings(Entity<SettingsView>),
-    ViewOptions,
+    /// How the library looks, dropping down from the corner capsule.
+    Display,
     Folder(Entity<FolderEditor>),
     /// The workspace switcher.
     Workspaces,
@@ -40,6 +39,10 @@ pub enum Overlay {
     Viewer(Viewer),
     /// Asking before a folder and its subfolders are deleted.
     DeleteFolder(FolderId),
+    /// The search tokens folded into "+N", dropping down from it at `left`.
+    FoldedTokens {
+        left: Pixels,
+    },
 }
 
 impl MainView {
@@ -164,9 +167,8 @@ impl MainView {
 /// padding.
 const SWITCHER_MARK_INSET: Pixels = px(21.);
 
-/// A drop-down fading in and sliding down from its button as it opens.
-fn drop_down(panel: gpui::Stateful<gpui::Div>) -> impl IntoElement {
-    let top = below_titlebar();
+/// A drop-down fading in and sliding down from its button to `top` as it opens.
+fn drop_down(panel: gpui::Stateful<gpui::Div>, top: Pixels) -> impl IntoElement {
     panel.with_animation(
         "drop-down-open",
         Animation::new(motion::MENU_OPEN),
@@ -204,14 +206,18 @@ impl MainView {
     ) -> Option<AnyElement> {
         let theme = Theme::get(cx).clone();
         let overlay = self.overlay.as_ref()?;
-        let anchored = matches!(overlay, Overlay::Workspaces);
+        let anchored = matches!(
+            overlay,
+            Overlay::Workspaces | Overlay::FoldedTokens { .. } | Overlay::Display
+        );
         let sheet = matches!(overlay, Overlay::Settings(_)).then(|| sheet_size(window));
         let panel: AnyElement = match overlay {
             Overlay::Settings(panel) => panel.clone().into_any_element(),
             Overlay::Folder(editor) => editor.clone().into_any_element(),
             Overlay::AddLink(panel) => panel.clone().into_any_element(),
-            Overlay::ViewOptions => self.view_options(cx).into_any_element(),
+            Overlay::Display => self.display_popover(cx).into_any_element(),
             Overlay::Workspaces => self.workspace_switcher(cx).into_any_element(),
+            Overlay::FoldedTokens { .. } => self.folded_tokens_popover(cx).into_any_element(),
             Overlay::DeleteFolder(id) => self.delete_folder_prompt(*id, cx).into_any_element(),
             // Not a panel: the viewer fills the window with its own backdrop.
             Overlay::Viewer(viewer) => {
@@ -245,78 +251,24 @@ impl MainView {
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
             );
-        let scrim = if anchored {
+        let scrim = if let Some(Overlay::Display) = self.overlay {
+            let show_detail = self.detail_open && self.selected.is_some();
+            let (top, right) = display::popover_anchor(show_detail, window);
             scrim.child(drop_down(
-                panel
-                    .absolute()
-                    .left(workspace_menu_left(SWITCHER_MARK_INSET)),
+                panel.rounded(px(14.)).absolute().right(right),
+                top,
             ))
+        } else if let Some(Overlay::FoldedTokens { left }) = self.overlay {
+            let top = MARGIN + px(PILL_HEIGHT) + px(6.);
+            scrim.child(drop_down(panel.rounded(px(14.)).absolute().left(left), top))
+        } else if anchored {
+            let left = workspace_menu_left(SWITCHER_MARK_INSET);
+            scrim.child(drop_down(panel.absolute().left(left), below_titlebar()))
         } else if sheet.is_some() {
             scrim.child(panel.absolute().top(below_titlebar()).left(SHEET_INSET))
         } else {
             scrim.flex().items_center().justify_center().child(panel)
         };
         Some(deferred(scrim).with_priority(1).into_any_element())
-    }
-
-    fn view_options(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
-        let theme = Theme::get(cx).clone();
-        let settings = SettingsFile::get(cx).clone();
-        let row = |label: String, id: &'static str, on: bool| {
-            div()
-                .flex()
-                .items_center()
-                .gap_3()
-                .text_sm()
-                .child(div().flex_1().child(label))
-                .child(Switch::new(id).checked(on))
-        };
-        div()
-            .w(px(300.))
-            .p_5()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.faint)
-                    .child(t!("main-view-options-title")),
-            )
-            .child(
-                row(
-                    t!("main-view-options-summaries"),
-                    "show-summaries",
-                    settings.show_summaries,
-                )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| {
-                        let on = !SettingsFile::get(cx).show_summaries;
-                        this.set_show_summaries(on, cx);
-                    }),
-                ),
-            )
-            .child(
-                row(
-                    t!("main-view-options-up-next"),
-                    "show-up-next",
-                    settings.show_up_next,
-                )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|_, _, _, cx| {
-                        SettingsFile::update(cx, |s| s.show_up_next = !s.show_up_next);
-                        cx.notify();
-                    }),
-                ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(theme.muted)
-                    .child(t!("main-view-options-about")),
-            )
     }
 }

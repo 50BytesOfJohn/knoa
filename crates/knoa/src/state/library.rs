@@ -2,6 +2,8 @@
 //! results, sidebar counts, folders and tags. Every database call runs on the background
 //! executor.
 
+mod load;
+
 use std::{
     collections::BTreeMap,
     sync::Arc,
@@ -9,19 +11,17 @@ use std::{
 };
 
 use gpui::{AppContext as _, Context, EventEmitter, Task};
-use knoa_core::{
-    Bookmark, BookmarkId, Folder, FolderTree, Kind, Place, Query, Workspace, WorkspaceId,
-};
+use knoa_core::{Bookmark, BookmarkId, Folder, FolderTree, Place, Query, Workspace, WorkspaceId};
 use knoa_store::{AddedLink, Counts, NewLink, Store};
 
-use crate::{
-    i18n,
-    state::{batch::Batch, database::Database, settings::SettingsFile},
+use crate::state::{
+    batch::Batch,
+    database::Database,
+    facets::{BaseFacets, ResultFacets},
+    search::Search,
+    settings::SettingsFile,
 };
-
-/// Enough for any personal library to stay fully browsable; masonry layout of this many
-/// cards is a few milliseconds.
-const RESULT_LIMIT: usize = 20_000;
+use load::{Base, Loaded, Request};
 
 /// Background refreshes wait at least this long, so a burst of changes shows as one.
 const MIN_REFRESH_WAIT: Duration = Duration::from_millis(500);
@@ -37,11 +37,14 @@ pub struct Library {
     workspaces: Vec<Workspace>,
     workspace_sync_ids: BTreeMap<WorkspaceId, String>,
     place: Place,
-    /// The search with `kind:` filters as slugs, whatever language they were typed in.
-    search: String,
-    kind: Option<Kind>,
+    search: Search,
     results: Arc<Vec<Bookmark>>,
-    kind_counts: Vec<(Kind, usize)>,
+    result_facets: ResultFacets,
+    /// Counts for the search without its typed text, and the query they were taken for.
+    base_query: Option<Query>,
+    base_facets: Arc<BaseFacets>,
+    /// The library changed since `base_facets` were counted.
+    base_stale: bool,
     counts: Counts,
     /// The organizing queue's current run, followed through `counts.organizing`.
     batch: Batch,
@@ -82,10 +85,12 @@ impl Library {
             workspaces: Vec::new(),
             workspace_sync_ids: BTreeMap::new(),
             place: Place::Everything,
-            search: String::new(),
-            kind: None,
+            search: Search::default(),
             results: Arc::default(),
-            kind_counts: Vec::new(),
+            result_facets: ResultFacets::default(),
+            base_query: None,
+            base_facets: Arc::default(),
+            base_stale: true,
             counts: Counts::default(),
             batch: Batch::default(),
             folders: FolderTree::default(),
@@ -127,7 +132,8 @@ impl Library {
         if self.workspace != id {
             self.workspace = id;
             self.place = Place::Everything;
-            self.kind = None;
+            // Tags and folders differ per workspace, so the search wouldn't carry over.
+            self.search = Search::default();
             SettingsFile::update(cx, |s| s.current_workspace = Some(id.0));
             self.refresh(cx);
         }
@@ -137,20 +143,21 @@ impl Library {
         self.place
     }
 
-    pub fn search(&self) -> &str {
+    pub fn search(&self) -> &Search {
         &self.search
-    }
-
-    pub fn kind(&self) -> Option<Kind> {
-        self.kind
     }
 
     pub fn results(&self) -> Arc<Vec<Bookmark>> {
         self.results.clone()
     }
 
-    pub fn kind_counts(&self) -> &[(Kind, usize)] {
-        &self.kind_counts
+    pub fn result_facets(&self) -> &ResultFacets {
+        &self.result_facets
+    }
+
+    /// Counts within the search's tokens and place, without its typed text.
+    pub fn base_facets(&self) -> &BaseFacets {
+        &self.base_facets
     }
 
     pub fn counts(&self) -> Counts {
@@ -196,56 +203,36 @@ impl Library {
         }
     }
 
+    /// Keeps the search: the place is its scope, one part of it.
     pub fn set_place(&mut self, place: Place, cx: &mut Context<'_, Library>) {
         if self.place != place {
             self.place = place;
-            self.kind = None;
             self.refresh(cx);
         }
     }
 
-    /// Kind names are read in the language of the moment and kept as slugs, so the
-    /// search means the same after a language switch.
-    pub fn set_search(&mut self, text: &str, cx: &mut Context<'_, Library>) {
-        let search = i18n::with_kind_slugs(text);
+    pub fn set_search(&mut self, search: Search, cx: &mut Context<'_, Library>) {
         if self.search != search {
             self.search = search;
-            self.refresh(cx);
+            self.reload(cx);
         }
     }
 
-    pub fn set_kind(&mut self, kind: Option<Kind>, cx: &mut Context<'_, Library>) {
-        if self.kind != kind {
-            self.kind = kind;
-            self.refresh(cx);
-        }
-    }
-
-    fn query(&self) -> Query {
-        let mut query = Query::parse(&self.search, Some(self.workspace), self.place);
-        if self.kind.is_some() {
-            query.kind = self.kind;
-        }
-        query
-    }
-
-    /// Re-runs the query now. The previous refresh, if still running, is dropped.
+    /// Re-runs the query now, for a change to the library. The previous refresh, if still
+    /// running, is dropped.
     pub fn refresh(&mut self, cx: &mut Context<'_, Library>) {
+        self.base_stale = true;
+        self.reload(cx);
+    }
+
+    /// Re-runs the query now; the base counts only when they could have changed.
+    fn reload(&mut self, cx: &mut Context<'_, Library>) {
         let database = self.database.clone();
-        let query = self.query();
-        let (workspace, selected) = (self.workspace, self.selected);
-        let current = self.results.clone();
+        let request = self.request();
         let load = cx.background_spawn(async move {
             let started = Instant::now();
-            let loaded = database
-                .read()
-                .snapshot(|store| load(store, workspace, &query, selected));
-            let took = started.elapsed();
-            let loaded = loaded.map(|loaded| Loaded {
-                results: same_or_fresh(current, loaded.results),
-                ..loaded
-            });
-            (loaded, took)
+            let loaded = database.read().snapshot(|store| load::load(store, request));
+            (loaded, started.elapsed())
         });
         self.refresh_pending = false;
         self.refresh = Some(cx.spawn(async move |this, cx| {
@@ -313,6 +300,24 @@ impl Library {
         })
     }
 
+    fn request(&self) -> Request {
+        let base_query = self.search.base_query(self.workspace, self.place);
+        let base = if self.search.typed.trim().is_empty() {
+            Base::Results(base_query)
+        } else if !self.base_stale && self.base_query.as_ref() == Some(&base_query) {
+            Base::Keep(base_query, self.base_facets.clone())
+        } else {
+            Base::Search(base_query)
+        };
+        Request {
+            workspace: self.workspace,
+            query: self.search.query(self.workspace, self.place),
+            selected: self.selected,
+            base,
+            current: self.results.clone(),
+        }
+    }
+
     fn apply(&mut self, loaded: Loaded, cx: &mut Context<'_, Library>) {
         let browsers_changed = browser_map(&self.workspaces) != browser_map(&loaded.workspaces);
         self.workspaces = loaded.workspaces;
@@ -328,7 +333,12 @@ impl Library {
             return;
         }
         self.results = loaded.results;
-        self.kind_counts = loaded.kind_counts;
+        self.result_facets = loaded.result_facets;
+        self.base_query = Some(loaded.base_query);
+        self.base_facets = loaded.base_facets;
+        if loaded.base_fresh {
+            self.base_stale = false;
+        }
         self.counts = loaded.counts;
         self.batch.update(self.counts.organizing);
         if self.folders != loaded.folders {
@@ -357,51 +367,9 @@ fn refresh_wait(last_load: Duration) -> Duration {
         .clamp(MIN_REFRESH_WAIT, MAX_REFRESH_WAIT)
 }
 
-/// The list already shown when nothing in it changed, so the card layout, cached by the
-/// list's address, survives refreshes that only touched counts, folders or tags.
-fn same_or_fresh(current: Arc<Vec<Bookmark>>, fresh: Arc<Vec<Bookmark>>) -> Arc<Vec<Bookmark>> {
-    if current == fresh { current } else { fresh }
-}
-
 fn browser_map(workspaces: &[Workspace]) -> Vec<(WorkspaceId, &[String])> {
     workspaces
         .iter()
         .map(|w| (w.id, w.browsers.as_slice()))
         .collect()
-}
-
-struct Loaded {
-    workspaces: Vec<Workspace>,
-    workspace_sync_ids: BTreeMap<WorkspaceId, String>,
-    results: Arc<Vec<Bookmark>>,
-    kind_counts: Vec<(Kind, usize)>,
-    counts: Counts,
-    folders: FolderTree,
-    tags: Vec<(String, usize)>,
-    /// The bookmark `selected` was loaded for: `None` there means it no longer exists.
-    selected_id: Option<BookmarkId>,
-    selected: Option<Bookmark>,
-}
-
-fn load(
-    store: &Store,
-    workspace: WorkspaceId,
-    query: &Query,
-    selected_id: Option<BookmarkId>,
-) -> knoa_store::Result<Loaded> {
-    let selected = match selected_id {
-        Some(id) => store.bookmark(id)?,
-        None => None,
-    };
-    Ok(Loaded {
-        workspaces: store.workspaces()?,
-        workspace_sync_ids: store.workspace_sync_ids()?,
-        results: Arc::new(store.search(query, RESULT_LIMIT)?),
-        kind_counts: store.kind_counts(query)?,
-        counts: store.counts(workspace)?,
-        folders: store.folders(workspace)?,
-        tags: store.tags(workspace)?,
-        selected_id,
-        selected,
-    })
 }

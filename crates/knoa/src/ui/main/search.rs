@@ -1,25 +1,72 @@
-//! The floating search pill and the kind chips under it.
+//! The search at the top of the library: the pill with its tokens and suggestions, and
+//! the refine row under it. Every change to the search goes through [`MainView::set_search`].
 
-use gpui::{
-    Context, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
-};
-use gpui_component::input::Input;
-use knoa_core::{Kind, Place};
+mod choose;
+mod derived;
+mod folded;
+mod keys;
+mod labels;
+mod pill;
+mod refine;
+mod suggest;
+mod suggestions;
+mod tokens;
 
-use super::{MainView, Overlay};
-use crate::{
-    i18n::{self, t},
-    ui::{
-        components::icon,
-        theme::{MARGIN, Theme},
-    },
-};
+use std::rc::Rc;
+
+use derived::Derived;
+use gpui::{Context, Entity, IntoElement, ParentElement as _, Styled as _, Window, div, px};
+use gpui_component::input::{InputEvent, InputState};
+use knoa_core::Place;
+
+use super::{MainView, overlay::Overlay};
+use crate::{i18n::t, state::search::Search, ui::theme::MARGIN};
 
 pub const PILL_HEIGHT: f32 = 50.;
 const PILL_MAX_WIDTH: f32 = 620.;
+const PILL_MIN_WIDTH: f32 = 200.;
 /// The pill, the chips under it and the space before the first card.
 pub const SEARCH_AREA_HEIGHT: f32 = PILL_HEIGHT + 52.;
+/// What the corner capsule takes at the content's right edge, with the space kept
+/// between it and the pill. Kept free on both sides so the pill stays centred.
+const CAPSULE_ROOM: f32 = 36. + 16.;
+
+/// A token in the pill: the scope (the place) or one of the search's tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Slot {
+    Scope,
+    Token(usize),
+}
+
+/// What the pill remembers between frames.
+#[derive(Default)]
+pub(super) struct PillState {
+    /// The token the first ⌫ on an empty input selected; the next ⌫ removes it.
+    selected: Option<Slot>,
+    /// How many of the oldest tokens fold into "+N", as last drawn.
+    folded: usize,
+    /// Whether the search icon is gone, as last drawn, and how many times it went or came
+    /// back: each turn plays its animation once.
+    icon_hidden: bool,
+    icon_turns: usize,
+    /// The highlighted suggestion row. Each change to the typed text starts it over on
+    /// "Search for".
+    highlight: usize,
+    /// Whether "More" opened the refine row, until the search or the place changes.
+    refine_expanded: bool,
+    refine_choices: Derived<Rc<[refine::Choice]>>,
+    suggestion_rows: Derived<Rc<[suggest::Row]>>,
+    /// Whether the input shows its placeholder, as last set; `None` to set it again.
+    placeholder: Option<bool>,
+}
+
+impl PillState {
+    /// Drops what was worked out from the library, for new results or a new language.
+    pub(super) fn forget_derived(&mut self) {
+        self.refine_choices.forget();
+        self.suggestion_rows.forget();
+    }
+}
 
 impl MainView {
     pub(super) fn render_search(
@@ -28,89 +75,13 @@ impl MainView {
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) -> impl IntoElement {
-        let theme = Theme::get(cx).clone();
         let (left, right) = super::content::content_span(window, show_detail);
-        let width = (right - left - 40.).min(PILL_MAX_WIDTH);
-        let library = self.library.read(cx);
-        let total = library.results().len();
-        let scope = match library.place() {
-            Place::Everything => None,
-            Place::Gallery => Some(t!("main-place-gallery")),
-            Place::Events => Some(t!("main-place-events")),
-            Place::UpNext => Some(t!("main-place-up-next")),
-            Place::Unsorted => Some(t!("main-place-unsorted")),
-            Place::NotOrganized => Some(t!("main-place-not-organized")),
-            Place::SetAside => Some(t!("main-place-set-aside")),
-            Place::Trash => Some(t!("main-place-trash")),
-            Place::Folder(id) => {
-                let tree = library.folder_tree();
-                tree.get(id).map(|_| tree.path_name(id))
-            }
-        };
-        let searching = !library.search().is_empty();
-
+        let (offset, width) = pill_frame(right - left);
+        let pill_left = left + offset;
         let pill = div()
-            .id("search-pill")
-            .key_context("SearchBar")
-            .capture_key_down(cx.listener(Self::search_keys))
-            .w(px(width))
-            .h(px(PILL_HEIGHT))
-            .px_4()
-            .flex()
-            .items_center()
-            .gap_2p5()
-            .rounded_full()
-            .bg(theme.panel)
-            .border_1()
-            .border_color(theme.hairline)
-            .shadow_md()
-            .child(icon("search", px(17.), theme.muted))
-            .when_some(scope, |s, scope| {
-                s.child(
-                    div()
-                        .flex_none()
-                        .px_2()
-                        .h(px(24.))
-                        .flex()
-                        .items_center()
-                        .rounded_full()
-                        .bg(theme.soft)
-                        .text_xs()
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(scope),
-                )
-            })
-            .child(
-                div()
-                    .flex_1()
-                    .child(Input::new(&self.search).appearance(false).cleanable(false)),
-            )
-            .when(searching, |s| {
-                s.child(
-                    div()
-                        .flex_none()
-                        .text_xs()
-                        .text_color(theme.muted)
-                        .child(t!("main-search-found", count = total)),
-                )
-            })
-            .child(
-                div()
-                    .id("view-options")
-                    .flex_none()
-                    .size(px(30.))
-                    .rounded_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover))
-                    .child(icon("sliders-horizontal", px(16.), theme.muted))
-                    .on_click(
-                        cx.listener(|this, _, _, cx| this.open_overlay(Overlay::ViewOptions, cx)),
-                    ),
-            );
-
+            .relative()
+            .child(self.render_pill(pill_left, width, window, cx))
+            .children(self.render_suggestions(width, window, cx));
         div()
             .absolute()
             .top(MARGIN)
@@ -120,14 +91,16 @@ impl MainView {
             .flex_col()
             .items_center()
             .gap_2()
-            .child(pill)
-            .child(self.kind_chips(cx))
+            .child(div().w_full().pl(px(offset)).child(pill))
+            .child(self.render_refine(right - left - 40., window, cx))
     }
 
-    /// After a language switch, what inputs keep rather than draw: their placeholders, and
-    /// the search's `kind:` filters, in the new language's names.
+    /// After a language switch, what inputs keep rather than draw: their placeholders.
+    /// Tokens draw their labels each frame.
     pub(super) fn translate(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        self.translate_search(window, cx);
+        self.pill.placeholder = None;
+        self.pill.forget_derived();
+        self.sync_input(window, cx);
         if let Some(edits) = &self.tag_edits {
             edits.translate(window, cx);
         }
@@ -136,104 +109,130 @@ impl MainView {
         }
     }
 
-    /// The search itself doesn't change: its kinds are kept as slugs.
-    fn translate_search(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let search = self.library.read(cx).search().to_owned();
-        self.search.update(cx, |input, cx| {
-            input.set_placeholder(t!("main-search-placeholder"), window, cx);
-            if i18n::with_kind_slugs(&input.value()) != search {
-                input.set_value(i18n::with_kind_names(&search), window, cx);
-            }
-        });
-    }
-
-    fn kind_chips(&self, cx: &mut Context<'_, MainView>) -> impl IntoElement {
-        let theme = Theme::get(cx).clone();
-        let library = self.library.read(cx);
-        let current = library.kind();
-        let counts = library.kind_counts().to_vec();
-        let chip = |id: &'static str, label: String, active: bool| {
-            div()
-                .id(id)
-                .h(px(28.))
-                .px_3()
-                .flex()
-                .items_center()
-                .rounded_full()
-                .text_xs()
-                .cursor_pointer()
-                .font_weight(FontWeight::MEDIUM)
-                .map(|s| {
-                    if active {
-                        s.bg(theme.text).text_color(theme.panel)
-                    } else {
-                        s.bg(theme.panel.opacity(0.7))
-                            .text_color(theme.muted)
-                            .hover(|s| s.bg(theme.panel))
-                    }
-                })
-                .child(label)
-        };
-        let mut row = div().flex().flex_wrap().justify_center().gap_1p5();
-        // The Gallery holds media kinds only, so choosing among them says little.
-        let in_gallery = library.place() == Place::Gallery;
-        if !in_gallery && (counts.len() > 1 || current.is_some()) {
-            row = row.child(
-                chip("kind-all", t!("main-kind-all"), current.is_none()).on_click(cx.listener(
-                    |this, _, _, cx| {
-                        this.library
-                            .update(cx, |library, cx| library.set_kind(None, cx));
-                    },
-                )),
-            );
-            for (kind, count) in counts {
-                row = row.child(
-                    chip(
-                        kind.slug(),
-                        t!(
-                            "main-kind-chip",
-                            kind = (i18n::kind_plural(kind)),
-                            count = count
-                        ),
-                        current == Some(kind),
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        let kind: Option<Kind> =
-                            (this.library.read(cx).kind() != Some(kind)).then_some(kind);
-                        this.library
-                            .update(cx, |library, cx| library.set_kind(kind, cx));
-                    })),
-                );
-            }
-        }
-        row
-    }
-
-    /// Escape and ↓ leave the search field for the cards.
-    fn search_keys(
+    /// The one way the UI changes the search: the input shows its typed text, the
+    /// placeholder shows only without tokens, and the cards scroll back to the top.
+    pub(super) fn set_search(
         &mut self,
-        event: &KeyDownEvent,
+        search: Search,
         window: &mut Window,
         cx: &mut Context<'_, MainView>,
     ) {
-        match event.keystroke.key.as_str() {
-            "down" => {
-                self.select_first(cx);
-                self.cards_focus.focus(window, cx);
-                cx.stop_propagation();
+        if self.library.read(cx).search().typed != search.typed {
+            self.pill.highlight = 0;
+        }
+        if *self.library.read(cx).search() != search {
+            self.pill.refine_expanded = false;
+        }
+        self.pill.selected = None;
+        self.library
+            .update(cx, |library, cx| library.set_search(search, cx));
+        self.sync_input(window, cx);
+        self.scroll.set_offset(gpui::point(px(0.), px(0.)));
+        cx.notify();
+    }
+
+    pub(super) fn on_search_event(
+        &mut self,
+        _: &Entity<InputState>,
+        event: &InputEvent,
+        window: &mut Window,
+        cx: &mut Context<'_, MainView>,
+    ) {
+        match event {
+            InputEvent::Change => self.on_search_input(window, cx),
+            // Only one thing drops down at a time.
+            InputEvent::Focus if matches!(self.overlay, Some(Overlay::Display)) => {
+                self.set_overlay(None, cx);
             }
-            "escape" => {
-                if self.search.read(cx).value().is_empty() {
-                    self.cards_focus.focus(window, cx);
-                } else {
-                    self.search
-                        .update(cx, |input, cx| input.set_value("", window, cx));
-                    self.library
-                        .update(cx, |library, cx| library.set_search("", cx));
-                }
-                cx.stop_propagation();
-            }
-            _ => {}
+            // The pill draws its focus ring and opens or closes the suggestions.
+            InputEvent::Focus | InputEvent::Blur => cx.notify(),
+            // The pill's keys take ↵ before the input does.
+            InputEvent::PressEnter { .. } => {}
         }
     }
+
+    /// Reads what was typed into the search, turning complete syntax words into tokens.
+    fn on_search_input(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let text = self.search.read(cx).value().to_string();
+        let mut search = self.library.read(cx).search().clone();
+        search.take_input(&text);
+        self.set_search(search, window, cx);
+    }
+
+    /// Clears the typed text and every token; the place stays.
+    pub(super) fn clear_search(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.set_search(Search::default(), window, cx);
+    }
+
+    /// The pill's ×: the text, the tokens and the scope.
+    fn clear_all(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.clear_search(window, cx);
+        self.show_place(Place::Everything, cx);
+        self.focus_pill(window, cx);
+    }
+
+    /// Takes a token out of the search. The scope goes by showing Everything, so the
+    /// sidebar follows.
+    fn remove_token(&mut self, slot: Slot, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        match slot {
+            Slot::Scope => {
+                self.pill.selected = None;
+                self.show_place(Place::Everything, cx);
+            }
+            Slot::Token(index) => {
+                let mut search = self.library.read(cx).search().clone();
+                if index < search.tokens.len() {
+                    search.tokens.remove(index);
+                    self.set_search(search, window, cx);
+                }
+            }
+        }
+    }
+
+    /// Folds the refine row back to one line. Returns whether it was open.
+    pub(super) fn collapse_refine(&mut self, cx: &mut Context<'_, MainView>) -> bool {
+        let was_open = std::mem::take(&mut self.pill.refine_expanded);
+        if was_open {
+            cx.notify();
+        }
+        was_open
+    }
+
+    pub(super) fn focus_pill(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.search.update(cx, |input, cx| input.focus(window, cx));
+    }
+
+    /// The input shows the search's typed text, and the placeholder only without tokens.
+    /// Also for changes the library makes itself, as switching workspaces does.
+    pub(super) fn sync_input(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let search = self.library.read(cx).search();
+        let (typed, placeholder) = (search.typed.clone(), search.tokens.is_empty());
+        if self.search.read(cx).value() != typed.as_str() {
+            self.search
+                .update(cx, |input, cx| input.set_value(typed, window, cx));
+        }
+        if self.pill.placeholder != Some(placeholder) {
+            self.pill.placeholder = Some(placeholder);
+            let text = if placeholder {
+                t!("main-search-placeholder")
+            } else {
+                String::new()
+            };
+            self.search
+                .update(cx, |input, cx| input.set_placeholder(text, window, cx));
+        }
+    }
+}
+
+/// Where the pill goes in a content span `span` wide: its offset from the span's left
+/// and its width. Centred, with the capsule's room kept free on both sides; when that
+/// leaves too little, it gives up the room on the left first, then shrinks, but never
+/// reaches into the capsule's.
+fn pill_frame(span: f32) -> (f32, f32) {
+    let centred = PILL_MAX_WIDTH.min(span - 2. * CAPSULE_ROOM);
+    if centred >= PILL_MIN_WIDTH {
+        return ((span - centred) / 2., centred);
+    }
+    let width = PILL_MIN_WIDTH.min(span - CAPSULE_ROOM).max(0.);
+    ((span - CAPSULE_ROOM - width).max(0.), width)
 }

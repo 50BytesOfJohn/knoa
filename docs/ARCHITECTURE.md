@@ -273,7 +273,13 @@ Keychain in release-channel builds and in a plain file in dev builds
   prefix matching and BM25 ranking.
 - A `Query` in `knoa-core` combines text with filters (kind, site, folder, tag, field
   comparisons such as `runtime > 2h`; dates and date-times compare by their date prefix,
-  `starts>2026-12-01`). `knoa-store` turns it into SQL. The search bar edits this `Query`.
+  `starts>2026-12-01`). `knoa-store` turns it into SQL. `Filter` in `knoa-core` is the
+  one source of the search syntax: it parses a word (`#pasta`, `kind:recipe`) and writes
+  it back.
+- The search pill holds tokens (filters and locked-in words) plus the text being typed;
+  together with the place they make the `Query`. The library counts kinds, tags, sites,
+  folders and field values of the results on the background executor, so suggestions and
+  the refine row only filter those counts as the user types.
 - `Place::Events`, like the Gallery, is device-side and not part of the sync protocol: the
   workspace's bookmarks of kind event, soonest `starts` first and undated ones last.
 
@@ -281,9 +287,11 @@ Keychain in release-channel builds and in a plain file in dev builds
 
 - Main screen: a floating sidebar (workspace and add-link buttons beside the traffic
   lights, places, folders, a status card for the AI and sync, and the account menu and
-  settings in its footer), a floating search pill with kind chips, masonry cards grouped
+  settings in its footer), a floating search pill with tokens, suggestions and a refine row
+  under it, a Display button in the top right corner, masonry cards grouped
   by date with a date rail, and a floating detail panel. The approved layout is in the
-  [main screen design](design/main-screen.md) and the [sidebar design](design/sidebar.md);
+  [main screen design](design/main-screen.md), the [sidebar design](design/sidebar.md) and the
+  [top bar design](design/top-bar.md) (first build done);
   the research behind it is in [research](research/main-screen.md).
 - The sidebar and the main view are sibling views, each drawn from its own cache, so the
   sidebar's hovers and animations never rebuild the cards. The sidebar redraws for a

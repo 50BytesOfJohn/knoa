@@ -105,7 +105,7 @@ impl MainView {
         let show_summaries = Self::show_summaries(cx);
         let arrangement = Arrangement::of(library.place());
         // Relevance order has no dates to group by.
-        let by_date = library.search().is_empty() && arrangement == Arrangement::Cards;
+        let by_date = !library.search().has_text() && arrangement == Arrangement::Cards;
         let preferred = if show_detail { 3 } else { 4 };
         let columns = preferred
             .min(((width + GAP) / (MIN_COLUMN_WIDTH + GAP)).floor() as usize)

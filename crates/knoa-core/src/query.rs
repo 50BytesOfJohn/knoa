@@ -1,8 +1,12 @@
 //! What the library shows: a place, free text and typed filters, parsed from the search bar.
 
+mod filter;
+
 use serde_json::Value;
 
-use crate::{FieldType, FolderId, Kind, WorkspaceId, field::parse_minutes};
+pub use filter::Filter;
+
+use crate::{FolderId, Kind, WorkspaceId};
 
 /// The sidebar selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -59,7 +63,7 @@ pub enum Comparison {
 }
 
 impl Query {
-    /// Parses search bar input. Tokens with a known prefix become filters, the rest is text:
+    /// Parses search bar input. Words with known syntax become filters, the rest is text:
     /// `kind:movie`, `site:github.com`, `#noir`, `runtime>2h`, `year:1999`.
     pub fn parse(input: &str, workspace: Option<WorkspaceId>, place: Place) -> Query {
         let mut query = Query {
@@ -68,9 +72,10 @@ impl Query {
             ..Query::default()
         };
         let mut words = Vec::new();
-        for token in input.split_whitespace() {
-            if !query.apply_filter(token) {
-                words.push(token);
+        for word in input.split_whitespace() {
+            match Filter::parse(word) {
+                Some(filter) => query.apply(filter),
+                None => words.push(word),
             }
         }
         query.text = words.join(" ");
@@ -85,60 +90,13 @@ impl Query {
             || !self.fields.is_empty()
     }
 
-    fn apply_filter(&mut self, token: &str) -> bool {
-        if let Some(tag) = token.strip_prefix('#').filter(|t| !t.is_empty()) {
-            self.tags.push(tag.to_lowercase());
-            return true;
-        }
-        let Some((name, op, value)) = split_comparison(token) else {
-            return false;
-        };
-        match (name.as_str(), op) {
-            ("kind", Comparison::Matches) => match Kind::parse(value) {
-                Some(kind) => self.kind = Some(kind),
-                None => return false,
-            },
-            ("site", Comparison::Matches) => self.sites.push(value.to_lowercase()),
-            ("tag", Comparison::Matches) => self.tags.push(value.to_lowercase()),
-            _ => match field_type(&name) {
-                Some(ty) => match filter_value(ty, value) {
-                    Some(value) => self.fields.push(FieldFilter { name, op, value }),
-                    None => return false,
-                },
-                None => return false,
-            },
-        }
-        true
-    }
-}
-
-fn split_comparison(token: &str) -> Option<(String, Comparison, &str)> {
-    let index = token.find([':', '>', '<'])?;
-    let (name, rest) = token.split_at(index);
-    let op = match rest.as_bytes()[0] {
-        b'>' => Comparison::Greater,
-        b'<' => Comparison::Less,
-        _ => Comparison::Matches,
-    };
-    let value = &rest[1..];
-    (!name.is_empty() && !value.is_empty()).then(|| (name.to_lowercase(), op, value))
-}
-
-/// Field names are shared across kinds with the same meaning (`duration`, `year`), so the
-/// first kind that defines a name decides its type.
-fn field_type(name: &str) -> Option<FieldType> {
-    Kind::ALL
-        .into_iter()
-        .find_map(|kind| kind.field(name))
-        .map(|def| def.ty)
-}
-
-fn filter_value(ty: FieldType, text: &str) -> Option<Value> {
-    match ty {
-        FieldType::Duration => parse_minutes(text).map(Value::from),
-        FieldType::Integer | FieldType::Number => text.parse::<f64>().ok().map(Value::from),
-        FieldType::Text | FieldType::List | FieldType::Date | FieldType::DateTime => {
-            Some(Value::from(text.replace('_', " ")))
+    /// Narrows the query by `filter`. A kind replaces the one already set.
+    pub fn apply(&mut self, filter: Filter) {
+        match filter {
+            Filter::Kind(kind) => self.kind = Some(kind),
+            Filter::Tag(tag) => self.tags.push(tag),
+            Filter::Site(site) => self.sites.push(site),
+            Filter::Field(field) => self.fields.push(field),
         }
     }
 }
@@ -168,6 +126,33 @@ mod tests {
                 value: json!(120)
             }]
         );
+    }
+
+    #[test]
+    fn typed_filters_parse_back() {
+        let filters = [
+            Filter::Kind(Kind::Recipe),
+            Filter::Tag("pasta".into()),
+            Filter::Site("youtube.com".into()),
+            Filter::Field(FieldFilter {
+                name: "director".into(),
+                op: Comparison::Matches,
+                value: json!("Christopher Nolan"),
+            }),
+            Filter::Field(FieldFilter {
+                name: "runtime".into(),
+                op: Comparison::Greater,
+                value: json!(120),
+            }),
+            Filter::Field(FieldFilter {
+                name: "year".into(),
+                op: Comparison::Less,
+                value: json!(1999.0),
+            }),
+        ];
+        for filter in filters {
+            assert_eq!(Filter::parse(&filter.typed()), Some(filter));
+        }
     }
 
     #[test]

@@ -1,9 +1,10 @@
 //! Small building blocks shared by Knoa's views.
 
 use gpui::{
-    AnyElement, AnyView, App, Div, ElementId, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Svg,
-    Window, div, prelude::FluentBuilder as _, px, svg,
+    AnyElement, AnyView, App, Div, ElementId, FontFeatures, FontWeight, Hsla,
+    InteractiveElement as _, IntoElement, ParentElement as _, Pixels, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Svg, Window, div, prelude::FluentBuilder as _,
+    px, svg,
 };
 use gpui_component::tooltip::Tooltip;
 use knoa_browser::{Browser, FULL_DISK_ACCESS_SETTINGS};
@@ -21,6 +22,26 @@ const FOLDER_TINT: f32 = 0.18;
 /// An emoji's font size against its box. Emoji fill their em square, while the glyphs
 /// keep a margin inside theirs, so a full-size emoji looks larger beside them.
 const EMOJI_SCALE: f32 = 0.85;
+
+/// How wide `text` draws in the window's font at `size` and `weight`, for laying out
+/// chips before they are drawn. GPUI caches the shaped line for the frame.
+pub fn text_width(text: &str, size: Pixels, weight: FontWeight, window: &Window) -> Pixels {
+    let mut style = window.text_style();
+    style.font_weight = weight;
+    let run = style.to_run(text.len());
+    window
+        .text_system()
+        .layout_line(text, size, &[run], None)
+        .width
+}
+
+/// Figures of one width, so counts in a column line up.
+pub fn tabular_figures() -> FontFeatures {
+    thread_local! {
+        static TNUM: FontFeatures = FontFeatures(std::sync::Arc::new(vec![("tnum".into(), 1)]));
+    }
+    TNUM.with(Clone::clone)
+}
 
 /// A Lucide icon by file name, e.g. `"bookmark"`.
 pub fn icon(name: &str, size: Pixels, color: Hsla) -> Svg {
@@ -154,7 +175,7 @@ pub fn button(
         .bg(bg)
         .text_color(fg)
         .text_sm()
-        .font_weight(gpui::FontWeight::MEDIUM)
+        .font_weight(FontWeight::MEDIUM)
         .cursor_pointer()
         .hover(move |s| s.bg(hover))
         .child(label.into())
@@ -215,7 +236,7 @@ pub fn site_mark(site: &str, size: Pixels, cx: &App) -> AnyElement {
         .justify_center()
         .text_color(gpui::white())
         .text_size(size * 0.55)
-        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .font_weight(FontWeight::SEMIBOLD)
         .child(letter.to_string())
         .into_any_element()
 }
@@ -276,7 +297,7 @@ pub fn workspace_mark(name: &str, color: Ink, size: Pixels, cx: &App) -> Div {
         .justify_center()
         .text_color(gpui::white())
         .text_size(size * 0.5)
-        .font_weight(gpui::FontWeight::BOLD)
+        .font_weight(FontWeight::BOLD)
         .child(initial)
 }
 
