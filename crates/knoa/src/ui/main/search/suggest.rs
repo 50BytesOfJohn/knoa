@@ -106,14 +106,32 @@ pub(super) fn suggestions(
         typed: 0..0,
         count: Some(results.len()),
     }];
-    let groups = [
-        kind_rows(&needle, search, base),
-        folder_rows(&needle, place, base, folders),
-        tag_rows(&needle, search, base, Group::Tags.max_rows()),
-        site_rows(&needle, search, base),
-        field_rows(&needle, search, base),
+    // Each group is looked through only while the budget has room, so a long list of
+    // field values isn't scanned once the tags have filled it.
+    let groups: [&dyn Fn(usize) -> Vec<Row>; 5] = [
+        &|budget| kind_rows(&needle, search, base, Group::Kinds.max_rows().min(budget)),
+        &|budget| {
+            folder_rows(
+                &needle,
+                place,
+                base,
+                folders,
+                Group::Folders.max_rows().min(budget),
+            )
+        },
+        &|budget| tag_rows(&needle, search, base, Group::Tags.max_rows().min(budget)),
+        &|budget| site_rows(&needle, search, base, Group::Sites.max_rows().min(budget)),
+        &|budget| field_rows(&needle, search, base, Group::Fields.max_rows().min(budget)),
     ];
-    rows.extend(groups.into_iter().flatten().take(MAX_FILTER_ROWS));
+    let mut budget = MAX_FILTER_ROWS;
+    for group_rows in groups {
+        if budget == 0 {
+            break;
+        }
+        let found = group_rows(budget);
+        budget -= found.len();
+        rows.extend(found);
+    }
     rows.extend(results.iter().take(MAX_BOOKMARK_ROWS).map(|bookmark| Row {
         action: Action::Open(bookmark.id),
         group: Some(Group::Bookmarks),
@@ -124,7 +142,7 @@ pub(super) fn suggestions(
     rows
 }
 
-fn kind_rows(needle: &str, search: &Search, base: &BaseFacets) -> Vec<Row> {
+fn kind_rows(needle: &str, search: &Search, base: &BaseFacets, max: usize) -> Vec<Row> {
     let applied = search.kind();
     base.kinds
         .iter()
@@ -141,12 +159,18 @@ fn kind_rows(needle: &str, search: &Search, base: &BaseFacets) -> Vec<Row> {
                 count,
             ))
         })
-        .take(Group::Kinds.max_rows())
+        .take(max)
         .collect()
 }
 
 /// Folders whose name, or any word in it, starts with the text.
-fn folder_rows(needle: &str, place: Place, base: &BaseFacets, folders: &FolderTree) -> Vec<Row> {
+fn folder_rows(
+    needle: &str,
+    place: Place,
+    base: &BaseFacets,
+    folders: &FolderTree,
+    max: usize,
+) -> Vec<Row> {
     folders
         .folders()
         .iter()
@@ -163,14 +187,14 @@ fn folder_rows(needle: &str, place: Place, base: &BaseFacets, folders: &FolderTr
                 count,
             ))
         })
-        .take(Group::Folders.max_rows())
+        .take(max)
         .collect()
 }
 
 fn tag_rows(needle: &str, search: &Search, base: &BaseFacets, max: usize) -> Vec<Row> {
     base.tags
         .iter()
-        .filter(|(tag, n)| *n > 0 && !search.contains(&Filter::Tag(tag.clone())))
+        .filter(|(tag, n)| *n > 0 && !search.has_tag(tag))
         .filter_map(|(tag, count)| {
             let typed = prefix(tag, needle)?;
             let action = Action::Add(Filter::Tag(tag.clone()));
@@ -180,10 +204,10 @@ fn tag_rows(needle: &str, search: &Search, base: &BaseFacets, max: usize) -> Vec
         .collect()
 }
 
-fn site_rows(needle: &str, search: &Search, base: &BaseFacets) -> Vec<Row> {
+fn site_rows(needle: &str, search: &Search, base: &BaseFacets, max: usize) -> Vec<Row> {
     base.sites
         .iter()
-        .filter(|(site, n)| *n > 0 && !search.contains(&Filter::Site(site.clone())))
+        .filter(|(site, n)| *n > 0 && !search.has_site(site))
         .filter_map(|(site, count)| {
             let typed = prefix(site, needle)?;
             let action = Action::Add(Filter::Site(site.clone()));
@@ -195,12 +219,12 @@ fn site_rows(needle: &str, search: &Search, base: &BaseFacets) -> Vec<Row> {
                 *count,
             ))
         })
-        .take(Group::Sites.max_rows())
+        .take(max)
         .collect()
 }
 
 /// "Director: Christopher Nolan", for values of text and list fields.
-fn field_rows(needle: &str, search: &Search, base: &BaseFacets) -> Vec<Row> {
+fn field_rows(needle: &str, search: &Search, base: &BaseFacets, max: usize) -> Vec<Row> {
     let mut rows = Vec::new();
     for (name, values) in &base.fields {
         let Some(def) = Kind::ALL.into_iter().find_map(|kind| kind.field(name)) else {
@@ -233,7 +257,7 @@ fn field_rows(needle: &str, search: &Search, base: &BaseFacets) -> Vec<Row> {
                 typed,
                 *count,
             ));
-            if rows.len() == Group::Fields.max_rows() {
+            if rows.len() == max {
                 return rows;
             }
         }

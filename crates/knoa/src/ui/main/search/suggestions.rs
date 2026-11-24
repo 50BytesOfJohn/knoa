@@ -1,14 +1,15 @@
 //! The suggestion list under the pill while the user types: drawn over the cards without
 //! taking focus from the input, which keeps the keys.
 
+use std::rc::Rc;
+
 use gpui::{
     AnyElement, Context, Div, Focusable as _, FontWeight, HighlightStyle, InteractiveElement as _,
     IntoElement, MouseButton, ObjectFit, ParentElement as _, StatefulInteractiveElement as _,
     Styled as _, StyledImage as _, StyledText, Window, deferred, div, img,
     prelude::FluentBuilder as _, px,
 };
-use knoa_browser::Activation;
-use knoa_core::{Filter, Place};
+use knoa_core::Filter;
 
 use super::{
     MainView, PILL_HEIGHT,
@@ -16,7 +17,6 @@ use super::{
 };
 use crate::{
     i18n::t,
-    state::search::Token,
     ui::{
         components::{Finish, folder_mark, icon, kind_icon, site_mark, tabular_figures},
         theme::Theme,
@@ -29,21 +29,31 @@ const GAP_BELOW_PILL: f32 = 6.;
 impl MainView {
     /// The rows for what is typed now, or none while the list is closed: it is open while
     /// the pill has focus and holds typed text.
-    pub(super) fn suggestion_rows(&self, window: &Window, cx: &Context<'_, MainView>) -> Vec<Row> {
+    pub(super) fn suggestion_rows(
+        &mut self,
+        window: &Window,
+        cx: &Context<'_, MainView>,
+    ) -> Rc<[Row]> {
         let focused = self.search.read(cx).focus_handle(cx).is_focused(window);
         let library = self.library.read(cx);
         let search = library.search();
         if !focused || self.overlay.is_some() || search.typed.trim().is_empty() {
-            return Vec::new();
+            return Rc::default();
         }
-        suggestions(
-            &search.typed,
-            search,
-            library.place(),
-            library.base_facets(),
-            &library.results(),
-            library.folder_tree(),
-        )
+        let place = library.place();
+        let build = || {
+            let results = library.results();
+            let rows = suggestions(
+                &search.typed,
+                search,
+                place,
+                library.base_facets(),
+                &results,
+                library.folder_tree(),
+            );
+            rows.into()
+        };
+        self.pill.suggestion_rows.get(search, place, build).clone()
     }
 
     /// The list `width` wide under the pill, deferred so it floats over the cards.
@@ -212,82 +222,6 @@ impl MainView {
             },
             None => frame.into_any_element(),
         }
-    }
-
-    /// ↑ and ↓ move the highlight while the list is open. Returns whether it was.
-    pub(super) fn move_highlight(
-        &mut self,
-        down: bool,
-        window: &Window,
-        cx: &mut Context<'_, MainView>,
-    ) -> bool {
-        let count = self.suggestion_rows(window, cx).len();
-        if count == 0 {
-            return false;
-        }
-        let at = self.pill.highlight.min(count - 1);
-        self.pill.highlight = if down {
-            (at + 1) % count
-        } else {
-            (at + count - 1) % count
-        };
-        cx.notify();
-        true
-    }
-
-    /// ↵: the highlighted row. Returns whether the list was open.
-    pub(super) fn apply_highlighted(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) -> bool {
-        if self.suggestion_rows(window, cx).is_empty() {
-            return false;
-        }
-        self.apply_suggestion(self.pill.highlight, window, cx);
-        true
-    }
-
-    /// ⇥: the first kind, folder, tag, site or field row. Returns whether there was one.
-    pub(super) fn apply_first_filter(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) -> bool {
-        let rows = self.suggestion_rows(window, cx);
-        let Some(index) = rows.iter().position(Row::is_filter) else {
-            return false;
-        };
-        self.apply_suggestion(index, window, cx);
-        true
-    }
-
-    fn apply_suggestion(
-        &mut self,
-        index: usize,
-        window: &mut Window,
-        cx: &mut Context<'_, MainView>,
-    ) {
-        let Some(row) = self.suggestion_rows(window, cx).into_iter().nth(index) else {
-            return;
-        };
-        let mut search = self.library.read(cx).search().clone();
-        match row.action {
-            Action::SearchFor => search.lock_in_typed(),
-            Action::Add(filter) => {
-                search.typed.clear();
-                search.add(Token::Filter(filter));
-            }
-            Action::Folder(id) => {
-                search.typed.clear();
-                self.show_place(Place::Folder(id), cx);
-            }
-            Action::Open(id) => {
-                self.open_bookmark(id, Activation::Foreground, cx);
-                return;
-            }
-        }
-        self.set_search(search, window, cx);
     }
 }
 

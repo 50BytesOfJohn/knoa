@@ -145,6 +145,7 @@ impl MainView {
     /// The selection outlives filing it elsewhere, so it can be filed again or opened. It
     /// ends when the bookmark is deleted, or trashed or restored: those send it away.
     fn on_library_changed(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.pill.forget_derived();
         self.sync_input(window, cx);
         let library = self.library.read(cx);
         let in_trash = library.place() == Place::Trash;

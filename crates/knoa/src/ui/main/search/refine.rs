@@ -2,7 +2,10 @@
 //! the kinds in view; while searching or filtered, "Narrow" with kinds and the tags
 //! some but not all results have. What doesn't fit waits behind "More".
 
-use std::hash::{DefaultHasher, Hash as _, Hasher as _};
+use std::{
+    hash::{DefaultHasher, Hash as _, Hasher as _},
+    rc::Rc,
+};
 
 use gpui::{
     Animation, AnimationExt as _, AnyElement, Context, Div, FontWeight, InteractiveElement,
@@ -37,7 +40,7 @@ const MAX_NARROW_KINDS: usize = 3;
 
 /// One choice in the row.
 #[derive(Debug, Clone, PartialEq, Hash)]
-enum Choice {
+pub(super) enum Choice {
     Kind(Kind, usize),
     Tag(String, usize),
 }
@@ -75,11 +78,21 @@ impl MainView {
     ) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let library = self.library.read(cx);
-        let (search, place) = (library.search().clone(), library.place());
+        let (search, place) = (library.search(), library.place());
+        let choices = self
+            .pill
+            .refine_choices
+            .get(search, place, || {
+                choices(search, place, library.result_facets())
+            })
+            .clone();
         let narrowing = !search.is_empty();
-        let choices = choices(&search, place, library.result_facets());
         let clearable = !search.tokens.is_empty();
-        let expanded = self.pill.refine_expanded.as_ref() == Some(&(search, place));
+        let expanded = self
+            .pill
+            .refine_expanded
+            .as_ref()
+            .is_some_and(|(s, p)| s == search && *p == place);
 
         let mut fixed = 0.;
         if narrowing && !choices.is_empty() {
@@ -191,32 +204,32 @@ impl MainView {
 
 /// What splits the results. At rest, the kinds in view, or the tags in the Gallery and
 /// Events, which hold one or a few kinds. Filtered, kinds while no kind is applied, then
-/// tags some but not all results have. Never a choice at 0, never one already applied.
-fn choices(search: &Search, place: Place, results: &ResultFacets) -> Vec<Choice> {
+/// tags some but not all results have. Never a choice at 0, never one already applied,
+/// never one that narrows nothing.
+fn choices(search: &Search, place: Place, results: &ResultFacets) -> Rc<[Choice]> {
     let splitting_tags = results
         .tags
         .iter()
-        .filter(|(tag, n)| {
-            *n > 0 && *n < results.total && !search.contains(&Filter::Tag(tag.clone()))
-        })
+        .filter(|(tag, n)| *n > 0 && *n < results.total && !search.has_tag(tag))
         .map(|(tag, n)| Choice::Tag(tag.clone(), *n));
     let kinds = results.kinds.iter().map(|&(kind, n)| Choice::Kind(kind, n));
     let tags_first = matches!(place, Place::Gallery | Place::Events);
+    let one_kind_for_all = matches!(results.kinds.as_slice(), [(_, n)] if *n == results.total);
     let several_kinds = results.kinds.len() > 1;
-    let choices: Vec<Choice> = if search.is_empty() {
+    let choices: Box<dyn Iterator<Item = Choice>> = if search.is_empty() {
         if tags_first {
-            splitting_tags.collect()
-        } else if several_kinds {
-            kinds.collect()
+            Box::new(splitting_tags)
+        } else if one_kind_for_all {
+            Box::new(std::iter::empty())
         } else {
-            Vec::new()
+            Box::new(kinds)
         }
     } else if search.kind().is_none() && several_kinds && !tags_first {
-        kinds.take(MAX_NARROW_KINDS).chain(splitting_tags).collect()
+        Box::new(kinds.take(MAX_NARROW_KINDS).chain(splitting_tags))
     } else {
-        splitting_tags.collect()
+        Box::new(splitting_tags)
     };
-    choices.into_iter().take(MAX_CHIPS).collect()
+    choices.take(MAX_CHIPS).collect()
 }
 
 /// How many choices fit on one line in `room`, keeping space for "More" when not all do.

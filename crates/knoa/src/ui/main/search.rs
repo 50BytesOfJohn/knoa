@@ -1,6 +1,8 @@
 //! The search at the top of the library: the pill with its tokens and suggestions, and
 //! the refine row under it. Every change to the search goes through [`MainView::set_search`].
 
+mod choose;
+mod derived;
 mod folded;
 mod keys;
 mod labels;
@@ -10,6 +12,9 @@ mod suggest;
 mod suggestions;
 mod tokens;
 
+use std::rc::Rc;
+
+use derived::Derived;
 use gpui::{Context, Entity, IntoElement, ParentElement as _, Styled as _, Window, div, px};
 use gpui_component::input::{InputEvent, InputState};
 use knoa_core::Place;
@@ -44,8 +49,18 @@ pub(super) struct PillState {
     /// "Search for".
     highlight: usize,
     refine_expanded: refine::Expanded,
+    refine_choices: Derived<Rc<[refine::Choice]>>,
+    suggestion_rows: Derived<Rc<[suggest::Row]>>,
     /// Whether the input shows its placeholder, as last set; `None` to set it again.
     placeholder: Option<bool>,
+}
+
+impl PillState {
+    /// Drops what was worked out from the library, for new results or a new language.
+    pub(super) fn forget_derived(&mut self) {
+        self.refine_choices.forget();
+        self.suggestion_rows.forget();
+    }
 }
 
 impl MainView {
@@ -79,6 +94,7 @@ impl MainView {
     /// Tokens draw their labels each frame.
     pub(super) fn translate(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
         self.pill.placeholder = None;
+        self.pill.forget_derived();
         self.sync_input(window, cx);
         if let Some(edits) = &self.tag_edits {
             edits.translate(window, cx);

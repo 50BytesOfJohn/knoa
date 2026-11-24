@@ -55,6 +55,20 @@ impl Search {
             .any(|t| matches!(t, Token::Filter(f) if f == filter))
     }
 
+    /// [`Search::contains`] for a tag, without building the filter.
+    pub fn has_tag(&self, tag: &str) -> bool {
+        self.tokens
+            .iter()
+            .any(|t| matches!(t, Token::Filter(Filter::Tag(t)) if t == tag))
+    }
+
+    /// [`Search::contains`] for a site, without building the filter.
+    pub fn has_site(&self, site: &str) -> bool {
+        self.tokens
+            .iter()
+            .any(|t| matches!(t, Token::Filter(Filter::Site(s)) if s == site))
+    }
+
     /// Adds a token at the end. A kind replaces the kind token already there, in place,
     /// since only one kind applies; a token already there isn't added twice.
     pub fn add(&mut self, token: Token) {
