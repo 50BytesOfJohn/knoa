@@ -272,15 +272,16 @@ impl MainView {
             return;
         };
         let mut search = self.library.read(cx).search().clone();
-        let typed = std::mem::take(&mut search.typed);
         match row.action {
-            Action::SearchFor => {
-                search.add(Token::Text(
-                    typed.split_whitespace().collect::<Vec<_>>().join(" "),
-                ));
+            Action::SearchFor => search.lock_in_typed(),
+            Action::Add(filter) => {
+                search.typed.clear();
+                search.add(Token::Filter(filter));
             }
-            Action::Add(filter) => search.add(Token::Filter(filter)),
-            Action::Folder(id) => self.show_place(Place::Folder(id), cx),
+            Action::Folder(id) => {
+                search.typed.clear();
+                self.show_place(Place::Folder(id), cx);
+            }
             Action::Open(id) => {
                 self.open_bookmark(id, Activation::Foreground, cx);
                 return;

@@ -107,6 +107,19 @@ impl Search {
         tokens.chain(typed).collect::<Vec<_>>().join(" ")
     }
 
+    /// Locks the typed text in as a text token, as "Search for" does. Its syntax words
+    /// become filter tokens first, as if a space followed, so a text token never holds a
+    /// word the parser reads as a filter and the typed form parses back to the same query.
+    pub fn lock_in_typed(&mut self) {
+        let typed = std::mem::take(&mut self.typed);
+        self.take_input(&format!("{typed} "));
+        let words = std::mem::take(&mut self.typed);
+        let words = words.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !words.is_empty() {
+            self.add(Token::Text(words));
+        }
+    }
+
     /// Takes what the input holds. Every complete word (one followed by whitespace) with
     /// known syntax becomes a token and leaves the text; this covers typing a space after
     /// `#pasta` and pasting `kind:recipe #pasta quick`. Returns whether any word did, in
@@ -129,5 +142,37 @@ impl Search {
         }
         self.typed = if took { kept + tail } else { input.to_owned() };
         took
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use knoa_core::Kind;
+
+    use super::*;
+
+    #[test]
+    fn locked_in_text_keeps_its_syntax_as_filters() {
+        let mut search = Search {
+            tokens: Vec::new(),
+            typed: "quick kind:recipe #pasta".into(),
+        };
+        search.lock_in_typed();
+        assert_eq!(
+            search.tokens,
+            [
+                Token::Filter(Filter::Kind(Kind::Recipe)),
+                Token::Filter(Filter::Tag("pasta".into())),
+                Token::Text("quick".into()),
+            ]
+        );
+
+        let mut pasted = Search::default();
+        pasted.take_input(&search.typed_form());
+        let (workspace, place) = (WorkspaceId(1), Place::Everything);
+        assert_eq!(
+            pasted.query(workspace, place),
+            search.query(workspace, place)
+        );
     }
 }
