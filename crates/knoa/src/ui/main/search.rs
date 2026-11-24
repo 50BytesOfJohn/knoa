@@ -43,6 +43,8 @@ pub(super) struct PillState {
     /// "Search for".
     highlight: usize,
     refine_expanded: refine::Expanded,
+    /// Whether the input shows its placeholder, as last set; `None` to set it again.
+    placeholder: Option<bool>,
 }
 
 impl MainView {
@@ -75,7 +77,8 @@ impl MainView {
     /// After a language switch, what inputs keep rather than draw: their placeholders.
     /// Tokens draw their labels each frame.
     pub(super) fn translate(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        self.sync_placeholder(window, cx);
+        self.pill.placeholder = None;
+        self.sync_input(window, cx);
         if let Some(edits) = &self.tag_edits {
             edits.translate(window, cx);
         }
@@ -95,15 +98,10 @@ impl MainView {
         if self.library.read(cx).search().typed != search.typed {
             self.pill.highlight = 0;
         }
-        if self.search.read(cx).value() != search.typed.as_str() {
-            let typed = search.typed.clone();
-            self.search
-                .update(cx, |input, cx| input.set_value(typed, window, cx));
-        }
         self.pill.selected = None;
         self.library
             .update(cx, |library, cx| library.set_search(search, cx));
-        self.sync_placeholder(window, cx);
+        self.sync_input(window, cx);
         self.scroll.set_offset(gpui::point(px(0.), px(0.)));
         cx.notify();
     }
@@ -170,15 +168,25 @@ impl MainView {
         self.search.update(cx, |input, cx| input.focus(window, cx));
     }
 
-    fn sync_placeholder(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let placeholder = if self.library.read(cx).search().tokens.is_empty() {
-            t!("main-search-placeholder")
-        } else {
-            String::new()
-        };
-        self.search.update(cx, |input, cx| {
-            input.set_placeholder(placeholder, window, cx);
-        });
+    /// The input shows the search's typed text, and the placeholder only without tokens.
+    /// Also for changes the library makes itself, as switching workspaces does.
+    pub(super) fn sync_input(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        let search = self.library.read(cx).search();
+        let (typed, placeholder) = (search.typed.clone(), search.tokens.is_empty());
+        if self.search.read(cx).value() != typed.as_str() {
+            self.search
+                .update(cx, |input, cx| input.set_value(typed, window, cx));
+        }
+        if self.pill.placeholder != Some(placeholder) {
+            self.pill.placeholder = Some(placeholder);
+            let text = if placeholder {
+                t!("main-search-placeholder")
+            } else {
+                String::new()
+            };
+            self.search
+                .update(cx, |input, cx| input.set_placeholder(text, window, cx));
+        }
     }
 }
 

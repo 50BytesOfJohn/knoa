@@ -144,14 +144,8 @@ impl MainView {
 
     /// The selection outlives filing it elsewhere, so it can be filed again or opened. It
     /// ends when the bookmark is deleted, or trashed or restored: those send it away.
-    /// The input follows the search when the library changed it, as switching workspaces
-    /// does.
     fn on_library_changed(&mut self, window: &mut Window, cx: &mut Context<'_, MainView>) {
-        let typed = self.library.read(cx).search().typed.clone();
-        if self.search.read(cx).value() != typed.as_str() {
-            self.search
-                .update(cx, |input, cx| input.set_value(typed, window, cx));
-        }
+        self.sync_input(window, cx);
         let library = self.library.read(cx);
         let in_trash = library.place() == Place::Trash;
         let still_here = |id| {
