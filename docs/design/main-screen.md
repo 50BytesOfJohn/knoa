@@ -66,6 +66,8 @@ Superseded by [sidebar.md](sidebar.md). Kept here as the v1 record.
 
 ### Search pill (top centre, floating)
 
+Superseded by [top-bar.md](top-bar.md). Kept here as the v1 record.
+
 - One field, about 620 × 50 px, centred over the content area.
 - Contents: search icon, scope chip (the selected place or folder, e.g. "Reading"),
   input ("Just start typing to search"), live result count, and the **view options**
@@ -134,7 +136,8 @@ Superseded by [sidebar.md](sidebar.md). Kept here as the v1 record.
 
 ### Popovers
 
-- **View options** (button in the search pill): layout (Masonry, Grid, List), card size,
+- **View options** (button in the search pill; replaced by the Display popover in
+  [top-bar.md](top-bar.md)): layout (Masonry, Grid, List), card size,
   show summaries, group by date, sort, show the Up next strip.
 - **Settings** (gear in the sidebar footer, ⌘,): a sheet nearly the size of the window,
   with its own sidebar. See "Decided after approval".

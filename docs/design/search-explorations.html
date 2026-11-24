@@ -1,0 +1,882 @@
+<title>Knoa Search Explorations</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+/* Layout: a design review document; each concept is a live mini Knoa window on one shared sample library. Colors are Knoa's Paper and Night themes. */
+:root {
+  --canvas: #efece6; --panel: #fbfaf7; --hair: #e2ddd4; --card: #ffffff;
+  --text: #22201c; --muted: #6f6a61; --faint: #a39d92;
+  --accent: #2f5d50; --on-accent: #ffffff; --soft: #f0ede6; --hover: #ece8e0;
+  --ai: #e0573c; --ai-soft: #fbe7e0; --shade: rgba(34,32,28,.28);
+  --page: #f6f4ef;
+  --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --canvas: #121314; --panel: #1c1d1f; --hair: #2e3033; --card: #232427;
+  --text: #eceae6; --muted: #9c9891; --faint: #68655f;
+  --accent: #8fc7b4; --on-accent: #121314; --soft: #262729; --hover: #2b2d30;
+  --ai-soft: #3b231d; --shade: rgba(0,0,0,.5); --page: #0d0e0f; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --canvas: #121314; --panel: #1c1d1f; --hair: #2e3033; --card: #232427;
+  --text: #eceae6; --muted: #9c9891; --faint: #68655f;
+  --accent: #8fc7b4; --on-accent: #121314; --soft: #262729; --hover: #2b2d30;
+  --ai-soft: #3b231d; --shade: rgba(0,0,0,.5); --page: #0d0e0f; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--page); color: var(--text); font: 15px/1.55 var(--sans); }
+.doc { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 48px 96px; display: flex; flex-direction: column; gap: 72px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 500; text-wrap: balance; margin: 0; letter-spacing: -.01em; }
+h1 { font-size: clamp(36px, 6vw, 56px); line-height: 1.05; }
+h2 { font-size: 32px; line-height: 1.15; }
+h3 { font-size: 22px; line-height: 1.25; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.lede { font-size: 18px; color: var(--muted); max-width: 62ch; }
+section { display: flex; flex-direction: column; gap: 24px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+a { color: var(--accent); }
+kbd { font: 11.5px var(--mono); padding: 1px 5px; border: 1px solid var(--hair); border-bottom-width: 2px; border-radius: 5px; background: var(--panel); color: var(--text); white-space: nowrap; }
+code { font: 13px var(--mono); background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+
+/* research */
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.finding { background: var(--panel); border: 1px solid var(--hair); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.finding b { font-weight: 600; }
+.finding p { color: var(--muted); font-size: 14px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--hair); border-radius: 14px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--hair); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td.take { color: var(--accent); }
+.scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.scope > div { display: flex; flex-direction: column; gap: 10px; }
+.scope h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.scope ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.scope li { background: var(--panel); border: 1px solid var(--hair); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.scope li span { display: block; color: var(--muted); font-size: 13px; }
+.scope .wont li { background: transparent; border-style: dashed; color: var(--muted); }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+
+/* concept frame */
+.concept { display: flex; flex-direction: column; gap: 20px; scroll-margin-top: 24px; }
+.concept-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.concept-head .stack { gap: 6px; }
+.letter { font: 500 15px var(--mono); color: var(--muted); }
+.demo-btn { font: 600 13px var(--sans); border: 1px solid var(--hair); background: var(--panel); color: var(--text); padding: 8px 14px; border-radius: 999px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.demo-btn:hover { background: var(--hover); }
+.demo-btn:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.notes { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 20px; }
+.notes > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.notes h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.notes ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.notes p { font-size: 14px; }
+@media (max-width: 820px) { .notes { grid-template-columns: 1fr; } }
+.hint { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; }
+
+/* ---------- mini Knoa window ---------- */
+.win { position: relative; height: 560px; border-radius: 18px; background: var(--canvas); border: 1px solid var(--hair); box-shadow: 0 30px 60px -30px var(--shade); display: flex; gap: 10px; padding: 10px; overflow: hidden; font-size: 13px; line-height: 1.35; user-select: none; }
+.side { width: 190px; flex: none; background: var(--panel); border: 1px solid var(--hair); border-radius: 14px; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+.lights { display: flex; gap: 6px; padding: 2px 6px 12px; align-items: center; }
+.lights i { width: 11px; height: 11px; border-radius: 50%; background: var(--hair); }
+.lights .ws { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+.lights .ws b { width: 16px; height: 16px; border-radius: 5px; background: #d9b04c; display: inline-block; }
+.nav { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; color: var(--text); }
+.nav svg { color: var(--muted); }
+.nav.on { background: var(--soft); font-weight: 600; }
+.nav em { margin-left: auto; font-style: normal; color: var(--faint); font-size: 11.5px; }
+.side .label { font-size: 11px; color: var(--muted); padding: 12px 8px 4px; font-weight: 600; }
+.side .foot { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 6px 8px 2px; color: var(--muted); font-size: 12px; }
+.side .foot .av { width: 18px; height: 18px; border-radius: 50%; background: var(--soft); border: 1px solid var(--hair); }
+.main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.content { flex: 1; min-height: 0; overflow: hidden; padding: 4px 6px 0; position: relative; }
+.grid { columns: 4 118px; column-gap: 10px; }
+.card { break-inside: avoid; margin-bottom: 10px; background: var(--card); border: 1px solid var(--hair); border-radius: 10px; overflow: hidden; display: block; }
+.card .img { position: relative; }
+.card .img span { position: absolute; left: 6px; top: 6px; width: 18px; height: 18px; border-radius: 5px; background: rgba(255,255,255,.85); color: #22201c; display: grid; place-items: center; }
+.card .t { padding: 7px 8px 2px; font-weight: 600; font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .s { padding: 0 8px 8px; color: var(--muted); font-size: 11px; }
+.empty { padding: 40px 10px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.empty .tok { cursor: pointer; }
+.grouplabel { font-size: 11.5px; font-weight: 600; color: var(--muted); margin: 2px 0 8px; display: flex; gap: 8px; align-items: baseline; }
+
+/* corner cluster (top-right of the window) */
+.corner { display: flex; gap: 2px; align-items: center; flex: none; }
+.ib { width: 30px; height: 30px; border-radius: 9px; border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.ib:hover, .ib.on { background: var(--hover); color: var(--text); }
+.pop { position: absolute; z-index: 30; width: 230px; background: var(--panel); border: 1px solid var(--hair); border-radius: 12px; box-shadow: 0 18px 40px -12px var(--shade); padding: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.pop .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.seg { display: flex; background: var(--soft); border-radius: 8px; padding: 2px; }
+.seg b { font-weight: 500; padding: 3px 8px; border-radius: 6px; color: var(--muted); }
+.seg b.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px var(--shade); }
+.sw { width: 26px; height: 16px; border-radius: 9px; background: var(--accent); position: relative; flex: none; }
+.sw::after { content: ""; position: absolute; right: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--on-accent); }
+.pop hr { border: 0; border-top: 1px solid var(--hair); margin: 2px 0; width: 100%; }
+.pop .item { padding: 5px 6px; border-radius: 6px; display: flex; gap: 8px; align-items: center; }
+.pop .item:hover { background: var(--hover); }
+.pop .item kbd { margin-left: auto; }
+
+/* tokens */
+.tok { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 6px 0 8px; border-radius: 999px; background: var(--soft); border: 1px solid var(--hair); color: var(--text); font-weight: 500; white-space: nowrap; flex: none; font-size: 12.5px; }
+.tok svg { color: var(--muted); flex: none; }
+.tok.text { background: transparent; border-color: transparent; padding-left: 2px; font-weight: 600; }
+.tok.armed { background: var(--text); color: var(--panel); border-color: var(--text); }
+.tok.armed svg { color: var(--panel); }
+.tok .x { width: 16px; height: 16px; border-radius: 50%; border: 0; background: transparent; color: var(--faint); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.tok .x:hover { background: var(--hover); color: var(--text); }
+.tok.ai { box-shadow: inset 0 0 0 1px var(--ai-soft); }
+.aidot { width: 6px; height: 6px; border-radius: 50%; background: var(--ai); flex: none; display: inline-block; }
+.q { flex: 1; min-width: 80px; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px; padding: 0; }
+.q::placeholder { color: var(--faint); }
+.count { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+
+/* suggestions dropdown */
+.drop { position: absolute; z-index: 25; background: var(--panel); border: 1px solid var(--hair); border-radius: 14px; box-shadow: 0 22px 50px -16px var(--shade); padding: 6px; display: flex; flex-direction: column; gap: 1px; max-height: 330px; overflow: auto; }
+.drop .h { font-size: 11px; color: var(--muted); padding: 8px 8px 3px; font-weight: 600; }
+.opt { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.opt .ic { width: 22px; height: 22px; border-radius: 6px; background: var(--soft); display: grid; place-items: center; color: var(--muted); flex: none; }
+.opt .n { margin-left: auto; color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.opt.sel { background: var(--hover); }
+.opt.sel .n::after { content: " ↵"; color: var(--muted); }
+.opt small { color: var(--muted); }
+.opt mark { background: transparent; color: var(--text); font-weight: 700; }
+.drop .foot { display: flex; gap: 12px; padding: 8px 8px 4px; border-top: 1px solid var(--hair); margin-top: 4px; color: var(--faint); font-size: 11px; flex-wrap: wrap; }
+
+/* refinement pills */
+.refine { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+.rp { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--hair); background: var(--panel); color: var(--muted); font: 500 12px var(--sans); cursor: pointer; white-space: nowrap; flex: none; }
+.rp:hover { color: var(--text); border-color: var(--faint); }
+.rp em { font-style: normal; color: var(--faint); font-size: 11px; }
+.rp.kind { background: var(--soft); border-color: transparent; }
+
+/* A. Trail */
+.A .top { display: flex; align-items: flex-start; gap: 10px; padding: 2px 0 10px; }
+.A .center { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 0; position: relative; }
+.A .pill { width: min(560px, 100%); min-height: 46px; background: var(--panel); border: 1px solid var(--hair); border-radius: 23px; box-shadow: 0 6px 20px -10px var(--shade); display: flex; align-items: center; gap: 6px; padding: 0 8px 0 14px; cursor: text; }
+.A .pill:focus-within { border-color: var(--faint); }
+.A .pill .toks { display: flex; gap: 4px; align-items: center; overflow: hidden; flex: none; max-width: 70%; }
+.A .chev { color: var(--faint); flex: none; }
+.A .save { height: 26px; border-radius: 999px; border: 1px solid var(--hair); background: transparent; color: var(--muted); font: 500 12px var(--sans); padding: 0 9px; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; flex: none; }
+.A .save:hover { color: var(--text); background: var(--hover); }
+.A .refine { width: min(560px, 100%); justify-content: safe center; }
+.A .spacer { width: 96px; flex: none; }
+
+/* B. Path */
+.B .bar { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 4px 0 8px; border-bottom: 1px solid var(--hair); margin-bottom: 10px; position: relative; }
+.B .path { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; font-size: 17px; overflow: hidden; }
+.B .seg2 { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; cursor: pointer; white-space: nowrap; color: var(--muted); font-weight: 500; flex: none; }
+.B .seg2:hover { background: var(--hover); color: var(--text); }
+.B .seg2.last { color: var(--text); font-weight: 600; }
+.B .seg2.armed { background: var(--text); color: var(--panel); }
+.B .slash { color: var(--faint); flex: none; font-weight: 300; font-size: 20px; }
+.B .q { font-size: 17px; padding-left: 6px; }
+.B .narrow { display: flex; gap: 4px 6px; align-items: baseline; font-size: 12.5px; color: var(--muted); padding: 0 8px 12px; flex-wrap: wrap; }
+.B .narrow button { border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; padding: 0 2px; text-decoration: underline; text-decoration-color: var(--hair); text-underline-offset: 3px; }
+.B .narrow button:hover { text-decoration-color: var(--text); }
+.B .narrow em { font-style: normal; color: var(--faint); font-size: 11px; }
+
+/* C. Spotlight */
+.C .bar { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; }
+.C .launcher { display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--hair); color: var(--muted); cursor: pointer; min-width: 0; flex: 0 1 auto; max-width: 70%; overflow: hidden; }
+.C .launcher:hover { border-color: var(--faint); }
+.C .launcher kbd { margin-left: 18px; }
+.C .grow { flex: 1; }
+.C .scrim { position: absolute; inset: 0; background: var(--shade); border-radius: 14px; z-index: 20; display: flex; justify-content: center; align-items: flex-start; padding-top: 38px; }
+.C .spot { width: min(560px, 94%); background: var(--panel); border: 1px solid var(--hair); border-radius: 16px; box-shadow: 0 30px 60px -20px var(--shade); overflow: hidden; display: flex; flex-direction: column; max-height: 430px; }
+.C .spot .in { display: flex; align-items: center; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
+.C .spot .q { font-size: 16px; }
+.C .spot .body { overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+.C .spot .hit { display: flex; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; }
+.C .spot .hit .th { width: 36px; height: 28px; border-radius: 6px; flex: none; }
+.C .spot .hit small { color: var(--muted); display: block; font-size: 11px; }
+
+/* D. Facets */
+.D .bar { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; position: relative; }
+.D .field { flex: 1; min-width: 0; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--hair); }
+.D .facets { display: flex; gap: 6px; align-items: center; padding: 0 0 8px; flex-wrap: wrap; position: relative; }
+.D .fb { height: 28px; border-radius: 8px; border: 1px dashed var(--hair); background: transparent; color: var(--muted); font: 500 12px var(--sans); padding: 0 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.D .fb:hover { color: var(--text); border-color: var(--faint); }
+.D .filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 0 10px; align-items: center; }
+.D .ftok { display: inline-flex; align-items: stretch; height: 28px; border: 1px solid var(--hair); border-radius: 8px; background: var(--panel); overflow: hidden; font-size: 12px; }
+.D .ftok > span { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-right: 1px solid var(--hair); }
+.D .ftok > span:first-child { color: var(--muted); }
+.D .ftok > span.v { font-weight: 600; }
+.D .ftok button { border: 0; background: transparent; color: var(--faint); cursor: pointer; padding: 0 7px; }
+.D .ftok button:hover { color: var(--text); background: var(--hover); }
+.D .clear { border: 0; background: none; color: var(--muted); font: 500 12px var(--sans); cursor: pointer; }
+
+/* E. Ask */
+.E .top { display: flex; gap: 10px; align-items: flex-start; padding: 2px 0 10px; }
+.E .center { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+.E .ask { width: min(580px, 100%); background: var(--panel); border: 1px solid var(--hair); border-radius: 16px; box-shadow: 0 6px 20px -10px var(--shade); padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
+.E .ask .q { font-size: 15px; }
+.E .under { width: min(580px, 100%); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.E .under .tok { height: 24px; }
+.E .spacer { width: 96px; flex: none; }
+
+/* F. Headline */
+.F .top { display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px 4px 8px; position: relative; }
+.F .head { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; font-family: var(--serif); font-size: 34px; line-height: 1.15; cursor: text; }
+.F .w { cursor: pointer; border-radius: 6px; padding: 0 2px; }
+.F .w:hover { text-decoration: line-through; text-decoration-color: var(--faint); text-decoration-thickness: 2px; }
+.F .w.armed { background: var(--text); color: var(--panel); }
+.F .w.tag::before { content: "#"; color: var(--faint); }
+.F .sep { color: var(--faint); font-size: 22px; }
+.F .q { font-family: var(--serif); font-size: 34px; min-width: 140px; }
+.F .q::placeholder { color: var(--text); opacity: 1; }
+.F .meta { padding: 2px 10px 14px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.F .meta button { border: 0; background: none; font: inherit; color: var(--text); cursor: pointer; padding: 0 1px; }
+.F .meta button:hover { color: var(--accent); }
+
+/* corner variants */
+.corners { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.cv { background: var(--panel); border: 1px solid var(--hair); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.cv .strip { height: 56px; border-radius: 10px; background: var(--canvas); border: 1px solid var(--hair); display: flex; align-items: center; gap: 8px; padding: 0 10px; position: relative; }
+.cv .fakepill { flex: 1; height: 32px; border-radius: 16px; background: var(--panel); border: 1px solid var(--hair); display: flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--faint); font-size: 12px; min-width: 0; }
+.cv p { font-size: 14px; color: var(--muted); }
+.textbtn { height: 30px; border-radius: 9px; border: 1px solid var(--hair); background: var(--panel); color: var(--text); font: 500 12px var(--sans); padding: 0 10px; display: inline-flex; gap: 6px; align-items: center; }
+.reco { background: var(--panel); border: 1px solid var(--hair); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+.reco ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 75ch; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc a { text-decoration: none; color: var(--text); border: 1px solid var(--hair); background: var(--panel); padding: 6px 12px; border-radius: 999px; font-size: 13px; }
+.toc a:hover { background: var(--hover); }
+.sources { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+
+@media (max-width: 720px) {
+  .side { display: none; }
+  .A .spacer, .E .spacer { display: none; }
+  .win { height: 600px; }
+  .F .head, .F .q { font-size: 26px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { animation: in .18s ease-out both; }
+  @keyframes in { from { opacity: .4; transform: translateY(3px); } }
+}
+</style>
+
+<div class="doc">
+
+<header class="stack" style="gap:18px">
+  <div class="eyebrow">Knoa · Design exploration · Search and top bar</div>
+  <h1>Search, from zero</h1>
+  <p class="lede">Six ways to rebuild the top of Knoa's main screen around one idea: you find things by narrowing, one word at a time. Every window below is live. Type, press <kbd>↵</kbd> to lock a word in, <kbd>⌫</kbd> on an empty field to take the last one back, or press "Play" to watch "outfits ↵ brown ↵ jacket".</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#research">What we learned</a>
+    <a href="#scope">What it needs</a>
+    <a href="#trail">A · Trail</a>
+    <a href="#path">B · Path</a>
+    <a href="#spotlight">C · Spotlight</a>
+    <a href="#facets">D · Facets</a>
+    <a href="#ask">E · Ask</a>
+    <a href="#headline">F · Headline</a>
+    <a href="#corner">Top-right corner</a>
+    <a href="#pick">Recommendation</a>
+  </nav>
+</header>
+
+<section id="research">
+  <div class="stack">
+    <div class="eyebrow">Research</div>
+    <h2>What we learned</h2>
+    <p>Knoa's own research report already holds the most important fact: people refind saved things mostly by recognising them, not by recalling exact words. They remember fragments: it was brown, it was a jacket, it was on some shop, I saved it a few weeks ago. Good search lets you pile up fragments until the thing appears.</p>
+  </div>
+  <div class="findings">
+    <div class="finding"><b>Narrowing beats querying</b><p>mymind's "deep search" lets you add a word, press Enter, add another. Pinterest's guided search shows the next words to add as pills under the bar. Both turn search into a series of small, safe steps instead of one perfect query.</p></div>
+    <div class="finding"><b>Only offer what exists</b><p>Raindrop lists a filter only when at least one bookmark matches it. Every suggestion and refinement in these concepts shows a count and disappears at zero, so you can never narrow into an empty page by accident.</p></div>
+    <div class="finding"><b>Tokens, not syntax</b><p>Apple's guidelines treat a token as a selectable, editable term that filters the others. Typed syntax (<code>#tag</code>, <code>site:</code>, <code>runtime&gt;2h</code>) stays as a shortcut for power users and is the text form of the same tokens.</p></div>
+    <div class="finding"><b>Separate "what" from "how"</b><p>Linear keeps what a view shows (filters) apart from how it looks (a Display menu at the top right). The sliders button inside Knoa's pill mixes the two. It belongs with settings in the corner.</p></div>
+    <div class="finding"><b>Where users get let down</b><p>Reviews of bookmark managers repeat a few complaints: search that only reads titles, results that are not ranked by relevance, wrong AI tags that pollute the filters, and syntax you have to memorise. Anecdotal, but consistent.</p></div>
+    <div class="finding"><b>Keep the page calm</b><p>Apple's guidance is to make results better before adding scopes. mymind wins on calm. So: no permanent filter panel, no query builder on screen, one row at most under the bar, and it only appears when it has something to offer.</p></div>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Product</th><th>How search works</th><th>What people like or miss</th><th>What Knoa takes</th></tr></thead>
+      <tbody>
+        <tr><td>mymind</td><td>One field. Enter stacks words. <code>#tag</code> + Enter limits to a tag. Searches colour, type and objects in images. Smart Spaces are saved searches.</td><td>Calm, no setup. Tag suggestions only after typing <code>#</code>; little visible structure.</td><td class="take">Enter to stack words. Saved searches. Suggest tags without needing <code>#</code>.</td></tr>
+        <tr><td>Pinterest guided search</td><td>Pills under the bar with words that split the current results ("brown", "leather", "cropped").</td><td>Feels like browsing, not searching.</td><td class="take">Refinement row built from the current results.</td></tr>
+        <tr><td>Raindrop.io</td><td>Operators, sidebar filters with counts, full-text search.</td><td>Powerful. Complaints about reliability, relevance and AI tag quality.</td><td class="take">Counts, only-what-matches. Search page text, not just titles.</td></tr>
+        <tr><td>Linear</td><td>Filter pills with field, operator and value ("Label is Bug"). Display menu at the top right.</td><td>Precise, editable. Heavier than a consumer app needs.</td><td class="take">Clickable tokens to edit or remove. Display menu in the corner.</td></tr>
+        <tr><td>Raycast, Arc, Spotlight</td><td>Keyboard-first palette, results grouped by type.</td><td>Fast; everything in one list.</td><td class="take">Grouped suggestions (Tags, Folders, Kinds, Sites) with keyboard selection.</td></tr>
+        <tr><td>Eagle</td><td>Search plus a filter bar for tags, colour, shape, type.</td><td>Thorough but busy.</td><td class="take">Colour as a later search fragment for images.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="scope">
+  <div class="stack">
+    <div class="eyebrow">Scope</div>
+    <h2>What the new top bar needs</h2>
+    <p>Sorted so the alpha stays small. Everything in the first column works on top of the <code>Query</code> Knoa already has (text, kind, tags, sites, fields, place), so the first version needs no new search engine.</p>
+  </div>
+  <div class="scope">
+    <div><h4><span class="dot" style="background:var(--accent)"></span>Now</h4><ul>
+      <li>Enter locks a word in as a token<span>Each next word searches inside the last result.</span></li>
+      <li>Typed suggestions with counts<span>Tag, folder, kind, site. Picked with ↑↓ and ↵. Zero-count values never show.</span></li>
+      <li>Refinement row<span>Kinds and tags that split the current results. Replaces the fixed kind chips.</span></li>
+      <li>⌫ edits, click removes<span>First ⌫ selects the last token, second removes it.</span></li>
+      <li>Place as a token<span>"in Outfits" is the first token; remove it to search everything.</span></li>
+      <li>View options and settings move to the top-right corner</li>
+    </ul></div>
+    <div><h4><span class="dot" style="background:var(--muted)"></span>Next</h4><ul>
+      <li>Recent searches on empty focus</li>
+      <li>Save a search as a smart folder<span>mymind's Smart Spaces; a place in the sidebar.</span></li>
+      <li>Exclude a word<span><code>-word</code>, or ⌥-click a refinement.</span></li>
+      <li>Typo tolerance and page text in the index</li>
+      <li>Zero results offers the token to drop</li>
+    </ul></div>
+    <div><h4><span class="dot" style="background:var(--ai)"></span>Later, with AI</h4><ul>
+      <li>Plain-language search that turns into tokens<span>"brown jackets I saved last month". Always shown as editable tokens, never a black box.</span></li>
+      <li>Meaning-based matches<span>"coat" finds "parka".</span></li>
+      <li>Colour and object search for images</li>
+      <li>Date tokens<span>"last month", "this summer".</span></li>
+    </ul></div>
+    <div class="wont"><h4><span class="dot" style="background:var(--faint)"></span>Not doing</h4><ul>
+      <li>A visible query builder with AND/OR</li>
+      <li>A permanent filter panel on the main screen</li>
+      <li>A separate search page or results mode</li>
+      <li>Any setting or view control inside the search field</li>
+    </ul></div>
+  </div>
+</section>
+
+<section class="concept" id="trail">
+  <div class="concept-head"><div class="stack"><span class="letter">A</span><h2>Trail</h2><p>The mymind idea, done fully. One floating pill; each ↵ turns what you typed into a token, and the row under it offers the next word to add, drawn from what is left.</p></div><button class="demo-btn" data-play="A">▶ Play outfits ↵ brown ↵ jacket</button></div>
+  <div class="win A" id="winA"></div>
+  <div class="notes">
+    <div><h4>How it behaves</h4><ul><li>Typing filters live; ↵ commits the highlighted suggestion, or the text itself.</li><li>Tokens sit inside the pill, joined by quiet chevrons, so it reads as a trail.</li><li>The refinement row replaces the kind chips: kinds first when the results are mixed, then tags.</li><li>"Save" turns the trail into a smart folder.</li></ul></div>
+    <div><h4>Good</h4><ul><li>Closest to how you described it.</li><li>Keeps the approved centred pill and the calm layout.</li><li>One row under the bar, only when useful.</li></ul></div>
+    <div><h4>Watch out</h4><ul><li>Long trails need to scroll inside the pill.</li><li>The refinement row moves as results change; it needs a short fade.</li></ul></div>
+  </div>
+</section>
+
+<section class="concept" id="path">
+  <div class="concept-head"><div class="stack"><span class="letter">B</span><h2>Path</h2><p>The search is a path, like a folder breadcrumb: Everything / outfits / brown / jacket. Click any step to go back to it. The bar becomes a full-width toolbar across the content.</p></div><button class="demo-btn" data-play="B">▶ Play outfits ↵ brown ↵ jacket</button></div>
+  <div class="win B" id="winB"></div>
+  <div class="notes">
+    <div><h4>How it behaves</h4><ul><li>The place is the first step; typing adds the next one.</li><li>Clicking a step drops everything after it, like going back.</li><li>"Narrow" is a line of plain words under the bar, not pills.</li></ul></div>
+    <div><h4>Good</h4><ul><li>Folders and searches feel like one thing: places you drill into.</li><li>Big type makes where you are obvious.</li><li>Corner controls sit naturally at the end of the toolbar.</li></ul></div>
+    <div><h4>Watch out</h4><ul><li>Gives up the floating pill from the approved design.</li><li>A path implies order; filters do not really have one.</li></ul></div>
+  </div>
+</section>
+
+<section class="concept" id="spotlight">
+  <div class="concept-head"><div class="stack"><span class="letter">C</span><h2>Spotlight</h2><p>The bar shrinks to a quiet launcher. Typing opens a large panel over the library, with grouped suggestions and the top matches, like Raycast or Spotlight. Tokens stay in the launcher when it closes.</p></div><button class="demo-btn" data-play="C">▶ Play outfits ↵ brown ↵ jacket</button></div>
+  <div class="win C" id="winC"></div>
+  <div class="notes">
+    <div><h4>How it behaves</h4><ul><li>Any key or ⌘K opens the panel; Esc closes it and keeps the tokens.</li><li>Suggestions grouped: Tags, Folders, Kinds, Sites, then top bookmarks.</li><li>↵ on a bookmark opens it straight away.</li></ul></div>
+    <div><h4>Good</h4><ul><li>The library gets the most room when you are not searching.</li><li>Merges search with the planned command palette.</li><li>Room for richer suggestions (previews, counts, recent).</li></ul></div>
+    <div><h4>Watch out</h4><ul><li>The panel covers the cards you are narrowing.</li><li>Search becomes a mode, which the main-screen design avoided.</li></ul></div>
+  </div>
+</section>
+
+<section class="concept" id="facets">
+  <div class="concept-head"><div class="stack"><span class="letter">D</span><h2>Facets</h2><p>For precision. Text stays in the field; filters are explicit pills ("Tag is brown") with quiet facet buttons to add more. Close to Linear, simplified for a personal library.</p></div><button class="demo-btn" data-play="D">▶ Play outfits ↵ brown ↵ jacket</button></div>
+  <div class="win D" id="winD"></div>
+  <div class="notes">
+    <div><h4>How it behaves</h4><ul><li>Kind, Tag, Folder and Site each open a list of values with counts.</li><li>Typed suggestions work too; ↵ adds the filter pill.</li><li>Free text becomes a "Contains" pill.</li></ul></div>
+    <div><h4>Good</h4><ul><li>Unambiguous: you always see exactly what is applied.</li><li>Scales to typed fields later ("Runtime &gt; 2h", "Year is 1999").</li></ul></div>
+    <div><h4>Watch out</h4><ul><li>Two rows of controls even when idle; the busiest option here.</li><li>Feels like a work tool, not a personal library.</li></ul></div>
+  </div>
+</section>
+
+<section class="concept" id="ask">
+  <div class="concept-head"><div class="stack"><span class="letter">E</span><h2>Ask</h2><p>Describe it in your own words. Knoa reads the sentence and shows how it understood it, as tokens you can remove or add to. In this mock the reading is a simple local match; the real one would use the AI.</p></div><button class="demo-btn" data-play="E">▶ Play a sentence</button></div>
+  <div class="win E" id="winE"></div>
+  <div class="notes">
+    <div><h4>How it behaves</h4><ul><li>↵ reads the whole sentence and turns it into tokens.</li><li>Tokens the AI chose carry the AI dot, like everywhere else in Knoa.</li><li>Words it could not place stay as text.</li></ul></div>
+    <div><h4>Good</h4><ul><li>Lowest effort for vague memories.</li><li>Fits Knoa's "visible, reversible automation" principle.</li></ul></div>
+    <div><h4>Watch out</h4><ul><li>Needs a network and an LLM call; the vision says search never waits on either.</li><li>Best as a layer over A, not its own bar.</li></ul></div>
+  </div>
+</section>
+
+<section class="concept" id="headline">
+  <div class="concept-head"><div class="stack"><span class="letter">F</span><h2>Headline</h2><p>No search box at all. The title of the page is the search: it says "Everything" until you type, then your words replace it in large type. Strike a word to remove it. The most "mymind" in feel.</p></div><button class="demo-btn" data-play="F">▶ Play outfits ↵ brown ↵ jacket</button></div>
+  <div class="win F" id="winF"></div>
+  <div class="notes">
+    <div><h4>How it behaves</h4><ul><li>Typing anywhere writes into the headline.</li><li>Committed words join with dots; click one to remove it.</li><li>The line under it gives the count and words to narrow by.</li></ul></div>
+    <div><h4>Good</h4><ul><li>The calmest screen; type becomes the interface.</li><li>Uses Knoa's serif, gives the app a strong character.</li></ul></div>
+    <div><h4>Watch out</h4><ul><li>New users may not see that they can search.</li><li>Tag versus word versus folder is harder to show in plain type.</li></ul></div>
+  </div>
+</section>
+
+<section id="corner">
+  <div class="stack">
+    <div class="eyebrow">Top-right corner</div>
+    <h2>Where view options and settings go</h2>
+    <p>Every concept above puts them in the top-right corner of the content, away from search. These are three ways to dress that corner. The sidebar footer keeps the account; app settings can live in either place, but only one.</p>
+  </div>
+  <div class="corners">
+    <div class="cv"><div class="strip"><div class="fakepill">⌕ outfits › brown</div><button class="ib" aria-label="Add link" tabindex="-1" data-i="plus"></button><button class="ib" aria-label="View options" tabindex="-1" data-i="sliders"></button><button class="ib" aria-label="Settings" tabindex="-1" data-i="gear"></button></div><h3>1 · Three quiet icons</h3><p>Add link, view options, settings. Familiar, matches Finder and Photos. Used in the concepts. The add button can move here from the sidebar so all actions live in one corner.</p></div>
+    <div class="cv"><div class="strip"><div class="fakepill">⌕ outfits › brown</div><span class="textbtn"><span data-i="sliders"></span>Display</span><button class="ib" aria-label="More" tabindex="-1" data-i="more"></button></div><h3>2 · "Display" plus a menu</h3><p>A labelled Display button (layout, sort, summaries) and one ⋯ menu for settings, workspace and help. Clear what each does; one more word on screen.</p></div>
+    <div class="cv"><div class="strip"><div class="fakepill">⌕ outfits › brown</div><button class="ib" aria-label="Organizing status" tabindex="-1"><span class="aidot"></span></button><button class="ib" aria-label="Menu" tabindex="-1" data-i="sliders"></button></div><h3>3 · One menu, with AI status</h3><p>A single button opens view options with Settings at the bottom (⌘,). The AI's dot sits beside it and shows organizing progress, moving it out of the sidebar footer.</p></div>
+  </div>
+</section>
+
+<section id="pick">
+  <div class="reco">
+    <div class="eyebrow">Recommendation</div>
+    <h2>Build A, borrow from B, C and E</h2>
+    <ol>
+      <li><b>Trail (A) as the base.</b> It is the idea you described, it keeps the approved floating pill, and it adds one row only when there is something to narrow by.</li>
+      <li><b>From Path (B):</b> clicking a token in the trail jumps back to that step, which makes going back as easy as narrowing.</li>
+      <li><b>From Spotlight (C):</b> the suggestion list groups Tags, Folders, Kinds and Sites with counts, and lists the top bookmarks last so ↵ can open one directly.</li>
+      <li><b>From Ask (E), later:</b> a plain sentence typed into the same pill becomes AI-marked tokens. No separate mode.</li>
+      <li><b>Corner option 1</b> for now: view options and settings as icons at the top right; the sliders leave the pill.</li>
+    </ol>
+    <p class="lede" style="font-size:16px">Headline (F) is the bold alternative if you want Knoa to look unlike any other app. I would keep it on the table and test it against A once both are clickable in the app.</p>
+  </div>
+  <div class="sources">
+    <b style="color:var(--text)">Sources</b>
+    <span>Knoa's own <code>docs/research/main-screen.md</code> (refinding studies, competitor review).</span>
+    <a href="https://mymind.helpscoutdocs.com/article/48-using-search">mymind: How to search and find anything</a>
+    <a href="https://mymind.com/the-deep-search">mymind: The deep search</a>
+    <a href="https://mymind.helpscoutdocs.com/article/85-searching-tags-in-your-mind">mymind: Searching tags</a>
+    <a href="https://help.raindrop.io/filters">Raindrop.io: Filters</a>
+    <a href="https://www.producthunt.com/p/raindrop-io/raindrop-io-3-0">Raindrop.io 3.0 discussion on Product Hunt</a>
+    <a href="https://developer.apple.com/design/human-interface-guidelines/search-fields">Apple HIG: Search fields</a>
+    <a href="https://developer.apple.com/design/human-interface-guidelines/token-fields">Apple HIG: Token fields</a>
+    <a href="https://baymard.com/learn/ecommerce-filter-ui">Baymard: Filter UI</a>
+  </div>
+</section>
+
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- icons ---------- */
+const P = {
+  search: '<circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/>',
+  hash: '<path d="M6 2.5 4.5 13.5M11.5 2.5 10 13.5M2.5 6h11M2 10h11"/>',
+  folder: '<path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/>',
+  globe: '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/>',
+  x: '<path d="m4.5 4.5 7 7m0-7-7 7"/>',
+  plus: '<path d="M8 3v10M3 8h10"/>',
+  sliders: '<path d="M2.5 5h6M11.5 5h2M2.5 11h2M7.5 11h6"/><circle cx="10" cy="5" r="1.5"/><circle cx="6" cy="11" r="1.5"/>',
+  gear: '<circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2"/>',
+  more: '<circle cx="4" cy="8" r=".8"/><circle cx="8" cy="8" r=".8"/><circle cx="12" cy="8" r=".8"/>',
+  chev: '<path d="m6 4 4 4-4 4"/>',
+  down: '<path d="m4 6 4 4 4-4"/>',
+  star: '<path d="m8 2.5 1.7 3.5 3.8.5-2.8 2.6.7 3.8L8 11.1l-3.4 1.8.7-3.8L2.5 6.5l3.8-.5z"/>',
+  clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 1.5"/>',
+  layers: '<path d="m8 2.5 5.5 3L8 8.5l-5.5-3z"/><path d="m2.5 8.5 5.5 3 5.5-3"/>',
+  photo: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><circle cx="6" cy="6.5" r="1"/><path d="m3 12 3.5-3.5 2.5 2.5 1.5-1.5 2.5 2.5"/>',
+  inbox: '<path d="M2.5 9 4 3.5h8L13.5 9v3.5h-11z"/><path d="M2.5 9H6l.5 1.5h3L10 9h3.5"/>',
+  bookmark: '<path d="M4.5 2.5h7v11L8 11l-3.5 2.5z"/>',
+  article: '<rect x="3" y="2.5" width="10" height="11" rx="1.5"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/>',
+  bag: '<path d="M3.5 5.5h9l-.7 8h-7.6z"/><path d="M6 5.5V4.5a2 2 0 0 1 4 0v1"/>',
+  play: '<rect x="2.5" y="3.5" width="11" height="9" rx="2"/><path d="m7 6 3 2-3 2z"/>',
+  code: '<path d="m5.5 5-3 3 3 3M10.5 5l3 3-3 3"/>',
+  cup: '<path d="M3 5.5h8v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M11 6.5h1a1.5 1.5 0 0 1 0 3h-1"/>',
+  pin: '<path d="M8 14s4.5-4 4.5-7.5a4.5 4.5 0 0 0-9 0C3.5 10 8 14 8 14z"/><circle cx="8" cy="6.5" r="1.5"/>',
+  app: '<rect x="3" y="3" width="10" height="10" rx="2.5"/>',
+  minus: '<path d="M3.5 8h9"/>',
+  text: '<path d="M3.5 4h9M8 4v8.5"/>',
+};
+const ico = (n, s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ""}</svg>`;
+document.querySelectorAll("[data-i]").forEach(el => el.insertAdjacentHTML("afterbegin", ico(el.dataset.i, 15)));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- sample library (example data) ---------- */
+const KINDS = {
+  article: ["Article", "Articles", "article"], product: ["Product", "Products", "bag"], image: ["Image", "Images", "photo"],
+  video: ["Video", "Videos", "play"], repo: ["Code", "Code", "code"], recipe: ["Recipe", "Recipes", "cup"],
+  app: ["App", "Apps", "app"], place: ["Place", "Places", "pin"],
+};
+const FOLDERS = ["Outfits / Fashion", "Design", "Dev tools", "Wallpapers", "Food", "Travel"];
+const D = (t, site, kind, folder, tags, hue, r) => ({ t, site, kind, folder, tags, hue, r });
+const DATA = [
+  D("Waxed cotton field jacket, tobacco brown", "barbour.com", "product", "Outfits / Fashion", ["outfits", "brown", "jacket", "waxed", "outerwear"], 28, 1.2),
+  D("Suede trucker jacket in chocolate", "ourlegacy.com", "product", "Outfits / Fashion", ["outfits", "brown", "jacket", "suede", "outerwear"], 22, 1.3),
+  D("Vintage leather bomber, 1970s", "grailed.com", "product", "Outfits / Fashion", ["outfits", "brown", "jacket", "leather", "vintage"], 18, 1.1),
+  D("Brown corduroy chore jacket", "uniqlo.com", "product", "Outfits / Fashion", ["outfits", "brown", "jacket", "corduroy", "workwear"], 32, 1.25),
+  D("Autumn layering: brown on brown", "pinterest.com", "image", "Outfits / Fashion", ["outfits", "brown", "layering", "autumn", "inspiration"], 25, 1.5),
+  D("Camel wool overcoat fit check", "instagram.com", "image", "Outfits / Fashion", ["outfits", "brown", "coat", "wool", "inspiration"], 35, 1.45),
+  D("Chelsea boots in dark brown suede", "grenson.com", "product", "Outfits / Fashion", ["outfits", "brown", "boots", "suede", "shoes"], 20, 1),
+  D("Navy chore jacket, heavy twill", "carhartt-wip.com", "product", "Outfits / Fashion", ["outfits", "navy", "jacket", "workwear"], 220, 1.2),
+  D("Black leather biker jacket guide", "putthison.com", "article", "Outfits / Fashion", ["outfits", "black", "jacket", "leather", "guide"], 0, .75),
+  D("Olive M-65 field jacket", "alphaindustries.com", "product", "Outfits / Fashion", ["outfits", "olive", "jacket", "military", "outerwear"], 85, 1.2),
+  D("How to build a capsule wardrobe", "youtube.com", "video", "Outfits / Fashion", ["outfits", "capsule", "minimal", "guide"], 340, .56),
+  D("Linen shirts for summer heat", "mrporter.com", "article", "Outfits / Fashion", ["outfits", "summer", "linen", "shirt"], 50, .7),
+  D("Grey wool overcoat, double-breasted", "cos.com", "product", "Outfits / Fashion", ["outfits", "grey", "coat", "wool", "outerwear"], 210, 1.3),
+  D("Brown leather belt, solid brass buckle", "anderson-s.com", "product", "Outfits / Fashion", ["outfits", "brown", "leather", "accessories"], 26, .9),
+  D("Japanese denim selvedge explained", "heddels.com", "article", "Outfits / Fashion", ["outfits", "denim", "japan", "guide"], 225, .65),
+  D("Rust-coloured knit, shawl collar", "arket.com", "product", "Outfits / Fashion", ["outfits", "brown", "knitwear", "wool", "autumn"], 15, 1.15),
+  D("Swiss typography poster archive", "swissted.com", "image", "Design", ["typography", "poster", "inspiration", "swiss"], 5, 1.4),
+  D("Designing calm interfaces", "rauno.me", "article", "Design", ["ui", "interaction", "calm", "essay"], 260, .7),
+  D("Radix colour scales", "radix-ui.com", "article", "Design", ["ui", "color", "design-system"], 280, .6),
+  D("Brown and cream brand palette", "dribbble.com", "image", "Design", ["color", "brown", "palette", "branding"], 30, 1),
+  D("Variable fonts in practice", "fonts.google.com", "article", "Design", ["typography", "fonts", "web"], 150, .65),
+  D("Linear's new filter system", "linear.app", "article", "Design", ["ui", "search", "filters", "interaction"], 245, .6),
+  D("zed-industries/zed", "github.com", "repo", "Dev tools", ["rust", "editor", "gpui"], 200, .55),
+  D("Building native UIs with GPUI", "zed.dev", "article", "Dev tools", ["rust", "gpui", "ui"], 190, .6),
+  D("tokio-rs/tokio", "github.com", "repo", "Dev tools", ["rust", "async", "runtime"], 170, .5),
+  D("SQLite FTS5 deep dive", "sqlite.org", "article", "Dev tools", ["sqlite", "search", "database"], 205, .65),
+  D("Ghostty terminal", "ghostty.org", "app", "Dev tools", ["terminal", "zig", "macos"], 240, .8),
+  D("Raycast", "raycast.com", "app", "Dev tools", ["launcher", "macos", "productivity", "search"], 355, .8),
+  D("Misty forest at dawn", "unsplash.com", "image", "Wallpapers", ["wallpaper", "forest", "green", "nature"], 120, 1.5),
+  D("Desert dunes, warm light", "unsplash.com", "image", "Wallpapers", ["wallpaper", "desert", "brown", "nature"], 32, .7),
+  D("Studio Ghibli countryside", "wallhaven.cc", "image", "Wallpapers", ["wallpaper", "anime", "green"], 100, .62),
+  D("Kyoto alley at night", "wallhaven.cc", "image", "Wallpapers", ["wallpaper", "japan", "night", "city"], 270, 1.45),
+  D("Brown butter pasta with sage", "bonappetit.com", "recipe", "Food", ["recipe", "pasta", "brown-butter", "quick"], 40, .8),
+  D("Cacio e pepe, the real way", "youtube.com", "video", "Food", ["recipe", "pasta", "italian"], 45, .56),
+  D("Miso-glazed aubergine", "ottolenghi.co.uk", "recipe", "Food", ["recipe", "vegetarian", "japan"], 300, .85),
+  D("Best coffee in Kyoto", "theinfatuation.com", "place", "Travel", ["travel", "japan", "coffee", "kyoto"], 25, .75),
+  D("Hiking the Dolomites, 5 days", "komoot.com", "article", "Travel", ["travel", "hiking", "italy", "mountains"], 160, .7),
+  D("Tokyo neighbourhood guide", "monocle.com", "article", "Travel", ["travel", "japan", "tokyo", "guide"], 350, .65),
+];
+DATA.forEach((b, i) => { b.id = i; b.hay = [b.t, b.site, b.folder, KINDS[b.kind][0], KINDS[b.kind][1], ...b.tags].join(" ").toLowerCase(); });
+
+/* ---------- query engine (mirrors Knoa's Query: text, kind, tags, sites, place) ---------- */
+const textHit = (b, q) => q.toLowerCase().split(/\s+/).filter(Boolean).every(w => b.hay.includes(w));
+const hit = (b, k) => k.type === "tag" ? b.tags.includes(k.v)
+  : k.type === "kind" ? b.kind === k.v
+  : k.type === "folder" ? b.folder === k.v
+  : k.type === "site" ? b.site === k.v
+  : k.type === "not" ? !textHit(b, k.v)
+  : textHit(b, k.v);
+const results = (toks, draft = "") => DATA.filter(b => toks.every(k => hit(b, k)) && (!draft.trim() || textHit(b, draft.trim())));
+const kindLabel = (v, plural) => KINDS[v][plural ? 1 : 0];
+const tokLabel = k => k.type === "kind" ? kindLabel(k.v, true) : k.type === "folder" ? k.v : k.type === "not" ? "not " + k.v : k.v;
+const tokIcon = k => ({ tag: "hash", folder: "folder", site: "globe", kind: KINDS[k.v]?.[2], not: "minus" }[k.type]);
+const has = (toks, type, v) => toks.some(k => k.type === type && k.v === v) || (type === "tag" && toks.some(k => k.type === "text" && k.v.toLowerCase() === v));
+
+/* What splits the current results: kinds when mixed, then the tags that are neither everywhere nor too rare. */
+function refinements(toks, n = 9) {
+  const res = results(toks); const out = [];
+  if (!res.length) return out;
+  const kinds = {}; res.forEach(b => kinds[b.kind] = (kinds[b.kind] || 0) + 1);
+  if (!toks.some(k => k.type === "kind") && Object.keys(kinds).length > 1)
+    Object.entries(kinds).sort((a, b) => b[1] - a[1]).slice(0, 3).forEach(([v, c]) => out.push({ type: "kind", v, c }));
+  const tags = {}; res.forEach(b => b.tags.forEach(t => tags[t] = (tags[t] || 0) + 1));
+  Object.entries(tags).filter(([t, c]) => c < res.length && !has(toks, "tag", t)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, n - out.length).forEach(([v, c]) => out.push({ type: "tag", v, c }));
+  return out;
+}
+
+/* Suggestions for what is being typed, grouped, only values with matches inside the current trail. */
+function suggest(toks, draft) {
+  const q = draft.trim().toLowerCase(); if (!q) return [];
+  const base = results(toks); const groups = [];
+  const starts = s => s.toLowerCase().startsWith(q) || s.toLowerCase().split(/[\s/-]+/).some(w => w.startsWith(q));
+  const count = k => base.filter(b => hit(b, k)).length;
+  const add = (name, items) => { const f = items.filter(i => i.c > 0).sort((a, b) => b.c - a.c).slice(0, 4); if (f.length) groups.push([name, f]); };
+  const tagSet = [...new Set(base.flatMap(b => b.tags))].filter(t => starts(t) && !has(toks, "tag", t));
+  add("Tags", tagSet.map(v => ({ type: "tag", v, c: count({ type: "tag", v }) })));
+  add("Folders", FOLDERS.filter(f => starts(f) && !has(toks, "folder", f)).map(v => ({ type: "folder", v, c: count({ type: "folder", v }) })));
+  add("Kinds", Object.keys(KINDS).filter(k => (starts(KINDS[k][0]) || starts(KINDS[k][1])) && !has(toks, "kind", k)).map(v => ({ type: "kind", v, c: count({ type: "kind", v }) })));
+  add("Sites", [...new Set(base.map(b => b.site))].filter(s => s.startsWith(q)).map(v => ({ type: "site", v, c: count({ type: "site", v }) })));
+  const textC = base.filter(b => textHit(b, q)).length;
+  const flat = groups.flatMap(g => g[1]);
+  const exact = flat.find(i => i.type === "tag" && i.v === q) || flat.find(i => i.type === "folder" && i.v.toLowerCase().startsWith(q));
+  const text = { type: "text", v: draft.trim(), c: textC };
+  return { groups, text, order: exact ? [exact, text, ...flat.filter(i => i !== exact)] : [text, ...flat] };
+}
+const hl = (s, q) => { const i = s.toLowerCase().indexOf(q.toLowerCase()); return i < 0 || !q ? esc(s) : esc(s.slice(0, i)) + "<mark>" + esc(s.slice(i, i + q.length)) + "</mark>" + esc(s.slice(i + q.length)); };
+
+/* ---------- shared pieces ---------- */
+const sidebar = () => `<aside class="side" aria-hidden="true">
+  <div class="lights"><i></i><i></i><i></i><span class="ws"><b></b>${ico("down", 11)}</span></div>
+  <div class="nav on">${ico("layers")}Everything<em>${DATA.length}</em></div>
+  <div class="nav">${ico("photo")}Gallery<em>11</em></div>
+  <div class="nav">${ico("bookmark")}Up next<em>4</em></div>
+  <div class="nav">${ico("inbox")}Unsorted<em>2</em></div>
+  <div class="label">Folders</div>
+  ${FOLDERS.map(f => `<div class="nav">${ico("folder")}${esc(f)}<em>${DATA.filter(b => b.folder === f).length}</em></div>`).join("")}
+  <div class="foot"><span class="av"></span>tomasz</div></aside>`;
+const corner = () => `<div class="corner"><button class="ib" title="Add link (⌘N)" aria-label="Add link">${ico("plus", 15)}</button><button class="ib" data-display title="View options" aria-label="View options">${ico("sliders", 15)}</button><button class="ib" title="Settings (⌘,)" aria-label="Settings">${ico("gear", 15)}</button></div>`;
+const displayPop = `<div class="pop" data-pop hidden>
+  <div class="row"><span>Layout</span><span class="seg"><b class="on">Masonry</b><b>Grid</b><b>List</b></span></div>
+  <div class="row"><span>Sort</span><span class="seg"><b class="on">Best match</b><b>Newest</b></span></div>
+  <div class="row"><span>Summaries on cards</span><span class="sw"></span></div>
+  <div class="row"><span>Up next strip</span><span class="sw"></span></div>
+  <hr><div class="item">${ico("gear")}Settings<kbd>⌘,</kbd></div></div>`;
+const cardHTML = b => {
+  const light = `hsl(${b.hue} 38% 62%)`, dark = `hsl(${(b.hue + 20) % 360} 34% 34%)`;
+  return `<div class="card"><div class="img" style="aspect-ratio:${1 / b.r};background:linear-gradient(150deg,${light},${dark})"><span>${ico(KINDS[b.kind][2], 11)}</span></div><div class="t">${esc(b.t)}</div><div class="s">${esc(b.site)}</div></div>`;
+};
+const tokHTML = (k, i, armed, extra = "") => k.type === "text"
+  ? `<span class="tok text${armed ? " armed" : ""}" data-tok="${i}">“${esc(k.v)}”<button class="x" data-rm="${i}" aria-label="Remove ${esc(k.v)}">${ico("x", 10)}</button></span>`
+  : `<span class="tok${armed ? " armed" : ""}${k.ai ? " ai" : ""}" data-tok="${i}">${k.ai ? '<span class="aidot"></span>' : ico(tokIcon(k), 12)}${esc(tokLabel(k))}${extra}<button class="x" data-rm="${i}" aria-label="Remove ${esc(tokLabel(k))}">${ico("x", 10)}</button></span>`;
+const optHTML = (o, sel, q, j) => {
+  const ic = o.type === "text" ? "search" : tokIcon(o);
+  const label = o.type === "text" ? `Search for “${esc(o.v)}”` : hl(tokLabel(o), q);
+  const sub = { tag: "tag", folder: "folder", kind: "kind", site: "site", text: "" }[o.type];
+  return `<div class="opt${sel ? " sel" : ""}" data-opt="${j}"><span class="ic">${ico(ic, 12)}</span><span>${label} ${sub ? `<small>${sub}</small>` : ""}</span><span class="n">${o.c}</span></div>`;
+};
+function dropHTML(s, recent) {
+  const q = s.draft.trim();
+  if (!q) {
+    if (!recent) return "";
+    return `<div class="h">Recent</div>${recent.map((r, j) => `<div class="opt" data-recent="${j}"><span class="ic">${ico("clock", 12)}</span><span>${esc(r.label)}</span></div>`).join("")}
+      <div class="foot"><span><kbd>#</kbd> tag</span><span><kbd>site:</kbd></span><span><kbd>-</kbd> exclude</span><span><kbd>↵</kbd> add word</span></div>`;
+  }
+  const sg = s.sug; let j = 0; let html = "";
+  const order = sg.order;
+  html += optHTML(order[0], s.sel === 0, q, j++);
+  const rest = order.slice(1);
+  const byGroup = {};
+  rest.forEach(o => { const g = o.type === "text" ? "Text" : { tag: "Tags", folder: "Folders", kind: "Kinds", site: "Sites" }[o.type]; (byGroup[g] = byGroup[g] || []).push(o); });
+  for (const g of ["Text", "Tags", "Folders", "Kinds", "Sites"]) if (byGroup[g]) {
+    if (g !== "Text") html += `<div class="h">${g}</div>`;
+    byGroup[g].forEach(o => { html += optHTML(o, s.sel === j, q, j); j++; });
+  }
+  return html + `<div class="foot"><span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>↵</kbd> add</span><span><kbd>⌫</kbd> remove last</span><span><kbd>esc</kbd> clear</span></div>`;
+}
+const RECENT = [
+  { label: "outfits › brown › jacket", toks: [{ type: "tag", v: "outfits" }, { type: "tag", v: "brown" }, { type: "tag", v: "jacket" }] },
+  { label: "Design › typography", toks: [{ type: "folder", v: "Design" }, { type: "tag", v: "typography" }] },
+  { label: "japan › travel", toks: [{ type: "tag", v: "japan" }, { type: "tag", v: "travel" }] },
+];
+
+/* ---------- controller: one per window ---------- */
+function make(id, view) {
+  const root = document.getElementById(id);
+  const s = { toks: (view.seed || []).map(t => ({ ...t })), draft: "", sel: 0, open: false, armed: false, sug: null };
+  root.innerHTML = sidebar() + `<div class="main">${view.shell()}<div class="content"><div data-slot="grid"></div></div>${displayPop}</div>`;
+  const $ = sel => root.querySelector(sel);
+  const input = $(".q");
+  const ctl = { s, root, input, update, commit, removeAt, setToks };
+
+  function setToks(t) { s.toks = t; s.draft = ""; input.value = ""; s.armed = false; update(); }
+  function removeAt(i) { s.toks.splice(i, 1); s.armed = false; update(); }
+  function commit(o) {
+    if (!o) { const v = s.draft.trim(); if (!v) return; o = v.startsWith("-") && v.length > 1 ? { type: "not", v: v.slice(1) } : v.startsWith("#") ? { type: "tag", v: v.slice(1).toLowerCase() } : { type: "text", v }; }
+    if (view.commit) return view.commit(ctl, o);
+    if (o.type === "text" && !o.v) return;
+    s.toks.push({ type: o.type, v: o.v }); s.draft = ""; input.value = ""; s.sel = 0; s.armed = false; update();
+  }
+  function update() {
+    s.sug = s.draft.trim() ? suggest(s.toks, s.draft) : null;
+    if (s.sug && s.sel >= s.sug.order.length) s.sel = 0;
+    view.render(ctl);
+    const res = results(s.toks, view.liveDraft === false ? "" : s.draft);
+    const g = $('[data-slot="grid"]');
+    if (!res.length) {
+      g.innerHTML = `<div class="empty"><b>Nothing matches all of these.</b><span>Drop one to widen the search:</span><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">${s.toks.map((k, i) => `<span class="tok" data-drop="${i}">${ico(tokIcon(k) || "text", 12)}${esc(tokLabel(k))} <em style="font-style:normal;color:var(--faint)">${results(s.toks.filter((_, j) => j !== i)).length}</em></span>`).join("")}</div></div>`;
+    } else {
+      const label = s.toks.length || s.draft ? `<div class="grouplabel">Best match<span style="font-weight:400;color:var(--faint)">${res.length}</span></div>` : `<div class="grouplabel">This week</div>`;
+      g.innerHTML = label + `<div class="grid">${res.slice(0, 16).map(cardHTML).join("")}</div>`;
+    }
+  }
+
+  input.addEventListener("input", () => { s.draft = input.value; s.sel = 0; s.armed = false; s.open = true; update(); });
+  input.addEventListener("focus", () => { s.open = true; update(); });
+  input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) { s.open = false; s.armed = false; update(); } }, 120));
+  input.addEventListener("keydown", e => {
+    const order = s.sug?.order || [];
+    if (e.key === "ArrowDown" && order.length) { s.sel = (s.sel + 1) % order.length; e.preventDefault(); update(); }
+    else if (e.key === "ArrowUp" && order.length) { s.sel = (s.sel - 1 + order.length) % order.length; e.preventDefault(); update(); }
+    else if (e.key === "Enter" || (e.key === "Tab" && s.draft)) { e.preventDefault(); commit(view.enterRaw ? null : order[s.sel]); }
+    else if (e.key === "Backspace" && !input.value && s.toks.length) { e.preventDefault(); if (s.armed) removeAt(s.toks.length - 1); else { s.armed = true; update(); } }
+    else if (e.key === "Escape") { if (s.draft) { s.draft = ""; input.value = ""; } else if (s.toks.length) { s.toks = []; } else input.blur(); s.armed = false; update(); }
+    else if (s.armed) { s.armed = false; update(); }
+  });
+  root.addEventListener("mousedown", e => { if (e.target.closest("[data-opt],[data-recent],[data-rm],[data-ref],[data-step],[data-drop],[data-facet],[data-fv]")) e.preventDefault(); });
+  root.addEventListener("click", e => {
+    const t = e.target.closest("[data-opt],[data-recent],[data-rm],[data-ref],[data-step],[data-drop],[data-display],[data-focus]");
+    const pop = $("[data-pop]");
+    if (!e.target.closest("[data-pop]") && !e.target.closest("[data-display]")) { pop.hidden = true; root.querySelectorAll("[data-display]").forEach(b => b.classList.remove("on")); }
+    if (!t) { if (view.onClick) view.onClick(ctl, e); return; }
+    if (t.dataset.display !== undefined) {
+      const b = t.getBoundingClientRect(), r = root.querySelector(".main").getBoundingClientRect();
+      pop.style.top = (b.bottom - r.top + 6) + "px"; pop.style.right = Math.max(0, r.right - b.right) + "px"; pop.hidden = !pop.hidden; t.classList.toggle("on", !pop.hidden); return;
+    }
+    if (t.dataset.opt !== undefined) { commit(s.sug.order[+t.dataset.opt]); input.focus(); }
+    else if (t.dataset.recent !== undefined) { setToks(RECENT[+t.dataset.recent].toks.map(k => ({ ...k }))); input.focus(); }
+    else if (t.dataset.rm !== undefined) { removeAt(+t.dataset.rm); }
+    else if (t.dataset.drop !== undefined) { removeAt(+t.dataset.drop); }
+    else if (t.dataset.ref !== undefined) { const r = JSON.parse(t.dataset.ref); s.toks.push(r); s.draft = ""; input.value = ""; update(); }
+    else if (t.dataset.step !== undefined) { s.toks = s.toks.slice(0, +t.dataset.step); update(); input.focus(); }
+    else if (t.dataset.focus !== undefined) input.focus();
+  });
+  if (view.init) view.init(ctl);
+  update();
+  return ctl;
+}
+const refAttr = r => esc(JSON.stringify({ type: r.type, v: r.v }));
+const refPills = toks => refinements(toks).map(r => `<button class="rp${r.type === "kind" ? " kind" : ""}" data-ref="${refAttr(r)}">${r.type === "kind" ? ico(KINDS[r.v][2], 12) : ico("plus", 11)}${esc(tokLabel(r))}<em>${r.c}</em></button>`).join("");
+function placeDrop(ctl, anchorSel, html) {
+  const d = ctl.root.querySelector("[data-drop-slot]");
+  if (!html || !ctl.s.open) { d.hidden = true; return; }
+  const a = ctl.root.querySelector(anchorSel).getBoundingClientRect(), m = ctl.root.querySelector(".main").getBoundingClientRect();
+  const w = Math.max(280, Math.min(a.width, 460));
+  d.style.width = w + "px"; d.style.top = (a.bottom - m.top + 6) + "px";
+  d.style.left = Math.max(0, Math.min(a.left - m.left, m.width - w - 4)) + "px";
+  d.innerHTML = html; d.hidden = false;
+}
+
+/* ---------- A · Trail ---------- */
+const A = make("winA", {
+  seed: [{ type: "tag", v: "outfits" }, { type: "tag", v: "brown" }],
+  shell: () => `<div class="top"><div class="spacer"></div><div class="center"><div class="pill" data-focus>${ico("search", 16)}<span class="toks" data-slot="toks"></span><input class="q" id="qa" aria-label="Search" autocomplete="off" spellcheck="false"><span class="count" data-slot="count"></span><button class="save" data-slot="save" title="Save as smart folder">${ico("star", 12)}Save</button></div><div class="refine" data-slot="refine"></div></div>${corner()}</div><div class="drop" data-drop-slot hidden></div>`,
+  render(c) {
+    const s = c.s, r = c.root;
+    r.querySelector('[data-slot="toks"]').innerHTML = s.toks.map((k, i) => (i ? `<span class="chev">${ico("chev", 11)}</span>` : "") + tokHTML(k, i, s.armed && i === s.toks.length - 1)).join("");
+    c.input.placeholder = s.toks.length ? "Add a word…" : "Search, or just start typing";
+    const n = results(s.toks, s.draft).length;
+    r.querySelector('[data-slot="count"]').textContent = s.toks.length || s.draft ? `${n} found` : "";
+    r.querySelector('[data-slot="save"]').hidden = !s.toks.length || !!s.draft;
+    r.querySelector('[data-slot="refine"]').innerHTML = s.draft ? "" : refPills(s.toks);
+    placeDrop(c, "#winA .pill", dropHTML(s, s.toks.length ? null : RECENT));
+    const tk = r.querySelector('[data-slot="toks"]'); tk.scrollLeft = tk.scrollWidth;
+  },
+});
+
+/* ---------- B · Path ---------- */
+const B = make("winB", {
+  seed: [{ type: "tag", v: "outfits" }],
+  shell: () => `<div class="bar"><div class="path" data-slot="path"><input class="q" id="qb" aria-label="Search" autocomplete="off" spellcheck="false"></div><span class="count" data-slot="count"></span>${corner()}</div><div class="narrow" data-slot="narrow"></div><div class="drop" data-drop-slot hidden></div>`,
+  render(c) {
+    const s = c.s, path = c.root.querySelector('[data-slot="path"]');
+    path.querySelectorAll(".seg2,.slash").forEach(n => n.remove());
+    const segs = [`<span class="seg2${s.toks.length ? "" : " last"}" data-step="0">${ico("layers", 15)}Everything</span>`]
+      .concat(s.toks.map((k, i) => `<span class="slash">/</span><span class="seg2${i === s.toks.length - 1 ? " last" : ""}${s.armed && i === s.toks.length - 1 ? " armed" : ""}" data-step="${i + 1}">${k.type === "text" ? "" : ico(tokIcon(k), 14)}${esc(tokLabel(k))}</span>`));
+    c.input.insertAdjacentHTML("beforebegin", segs.join("") + `<span class="slash">/</span>`);
+    c.input.placeholder = "type to narrow";
+    const n = results(s.toks, s.draft).length;
+    c.root.querySelector('[data-slot="count"]').textContent = `${n} bookmarks`;
+    const refs = refinements(s.toks, 8);
+    c.root.querySelector('[data-slot="narrow"]').innerHTML = s.draft || !refs.length ? "" : `<span>Narrow:</span>` + refs.map(r => `<button data-ref="${refAttr(r)}">${esc(tokLabel(r).toLowerCase())}</button><em>${r.c}</em>`).join("");
+    placeDrop(c, "#winB .q", dropHTML(s, null));
+  },
+});
+
+/* ---------- C · Spotlight ---------- */
+const C = make("winC", {
+  seed: [{ type: "tag", v: "outfits" }, { type: "kind", v: "product" }],
+  shell: () => `<div class="bar"><div class="launcher" data-focus data-slot="launch"></div><div class="grow"></div><span class="count" data-slot="count"></span>${corner()}</div>
+    <div class="scrim" data-slot="scrim" hidden><div class="spot"><div class="in" data-slot="in">${ico("search", 17)}<span data-slot="toks" style="display:contents"></span><input class="q" id="qc" aria-label="Search" autocomplete="off" spellcheck="false"></div><div class="body" data-slot="body"></div></div></div>`,
+  init(c) {
+    const scrim = c.root.querySelector('[data-slot="scrim"]');
+    c.root.querySelector('[data-slot="launch"]').addEventListener("click", () => { scrim.hidden = false; c.input.focus(); });
+    scrim.addEventListener("mousedown", e => { if (e.target === scrim) { scrim.hidden = true; c.input.blur(); } });
+    c.input.addEventListener("keydown", e => { if (e.key === "Escape" && !c.s.draft) { scrim.hidden = true; c.input.blur(); } }, true);
+    c.input.addEventListener("focus", () => { scrim.hidden = false; });
+    c.root.addEventListener("keydown", e => { if (scrim.hidden && e.key.length === 1 && !e.metaKey && document.activeElement !== c.input) { scrim.hidden = false; c.input.focus(); } });
+  },
+  render(c) {
+    const s = c.s, r = c.root;
+    r.querySelector('[data-slot="launch"]').innerHTML = ico("search", 14) + (s.toks.length ? s.toks.map((k, i) => tokHTML(k, i, false)).join("") : `<span>Search</span>`) + `<kbd>⌘K</kbd>`;
+    r.querySelector('[data-slot="toks"]').innerHTML = s.toks.map((k, i) => tokHTML(k, i, s.armed && i === s.toks.length - 1)).join("");
+    c.input.placeholder = s.toks.length ? "Add a word…" : "Search your library";
+    r.querySelector('[data-slot="count"]').textContent = s.toks.length ? `${results(s.toks).length} bookmarks` : "";
+    let body;
+    if (s.draft.trim()) body = dropHTML(s, null);
+    else {
+      const refs = refinements(s.toks, 6);
+      body = (s.toks.length ? `<div class="h">Narrow by</div><div style="display:flex;gap:6px;flex-wrap:wrap;padding:4px 8px 6px">${refPills(s.toks)}</div>` : dropHTML(s, RECENT).replace(/<div class="foot">[\s\S]*$/, ""));
+      void refs;
+    }
+    const top = results(s.toks, s.draft).slice(0, 3);
+    body += top.length ? `<div class="h">Bookmarks</div>` + top.map(b => `<div class="hit"><span class="th" style="background:linear-gradient(150deg,hsl(${b.hue} 38% 62%),hsl(${(b.hue + 20) % 360} 34% 34%))"></span><span>${esc(b.t)}<small>${esc(b.site)} · ${esc(b.folder)}</small></span></div>`).join("") : "";
+    r.querySelector('[data-slot="body"]').innerHTML = body;
+  },
+});
+
+/* ---------- D · Facets ---------- */
+const FACET = { kind: "Kind", tag: "Tag", folder: "Folder", site: "Site", text: "Contains", not: "Excludes" };
+const D_ = make("winD", {
+  seed: [{ type: "folder", v: "Outfits / Fashion" }, { type: "tag", v: "brown" }],
+  shell: () => `<div class="bar"><div class="field" data-focus>${ico("search", 15)}<input class="q" id="qd" aria-label="Search" autocomplete="off" spellcheck="false"><span class="count" data-slot="count"></span></div>${corner()}</div>
+    <div class="facets" data-slot="facets">${["kind", "tag", "folder", "site"].map(f => `<button class="fb" data-facet="${f}">${ico("plus", 11)}${FACET[f]}</button>`).join("")}<button class="fb" disabled style="opacity:.6">${ico("plus", 11)}Added</button></div>
+    <div class="filters" data-slot="filters"></div><div class="drop" data-drop-slot hidden></div>`,
+  onClick(c, e) {
+    const f = e.target.closest("[data-facet]"), fv = e.target.closest("[data-fv]");
+    const d = c.root.querySelector("[data-drop-slot]");
+    if (fv) { c.s.toks.push(JSON.parse(fv.dataset.fv)); d.hidden = true; c.update(); return; }
+    if (!f) { if (!e.target.closest("[data-drop-slot]")) d.hidden = true; return; }
+    const type = f.dataset.facet, base = results(c.s.toks);
+    const vals = {}; base.forEach(b => { (type === "tag" ? b.tags : [type === "kind" ? b.kind : type === "folder" ? b.folder : b.site]).forEach(v => { if (!has(c.s.toks, type, v)) vals[v] = (vals[v] || 0) + 1; }); });
+    const list = Object.entries(vals).sort((a, b) => b[1] - a[1]).slice(0, 9);
+    const a = f.getBoundingClientRect(), m = c.root.querySelector(".main").getBoundingClientRect();
+    d.style.left = (a.left - m.left) + "px"; d.style.top = (a.bottom - m.top + 6) + "px"; d.style.width = "240px";
+    d.innerHTML = `<div class="h">${FACET[type]}</div>` + (list.length ? list.map(([v, n]) => { const k = { type, v }; return `<div class="opt" data-fv="${refAttr(k)}"><span class="ic">${ico(tokIcon(k), 12)}</span><span>${esc(tokLabel(k))}</span><span class="n">${n}</span></div>`; }).join("") : `<div class="opt">Nothing left to add</div>`);
+    d.hidden = false;
+  },
+  render(c) {
+    const s = c.s, r = c.root;
+    c.input.placeholder = "Search titles, notes, page text…";
+    r.querySelector('[data-slot="count"]').textContent = `${results(s.toks, s.draft).length}`;
+    r.querySelector('[data-slot="filters"]').innerHTML = s.toks.map((k, i) => `<span class="ftok"${s.armed && i === s.toks.length - 1 ? ' style="outline:2px solid var(--text)"' : ""}><span>${ico(tokIcon(k) || "text", 12)}${FACET[k.type]}</span><span>is</span><span class="v">${esc(k.type === "kind" ? kindLabel(k.v) : k.v)}</span><button data-rm="${i}" aria-label="Remove filter">${ico("x", 11)}</button></span>`).join("") + (s.toks.length ? `<button class="clear" data-step="0">Clear</button>` : "");
+    placeDrop(c, "#winD .field", dropHTML(s, null));
+  },
+});
+
+/* ---------- E · Ask ---------- */
+const STOP = new Set("i a an the my me in on of for from with that this those these and or to some saved save ive i've was were all about like".split(" "));
+function interpret(sentence) {
+  const out = []; let rest = [];
+  const words = sentence.toLowerCase().replace(/[^\w\s/-]/g, " ").split(/\s+/).filter(Boolean);
+  const allTags = new Set(DATA.flatMap(b => b.tags));
+  for (const w of words) {
+    if (STOP.has(w) || w === "folder" || w === "stuff" || w === "things") continue;
+    const sing = w.replace(/s$/, "");
+    const folder = FOLDERS.find(f => f.toLowerCase().split(/[\s/]+/).includes(w));
+    const kind = Object.keys(KINDS).find(k => [KINDS[k][0], KINDS[k][1]].some(l => l.toLowerCase() === w || l.toLowerCase() === sing));
+    if (folder) out.push({ type: "folder", v: folder, ai: true });
+    else if (kind) out.push({ type: "kind", v: kind, ai: true });
+    else if (allTags.has(w) || allTags.has(sing)) out.push({ type: "tag", v: allTags.has(w) ? w : sing, ai: true });
+    else rest.push(w);
+  }
+  if (rest.length) out.push({ type: "text", v: rest.join(" ") });
+  return out;
+}
+const E = make("winE", {
+  seed: interpret("brown leather jackets in my outfits folder"),
+  enterRaw: true, liveDraft: false,
+  shell: () => `<div class="top"><div class="spacer"></div><div class="center"><div class="ask" data-focus><span class="aidot" style="width:8px;height:8px"></span><input class="q" id="qe" aria-label="Describe what you are looking for" autocomplete="off" spellcheck="false"><span class="count" data-slot="count"></span></div><div class="under" data-slot="under"></div><div class="refine" data-slot="refine" style="width:min(580px,100%);justify-content:safe center"></div></div>${corner()}</div>`,
+  init(c) { c.input.value = "brown leather jackets in my outfits folder"; c.s.draft = c.input.value; },
+  commit(c) { const v = c.input.value.trim(); if (!v) return; c.s.toks = interpret(v); c.s.armed = false; c.update(); },
+  render(c) {
+    const s = c.s, r = c.root;
+    c.input.placeholder = "Describe it: “that brown jacket from a shop”";
+    r.querySelector('[data-slot="count"]').textContent = s.toks.length ? `${results(s.toks).length} found` : "↵";
+    r.querySelector('[data-slot="under"]').innerHTML = s.toks.length ? `<span>Understood as</span>` + s.toks.map((k, i) => tokHTML(k, i, s.armed && i === s.toks.length - 1)).join("") : `<span>Press ↵ and Knoa turns the sentence into filters you can edit.</span>`;
+    r.querySelector('[data-slot="refine"]').innerHTML = s.toks.length ? refPills(s.toks) : "";
+  },
+});
+
+/* ---------- F · Headline ---------- */
+const F = make("winF", {
+  seed: [{ type: "tag", v: "outfits" }, { type: "tag", v: "brown" }],
+  shell: () => `<div class="top"><div class="head" data-focus data-slot="head"><input class="q" id="qf" aria-label="Search" autocomplete="off" spellcheck="false"></div>${corner()}</div><div class="meta" data-slot="meta"></div><div class="drop" data-drop-slot hidden></div>`,
+  render(c) {
+    const s = c.s, head = c.root.querySelector('[data-slot="head"]');
+    head.querySelectorAll(".w,.sep").forEach(n => n.remove());
+    c.input.insertAdjacentHTML("beforebegin", s.toks.map((k, i) => `${i ? '<span class="sep">·</span>' : ""}<span class="w${k.type === "tag" ? " tag" : ""}${s.armed && i === s.toks.length - 1 ? " armed" : ""}" data-rm="${i}" title="Remove">${esc(tokLabel(k).toLowerCase())}</span>`).join("") + (s.toks.length ? '<span class="sep">·</span>' : ""));
+    c.input.placeholder = s.toks.length ? "" : "Everything";
+    c.input.style.width = Math.max(s.toks.length ? 40 : 170, (c.input.value.length + 1) * 17) + "px";
+    const n = results(s.toks, s.draft).length;
+    const refs = refinements(s.toks, 7);
+    c.root.querySelector('[data-slot="meta"]').innerHTML = `<span>${n} bookmarks</span>` + (refs.length && !s.draft ? `<span>· narrow by</span>` + refs.map((r, i) => `<button data-ref="${refAttr(r)}">${esc(tokLabel(r).toLowerCase())}</button>${i < refs.length - 1 ? "," : ""}`).join("") : "");
+    placeDrop(c, "#winF .q", dropHTML(s, null));
+  },
+});
+
+/* ---------- demos ---------- */
+const CTL = { A, B, C, D: D_, E, F };
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+async function typeInto(c, text) {
+  c.input.focus({ preventScroll: true });
+  for (const ch of text) { c.input.value += ch; c.input.dispatchEvent(new Event("input")); await wait(reduce ? 0 : 90); }
+  await wait(reduce ? 0 : 450);
+}
+const enter = c => c.input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+document.querySelectorAll("[data-play]").forEach(btn => btn.addEventListener("click", async () => {
+  const c = CTL[btn.dataset.play]; btn.disabled = true;
+  c.setToks([]);
+  if (btn.dataset.play === "E") { await typeInto(c, "brown jackets I saved in outfits"); enter(c); }
+  else for (const w of ["outfits", "brown", "jacket"]) { await typeInto(c, w); enter(c); await wait(reduce ? 0 : 700); }
+  btn.disabled = false;
+}));
+})();
+</script>

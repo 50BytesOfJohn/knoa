@@ -283,7 +283,8 @@ Keychain in release-channel builds and in a plain file in dev builds
   lights, places, folders, a status card for the AI and sync, and the account menu and
   settings in its footer), a floating search pill with kind chips, masonry cards grouped
   by date with a date rail, and a floating detail panel. The approved layout is in the
-  [main screen design](design/main-screen.md) and the [sidebar design](design/sidebar.md);
+  [main screen design](design/main-screen.md), the [sidebar design](design/sidebar.md) and the
+  [top bar design](design/top-bar.md) (approved, not built);
   the research behind it is in [research](research/main-screen.md).
 - The sidebar and the main view are sibling views, each drawn from its own cache, so the
   sidebar's hovers and animations never rebuild the cards. The sidebar redraws for a
