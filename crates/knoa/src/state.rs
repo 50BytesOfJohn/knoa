@@ -2,6 +2,7 @@
 
 pub mod batch;
 pub mod database;
+pub mod facets;
 pub mod library;
 pub mod rewritten_images;
 pub mod search;

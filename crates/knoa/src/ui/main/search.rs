@@ -33,7 +33,7 @@ impl MainView {
         let (left, right) = super::content::content_span(window, show_detail);
         let width = (right - left - 40.).min(PILL_MAX_WIDTH);
         let library = self.library.read(cx);
-        let total = library.results().len();
+        let total = library.result_facets().total;
         let scope = match library.place() {
             Place::Everything => None,
             Place::Gallery => Some(t!("main-place-gallery")),
@@ -202,7 +202,7 @@ impl MainView {
         let theme = Theme::get(cx).clone();
         let library = self.library.read(cx);
         let current = library.search().kind();
-        let counts = library.kind_counts().to_vec();
+        let counts = library.base_facets().kinds.clone();
         let chip = |id: &'static str, label: String, active: bool| {
             div()
                 .id(id)
