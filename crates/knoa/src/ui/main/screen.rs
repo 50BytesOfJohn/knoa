@@ -160,10 +160,13 @@ impl MainView {
         {
             return;
         }
+        // `/` only focuses the search, as on the web; it isn't typed.
         let text = text.clone();
         self.search.update(cx, |input, cx| {
             input.focus(window, cx);
-            input.insert(text, window, cx);
+            if text != "/" {
+                input.insert(text, window, cx);
+            }
         });
         cx.stop_propagation();
     }

@@ -35,7 +35,7 @@ use gpui::{
     ParentElement as _, Render, ScrollHandle, Styled as _, Subscription, Task, Window, div,
     prelude::FluentBuilder as _,
 };
-use gpui_component::input::{InputEvent, InputState};
+use gpui_component::input::InputState;
 use knoa_core::{BookmarkId, Place, WorkspaceId};
 
 use crate::{
@@ -58,6 +58,7 @@ use keys::{
 pub use keys::{OpenSettings, bind_keys};
 use overlay::Overlay;
 pub use screen::MainScreen;
+use search::PillState;
 pub use sidebar::traffic_light_position;
 use sidebar::{SidebarEvent, SidebarView};
 
@@ -65,6 +66,7 @@ pub struct MainView {
     library: Entity<Library>,
     sidebar: Entity<SidebarView>,
     search: Entity<InputState>,
+    pill: PillState,
     cards_focus: FocusHandle,
     /// Held by the image viewer while it is open, so its keys replace the grid's.
     viewer_focus: FocusHandle,
@@ -100,15 +102,7 @@ impl MainView {
             cx.new(|cx| InputState::new(window, cx).placeholder(t!("main-search-placeholder")));
         let sidebar = cx.new(|cx| SidebarView::new(library.clone(), cx));
         let subscriptions = vec![
-            cx.subscribe_in(
-                &search,
-                window,
-                |this, _, event: &InputEvent, window, cx| {
-                    if matches!(event, InputEvent::Change) {
-                        this.on_search_input(window, cx);
-                    }
-                },
-            ),
+            cx.subscribe_in(&search, window, Self::on_search_event),
             cx.subscribe_in(
                 &library,
                 window,
@@ -127,6 +121,7 @@ impl MainView {
             library,
             sidebar,
             search,
+            pill: PillState::default(),
             cards_focus,
             viewer_focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
@@ -189,6 +184,12 @@ impl MainView {
     /// Shows `place`. A folder chosen from anywhere but its own row, such as a menu or
     /// ⌘1 to ⌘9, has its parents opened so the selection is visible.
     pub fn set_place(&mut self, place: Place, window: &mut Window, cx: &mut Context<'_, MainView>) {
+        self.show_place(place, cx);
+        self.cards_focus.focus(window, cx);
+    }
+
+    /// [`MainView::set_place`] without moving focus, for the search pill.
+    fn show_place(&mut self, place: Place, cx: &mut Context<'_, MainView>) {
         self.confirm_empty_trash = false;
         if let Place::Folder(id) = place {
             self.sidebar
@@ -198,7 +199,6 @@ impl MainView {
             .update(cx, |library, cx| library.set_place(place, cx));
         self.scroll
             .set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
-        self.cards_focus.focus(window, cx);
     }
 
     /// Summaries change card heights, so the masonry layout is redone.

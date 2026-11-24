@@ -46,6 +46,7 @@ use account_menu::AccountMenu;
 use drop::SidebarDrop;
 use outline::Outline;
 use places::PlaceRows;
+pub(super) use places::place_icon;
 use shown::{CloudShown, LibraryShown};
 use status_card::StatusCard;
 

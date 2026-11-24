@@ -9,6 +9,18 @@ use crate::i18n;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Filter(Filter),
+    /// A word or phrase searched as text, drawn as its own chip.
+    Text(String),
+}
+
+impl Token {
+    /// The token as it would be typed: `#pasta`, `kind:recipe`, `quick`.
+    pub fn typed(&self) -> String {
+        match self {
+            Token::Filter(filter) => filter.typed(),
+            Token::Text(text) => text.clone(),
+        }
+    }
 }
 
 /// The search apart from the place. Text tokens stay apart from the typed text so the
@@ -27,13 +39,13 @@ impl Search {
 
     /// Whether any text is searched, which ranks results by best match.
     pub fn has_text(&self) -> bool {
-        !self.typed.trim().is_empty()
+        !self.typed.trim().is_empty() || self.tokens.iter().any(|t| matches!(t, Token::Text(_)))
     }
 
     pub fn kind(&self) -> Option<Kind> {
         self.tokens.iter().find_map(|token| match token {
             Token::Filter(Filter::Kind(kind)) => Some(*kind),
-            Token::Filter(_) => None,
+            _ => None,
         })
     }
 
@@ -70,10 +82,23 @@ impl Search {
             place,
             ..Query::default()
         };
-        for Token::Filter(filter) in &self.tokens {
-            query.apply(filter.clone());
+        let mut text = Vec::new();
+        for token in &self.tokens {
+            match token {
+                Token::Filter(filter) => query.apply(filter.clone()),
+                Token::Text(words) => text.push(words.as_str()),
+            }
         }
+        query.text = text.join(" ");
         query
+    }
+
+    /// The search as one line of syntax, `kind:recipe #pasta quick`, which parses back to
+    /// the same tokens. The typed text is left as typed.
+    pub fn typed_form(&self) -> String {
+        let tokens = self.tokens.iter().map(Token::typed);
+        let typed = (!self.typed.trim().is_empty()).then(|| self.typed.trim().to_owned());
+        tokens.chain(typed).collect::<Vec<_>>().join(" ")
     }
 
     /// Takes what the input holds. Every complete word (one followed by whitespace) with
