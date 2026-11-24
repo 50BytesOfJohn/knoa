@@ -1,13 +1,18 @@
 //! The pill's keys: ⌫ on an empty input, Esc, the suggestion list's ↑ ↓ ↵ ⇥, and ⌘C
-//! without a selection.
+//! without a selection. The input's cursor moves pass through, clearing a selected token.
 //!
 //! GPUI runs a key's binding before any key-down listener, and the input binds every one
 //! of these keys. So they are caught as the input's own actions, in the capture phase on
 //! the way down to it: a handler that acts stops the action there, one that doesn't lets
 //! the input have it.
 
-use gpui::{ClipboardItem, Context, Div, InteractiveElement as _, KeyDownEvent, Stateful, Window};
-use gpui_component::input::{Backspace, Copy, Enter, Escape, IndentInline, MoveDown, MoveUp};
+use gpui::{
+    Action, ClipboardItem, Context, Div, InteractiveElement as _, KeyDownEvent, Stateful, Window,
+};
+use gpui_component::input::{
+    Backspace, Copy, Enter, Escape, IndentInline, MoveDown, MoveEnd, MoveHome, MoveLeft, MoveRight,
+    MoveToEnd, MoveToNextWord, MoveToPreviousWord, MoveToStart, MoveUp,
+};
 use knoa_core::Place;
 
 use super::{MainView, Slot};
@@ -19,6 +24,7 @@ impl MainView {
         pill: Stateful<Div>,
         cx: &mut Context<'_, MainView>,
     ) -> Stateful<Div> {
+        let pill = self.deselect_on_moves(pill, cx);
         pill.capture_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
             // Typing goes on past a selected token rather than removing it.
             if event.keystroke.key != "backspace" {
@@ -68,6 +74,29 @@ impl MainView {
                 cx.stop_propagation();
             }
         }))
+    }
+
+    fn deselect_on_moves(
+        &self,
+        pill: Stateful<Div>,
+        cx: &mut Context<'_, MainView>,
+    ) -> Stateful<Div> {
+        let pill = Self::deselect_on::<MoveLeft>(pill, cx);
+        let pill = Self::deselect_on::<MoveRight>(pill, cx);
+        let pill = Self::deselect_on::<MoveHome>(pill, cx);
+        let pill = Self::deselect_on::<MoveEnd>(pill, cx);
+        let pill = Self::deselect_on::<MoveToStart>(pill, cx);
+        let pill = Self::deselect_on::<MoveToEnd>(pill, cx);
+        let pill = Self::deselect_on::<MoveToPreviousWord>(pill, cx);
+        Self::deselect_on::<MoveToNextWord>(pill, cx)
+    }
+
+    /// Clears a selected token on the input's action `A` and lets the input have it.
+    fn deselect_on<A: Action>(
+        pill: Stateful<Div>,
+        cx: &mut Context<'_, MainView>,
+    ) -> Stateful<Div> {
+        pill.capture_action(cx.listener(|this, _: &A, _, cx| this.deselect_token(cx)))
     }
 
     fn deselect_token(&mut self, cx: &mut Context<'_, MainView>) {
