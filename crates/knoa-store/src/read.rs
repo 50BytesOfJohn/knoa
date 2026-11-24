@@ -320,9 +320,11 @@ mod tests {
         store
             .import(WORKSPACE, "test", &movies, NewBookmarks::Organize)
             .unwrap();
-        for (job, runtime) in store.take_jobs(0, 2).unwrap().into_iter().zip([170, 104]) {
+        let movies = [(170, "Terrence Malick"), (104, "carol_reed")];
+        for (job, (runtime, director)) in store.take_jobs(0, 2).unwrap().into_iter().zip(movies) {
             let mut fields = Fields::new();
             fields.insert("runtime".into(), json!(runtime));
+            fields.insert("director".into(), json!(director));
             let enrichment = Enrichment {
                 kind: Kind::Movie,
                 title: None,
@@ -349,6 +351,9 @@ mod tests {
         };
         assert_eq!(titles("th"), ["The Thin Red Line", "The Third Man"]);
         assert_eq!(titles("thi noir runtime>2h"), ["The Thin Red Line"]);
+        // `_` in a typed value stands for a space, and finds a literal `_` too.
+        assert_eq!(titles("director:terrence_malick"), ["The Thin Red Line"]);
+        assert_eq!(titles("director:carol_reed"), ["The Third Man"]);
         assert_eq!(
             store
                 .kind_counts(&Query::parse("noir", None, Place::Everything))

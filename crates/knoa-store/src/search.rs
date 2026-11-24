@@ -121,11 +121,12 @@ fn field_condition(field: &FieldFilter, params: &mut Vec<Value>) -> String {
             params.push(Value::Real(n.as_f64().unwrap_or_default()));
             format!("{path} = ?")
         }
+        // Typed values stand in `_` for spaces, so `author:some_author` has to find both
+        // "some_author" and "some author": the two read as the same on either side.
         (Comparison::Matches, value) => {
-            params.push(Value::Text(
-                value.as_str().unwrap_or_default().to_lowercase(),
-            ));
-            format!("lower({path}) LIKE '%' || ? || '%'")
+            let wanted = value.as_str().unwrap_or_default().to_lowercase();
+            params.push(Value::Text(wanted.replace('_', " ")));
+            format!("instr(replace(lower({path}), '_', ' '), ?) > 0")
         }
         (op, serde_json::Value::String(text)) => {
             // Dates and date-times compare by their prefix, so `starts>2026-12-01`
