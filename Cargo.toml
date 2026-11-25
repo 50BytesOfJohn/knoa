@@ -158,3 +158,8 @@ opt-level = 2
 lto = "thin"
 codegen-units = 1
 strip = "debuginfo"
+
+# Drop once a gpui-pre / gpui-component bump includes upstream fixes for
+# zed-industries/zed#67295 (CAMetalDisplayLink idle stall) and #67004 (occlusion desync).
+[patch.crates-io]
+gpui-pre-macos = { path = "patches/gpui-pre-macos" }
