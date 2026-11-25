@@ -227,6 +227,17 @@ mod tests {
     }
 
     #[test]
+    fn a_sliver_is_shrunk_along_its_length_on_the_desktop() {
+        let png = worker_memory::sliver_png(1, 2_000_000);
+
+        let image = read_within(&url(), png, "image/png", false, decode::DESKTOP);
+
+        assert_eq!(image.problem, None);
+        let preview = image.preview.expect("a display copy");
+        assert_eq!((preview.width, preview.height), (1, 1600));
+    }
+
+    #[test]
     fn an_image_over_the_pixel_budget_is_described_without_decoding() {
         // A PNG's signature and header, claiming 12000×12000 pixels: over the budget on
         // every target.

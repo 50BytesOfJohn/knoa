@@ -38,13 +38,14 @@ pub fn decode(bytes: &[u8], target_side: u32, allowance: &Allowance) -> Result<D
     let source = (reader.info().width, reader.info().height);
     let target = scale::fit(source.0, source.1, target_side);
     // Adam7 hands out its rows in seven passes over the picture, so it is read whole.
+    let rows = CHUNK_BYTES + row_bytes(reader.info(), color);
     let image = if target == source || reader.info().interlaced {
         let whole = pixels(source) * u64::from(color.bytes_per_pixel());
-        allowance.check(CHUNK_BYTES + whole, whole)?;
+        allowance.check(rows + whole, whole)?;
         whole_frame(&mut reader, source, color)
     } else {
         let resampler = Resampler::bytes(source, target, color.channel_count());
-        allowance.check(CHUNK_BYTES + resampler, resampler)?;
+        allowance.check(rows + resampler, resampler)?;
         shrunk_frame(&mut reader, source, target, color)
     }
     .map_err(|err| refusal(&err, allowance))?;
@@ -77,6 +78,20 @@ fn shrunk_frame(
     Ok(resampler.finish())
 }
 
+/// What the reader holds to hand out rows, which no `Limits` bound: its buffer of raw rows,
+/// which it trims only once about four rows are spent (never past the whole image) and
+/// which grows by doubling, so up to twice its fill and, while it moves, the old block too;
+/// a copy of the previous row; and the row in eight bits a channel.
+fn row_bytes(info: &png::Info<'_>, color: ColorType) -> u64 {
+    let width = u64::from(info.width);
+    let bits = width * info.color_type.samples() as u64 * u64::from(info.bit_depth as u8);
+    // A filter byte leads every row.
+    let raw_row = 1 + bits.div_ceil(8);
+    let trimmed_after = (4 * raw_row).next_multiple_of(64).max(128 * 1024);
+    let filled = (trimmed_after + 3 * raw_row).min(u64::from(info.height) * raw_row) + 8 * 1024;
+    3 * filled + raw_row + width * u64::from(color.bytes_per_pixel())
+}
+
 fn pixels((width, height): (u32, u32)) -> u64 {
     u64::from(width) * u64::from(height)
 }
@@ -93,7 +108,7 @@ fn refusal(err: &png::DecodingError, allowance: &Allowance) -> Problem {
 mod tests {
     use image::{ExtendedColorType, ImageEncoder as _, codecs::png::PngEncoder};
 
-    use super::*;
+    use super::{super::budget::WORKER, *};
 
     fn unlimited() -> Allowance {
         Allowance::unlimited(Problem::TooManyPixels {
@@ -111,14 +126,36 @@ mod tests {
         file
     }
 
+    /// A black 16-bit RGBA PNG, written a row at a time: a large one is a small file.
+    fn blank_rgba16(width: u32, height: u32) -> Vec<u8> {
+        let mut file = Vec::new();
+        let mut encoder = png::Encoder::new(&mut file, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(BitDepth::Sixteen);
+        encoder.set_compression(png::Compression::Fastest);
+        let mut writer = encoder.write_header().expect("a header");
+        let mut rows = writer.stream_writer().expect("a writer");
+        let row = vec![0; width as usize * 8];
+        for _ in 0..height {
+            std::io::Write::write_all(&mut rows, &row).expect("writable");
+        }
+        rows.finish().expect("finished");
+        drop(writer);
+        file
+    }
+
     /// `file` with a chunk inserted after its header.
     fn with_chunk(file: &[u8], kind: [u8; 4], data: &[u8]) -> Vec<u8> {
         let header_end = 8 + 25;
+        [&file[..header_end], &chunk(kind, data), &file[header_end..]].concat()
+    }
+
+    fn chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
         let mut chunk = (data.len() as u32).to_be_bytes().to_vec();
         chunk.extend(kind);
         chunk.extend(data);
         chunk.extend(crc32(&chunk[4..]).to_be_bytes());
-        [&file[..header_end], &chunk, &file[header_end..]].concat()
+        chunk
     }
 
     fn crc32(bytes: &[u8]) -> u32 {
@@ -146,6 +183,42 @@ mod tests {
         assert_eq!((image.width(), image.height()), (100, 50));
         assert_eq!(image.color(), ColorType::Rgba8);
         assert_eq!(image.to_rgba8().get_pixel(50, 25).0, [90; 4]);
+    }
+
+    #[test]
+    fn a_wide_png_whose_rows_overflow_the_worker_is_refused_before_decoding() {
+        // Rows of 6.4 MB: the reader's buffer of them grows to 64 MiB, though the file is
+        // small and the shrunk copy tiny.
+        let (width, height) = (800_000, 32);
+        let file = blank_rgba16(width, height);
+        let too_large = Problem::TooManyPixels { width, height };
+        let worker = Allowance::new(WORKER, file.len() as u64, 0, too_large.clone());
+
+        let decoded = decode(&file, 1600, &worker);
+
+        assert_eq!(decoded.err(), Some(too_large));
+    }
+
+    #[test]
+    fn a_sliver_70_million_pixels_long_fits_the_desktop_budget() {
+        // Only a header and a scrap of image data: it passes the size checks, then fails
+        // as damaged. Weights for every output row would have taken 1.1 GB.
+        let mut file = b"\x89PNG\r\n\x1a\n".to_vec();
+        let mut header = 1_u32.to_be_bytes().to_vec();
+        header.extend(70_000_000_u32.to_be_bytes());
+        header.extend([8, 0, 0, 0, 0]);
+        file.extend(chunk(*b"IHDR", &header));
+        file.extend(chunk(*b"IDAT", &[0x78, 0x9c, 0x63]));
+
+        let decoded = crate::image::decode::decode(
+            &file,
+            crate::image::facts::Codec::Png,
+            (1, 70_000_000),
+            1600,
+            crate::image::decode::DESKTOP,
+        );
+
+        assert_eq!(decoded.err(), Some(Problem::Damaged));
     }
 
     #[test]

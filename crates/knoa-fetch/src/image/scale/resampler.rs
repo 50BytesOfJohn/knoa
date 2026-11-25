@@ -2,6 +2,8 @@
 //! arrives and kept in a window of the few rows the next output row needs, so shrinking
 //! holds the output and that window, never a second copy of the image.
 
+use std::ops::Range;
+
 use image::{ColorType, DynamicImage};
 
 /// Catmull-Rom reaches two source pixels either side, stretched by the shrink ratio so
@@ -13,8 +15,10 @@ pub struct Resampler {
     channels: usize,
     width: u32,
     height: u32,
-    columns: Taps,
+    columns: Columns,
     rows: Taps,
+    /// The current output row's weights, worked out once for it.
+    row_weights: Vec<f32>,
     /// Source rows filtered across, each `width` pixels long, in a ring.
     window: Vec<f32>,
     window_rows: usize,
@@ -35,7 +39,8 @@ impl Resampler {
             channels,
             width: target.0,
             height: target.1,
-            columns: Taps::new(source.0, target.0),
+            columns: Columns::new(Taps::new(source.0, target.0)),
+            row_weights: Vec::with_capacity(rows.stride),
             window: vec![0.0; rows.stride * row_len],
             window_rows: rows.stride,
             rows,
@@ -45,17 +50,15 @@ impl Resampler {
         }
     }
 
-    /// The bytes a resampler holds: the output, the window and the filter weights.
+    /// The bytes a resampler holds: the output, the window of rows, one output row's sum
+    /// and weights, and the columns' weights.
     pub fn bytes(source: (u32, u32), target: (u32, u32), channels: u8) -> u64 {
         let row_len = u64::from(target.0) * u64::from(channels);
-        let window_rows = Taps::stride_for(source.1, target.1) as u64;
-        // A weight is an f32; each target pixel also keeps its first source pixel and count.
-        let weights =
-            |from: u32, to: u32| u64::from(to) * (Taps::stride_for(from, to) as u64 * 4 + 16);
+        let window_rows = Taps::new(source.1, target.1).stride as u64;
         row_len * u64::from(target.1)
             + (window_rows + 1) * row_len * 4
-            + weights(source.0, target.0)
-            + weights(source.1, target.1)
+            + window_rows * 4
+            + Columns::bytes(&Taps::new(source.0, target.0))
     }
 
     /// Takes the next source row, and finishes every output row it completes.
@@ -63,7 +66,7 @@ impl Resampler {
         let row_len = self.sum.len();
         let slot = self.received % self.window_rows;
         let filtered = &mut self.window[slot * row_len..(slot + 1) * row_len];
-        filter_across(row, &self.columns, self.channels, filtered);
+        filter_across(row, &mut self.columns, self.channels, filtered);
         self.received += 1;
         while self.next_row_ready() {
             self.finish_row();
@@ -81,10 +84,7 @@ impl Resampler {
 
     fn next_row_ready(&self) -> bool {
         let row = self.finished_rows();
-        row < self.height as usize && {
-            let (first, weights) = self.rows.of(row);
-            first + weights.len() <= self.received
-        }
+        row < self.height as usize && self.rows.span(row).end <= self.received
     }
 
     /// Sums the window's rows for the next output row. Its rows are all still in the ring:
@@ -92,9 +92,11 @@ impl Resampler {
     /// many rows as any output row reaches.
     fn finish_row(&mut self) {
         let row_len = self.sum.len();
-        let (first, weights) = self.rows.of(self.finished_rows());
+        let row = self.finished_rows();
+        let first = self.rows.span(row).start;
+        self.rows.weights(row, &mut self.row_weights);
         self.sum.fill(0.0);
-        for (offset, &weight) in weights.iter().enumerate() {
+        for (offset, &weight) in self.row_weights.iter().enumerate() {
             let slot = (first + offset) % self.window_rows;
             let filtered = &self.window[slot * row_len..(slot + 1) * row_len];
             for (sum, value) in self.sum.iter_mut().zip(filtered) {
@@ -107,7 +109,7 @@ impl Resampler {
 }
 
 /// `row` filtered across into `out`, one target pixel per weight set.
-fn filter_across(row: &[u8], columns: &Taps, channels: usize, out: &mut [f32]) {
+fn filter_across(row: &[u8], columns: &mut Columns, channels: usize, out: &mut [f32]) {
     for (x, pixel) in out.chunks_exact_mut(channels).enumerate() {
         let (first, weights) = columns.of(x);
         pixel.fill(0.0);
@@ -125,12 +127,14 @@ fn to_byte(value: f32) -> u8 {
     value.round().clamp(0.0, 255.0) as u8
 }
 
-/// Each target pixel's first source pixel and weights along one axis, the weights summing
-/// to one. Every pixel has `stride` slots; one near an edge uses fewer.
+/// Which source pixels each target pixel along one axis draws on, and with what weights,
+/// summing to one. Worked out on demand, so an axis costs nothing however long it is.
 struct Taps {
-    first: Vec<usize>,
-    count: Vec<usize>,
-    weights: Vec<f32>,
+    source: usize,
+    target: usize,
+    ratio: f32,
+    stretch: f32,
+    /// The most source pixels any target pixel reaches.
     stride: usize,
 }
 
@@ -138,42 +142,98 @@ impl Taps {
     fn new(source: u32, target: u32) -> Taps {
         let ratio = source as f32 / target as f32;
         let stretch = ratio.max(1.0);
-        let reach = SUPPORT * stretch;
-        let stride = Taps::stride_for(source, target);
-        let mut taps = Taps {
-            first: Vec::with_capacity(target as usize),
-            count: Vec::with_capacity(target as usize),
-            weights: vec![0.0; target as usize * stride],
-            stride,
-        };
-        for i in 0..target as usize {
-            let center = (i as f32 + 0.5) * ratio;
-            let first = (center - reach).floor().max(0.0) as usize;
-            let end = ((center + reach).ceil() as usize)
-                .min(source as usize)
-                .min(first + stride);
-            let slots = &mut taps.weights[i * stride..i * stride + (end - first)];
-            for (k, weight) in (first..end).zip(slots.iter_mut()) {
-                *weight = catmull_rom((k as f32 + 0.5 - center) / stretch);
-            }
-            let total: f32 = slots.iter().sum();
-            for weight in slots.iter_mut() {
-                *weight /= total;
-            }
-            taps.first.push(first);
-            taps.count.push(end - first);
+        Taps {
+            source: source as usize,
+            target: target as usize,
+            ratio,
+            stretch,
+            stride: (2.0 * SUPPORT * stretch).ceil() as usize + 1,
         }
-        taps
     }
 
-    fn stride_for(source: u32, target: u32) -> usize {
-        let stretch = (source as f32 / target as f32).max(1.0);
-        (2.0 * SUPPORT * stretch).ceil() as usize + 1
+    fn center(&self, i: usize) -> f32 {
+        (i as f32 + 0.5) * self.ratio
     }
 
-    fn of(&self, i: usize) -> (usize, &[f32]) {
-        let start = i * self.stride;
-        (self.first[i], &self.weights[start..start + self.count[i]])
+    /// The source pixels target pixel `i` reaches, cut short at the edges.
+    fn span(&self, i: usize) -> Range<usize> {
+        let reach = SUPPORT * self.stretch;
+        let center = self.center(i);
+        let start = (center - reach).floor().max(0.0) as usize;
+        let end = ((center + reach).ceil() as usize)
+            .min(self.source)
+            .min(start + self.stride);
+        start..end
+    }
+
+    /// Target pixel `i`'s weights, one per pixel of its span, into `out`.
+    fn weights(&self, i: usize, out: &mut Vec<f32>) {
+        let center = self.center(i);
+        out.clear();
+        out.extend(
+            self.span(i)
+                .map(|k| catmull_rom((k as f32 + 0.5 - center) / self.stretch)),
+        );
+        let total: f32 = out.iter().sum();
+        for weight in out.iter_mut() {
+            *weight /= total;
+        }
+    }
+}
+
+/// Every source row needs every column's weights, so they are kept, unless an extreme
+/// aspect ratio would make them large; then each is worked out again as it is needed.
+struct Columns {
+    taps: Taps,
+    /// Each target pixel's weights, `stride` slots apart.
+    kept: Option<Vec<f32>>,
+    scratch: Vec<f32>,
+}
+
+/// Weights kept for the columns, at most: 4 MB.
+const KEPT_WEIGHTS: usize = 1 << 20;
+
+impl Columns {
+    fn new(taps: Taps) -> Columns {
+        let kept = Columns::keeps(&taps).then(|| {
+            let mut weights = vec![0.0; taps.target * taps.stride];
+            let mut one = Vec::with_capacity(taps.stride);
+            for (i, slots) in weights.chunks_exact_mut(taps.stride).enumerate() {
+                taps.weights(i, &mut one);
+                slots[..one.len()].copy_from_slice(&one);
+            }
+            weights
+        });
+        Columns {
+            scratch: Vec::with_capacity(taps.stride),
+            taps,
+            kept,
+        }
+    }
+
+    fn bytes(taps: &Taps) -> u64 {
+        let kept = if Columns::keeps(taps) {
+            taps.target * taps.stride
+        } else {
+            0
+        };
+        // Weights are f32s; a target pixel's are worked out in a scratch row of them.
+        ((kept + taps.stride) * 4) as u64
+    }
+
+    fn keeps(taps: &Taps) -> bool {
+        taps.target * taps.stride <= KEPT_WEIGHTS
+    }
+
+    fn of(&mut self, x: usize) -> (usize, &[f32]) {
+        let span = self.taps.span(x);
+        if let Some(weights) = &self.kept {
+            let start = x * self.taps.stride;
+            (span.start, &weights[start..start + span.len()])
+        } else {
+            self.taps.weights(x, &mut self.scratch);
+            (span.start, &self.scratch)
+        }
     }
 }
 

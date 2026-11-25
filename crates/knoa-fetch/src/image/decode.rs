@@ -14,9 +14,9 @@ use image::{DynamicImage, metadata::Orientation};
 
 use super::{facts::Codec, scale};
 use budget::Allowance;
-#[cfg(test)]
-pub use budget::WORKER;
 pub use budget::{BUDGET, Budget};
+#[cfg(test)]
+pub use budget::{DESKTOP, WORKER};
 
 /// Why an image file has no pixels to show.
 #[derive(Debug, Clone, PartialEq, Eq)]

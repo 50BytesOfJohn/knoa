@@ -60,6 +60,19 @@ fn cases() -> Vec<Case> {
             "image/gif",
             (1500, 1500),
         ),
+        // Slivers, whose filters reach thousands of pixels along their long side.
+        case(
+            "1×2000000 PNG",
+            sliver_png(1, 2_000_000),
+            "image/png",
+            (1, 1600),
+        ),
+        case(
+            "2000000×1 PNG",
+            sliver_png(2_000_000, 1),
+            "image/png",
+            (1600, 1),
+        ),
     ]
 }
 
@@ -120,6 +133,16 @@ fn photo_png(width: u32, height: u32) -> Vec<u8> {
     let mut file = Vec::new();
     PngEncoder::new(&mut file)
         .write_image(&pixels, width, height, image::ExtendedColorType::Rgb8)
+        .expect("encodable");
+    file
+}
+
+/// A gray gradient one pixel across, long `width` or `height`.
+pub(super) fn sliver_png(width: u32, height: u32) -> Vec<u8> {
+    let pixels = image::GrayImage::from_fn(width, height, |x, y| image::Luma([(x + y) as u8]));
+    let mut file = Vec::new();
+    PngEncoder::new(&mut file)
+        .write_image(&pixels, width, height, image::ExtendedColorType::L8)
         .expect("encodable");
     file
 }
