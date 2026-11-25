@@ -3,6 +3,15 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.12.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.12.1) - 2026-11-25
+
+### Changed
+
+- Keep the Worker's image decoding within 48 MiB ([#55](https://github.com/50BytesOfJohn/knoa/pull/55))
+
+### Fixed
+
+- Fix macOS idle and occlusion freeze in GPUI display link
 ## [0.12.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.12.0) - 2026-11-25
 
 ### Added
