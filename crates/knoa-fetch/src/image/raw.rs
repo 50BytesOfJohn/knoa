@@ -7,7 +7,7 @@ use url::Url;
 
 use super::{
     Preview,
-    decode::{self, Decoded, Problem},
+    decode::{self, Budget, Decoded, Problem},
     encode,
     facts::Facts,
     scale,
@@ -36,11 +36,21 @@ pub struct RawImage {
 
 /// Reads the image file at `url`. `truncated` says `body` holds only the file's start.
 pub fn read(url: &Url, body: Vec<u8>, content_type: &str, truncated: bool) -> RawImage {
+    read_within(url, body, content_type, truncated, decode::BUDGET)
+}
+
+fn read_within(
+    url: &Url,
+    body: Vec<u8>,
+    content_type: &str,
+    truncated: bool,
+    budget: Budget,
+) -> RawImage {
     let mut facts = Facts::read(&body, content_type, !truncated);
     let decoded = if truncated {
         Err(Problem::TooLargeToDownload)
     } else {
-        decode_body(&body, &facts)
+        decode_body(&body, &facts, budget)
     };
     let decoded = match decoded {
         Ok(decoded) => decoded,
@@ -54,7 +64,7 @@ pub fn read(url: &Url, body: Vec<u8>, content_type: &str, truncated: bool) -> Ra
         }
     };
     facts.animated = decoded.animated;
-    if decoded.turned {
+    if decoded.turned() {
         (facts.width, facts.height) = (facts.height, facts.width);
     }
     let (preview, analysis) = copies(url, body, &facts, decoded);
@@ -66,10 +76,10 @@ pub fn read(url: &Url, body: Vec<u8>, content_type: &str, truncated: bool) -> Ra
     }
 }
 
-fn decode_body(body: &[u8], facts: &Facts) -> Result<Decoded, Problem> {
+fn decode_body(body: &[u8], facts: &Facts, budget: Budget) -> Result<Decoded, Problem> {
     let codec = facts.codec.ok_or(Problem::Unsupported)?;
     let size = facts.width.zip(facts.height).ok_or(Problem::Damaged)?;
-    decode::decode(body, codec, size, DISPLAY_SIDE)
+    decode::decode(body, codec, size, DISPLAY_SIDE, budget)
 }
 
 fn copies(
@@ -78,20 +88,19 @@ fn copies(
     facts: &Facts,
     decoded: Decoded,
 ) -> (Option<Preview>, Option<AnalysisImage>) {
-    let (preview, display) = if keeps_file(body.len(), facts, &decoded) {
-        let preview = facts.codec.map(|codec| Preview {
+    // Dropped unless kept: shrinking is the pipeline's second peak, and the budget leaves
+    // the body out of it.
+    let kept = keeps_file(body.len(), facts, &decoded).then_some(body);
+    let display = decoded.upright(DISPLAY_SIDE);
+    let preview = match (kept, facts.codec) {
+        (Some(bytes), Some(codec)) => Some(Preview {
             url: url.clone(),
-            width: decoded.image.width(),
-            height: decoded.image.height(),
+            width: display.width(),
+            height: display.height(),
             extension: codec.extension(),
-            bytes: body,
-        });
-        (preview, decoded.image)
-    } else {
-        // The body is no longer needed, and the shrinking is the pipeline's peak.
-        drop(body);
-        let display = scale::shrink(decoded.image, DISPLAY_SIDE);
-        (display_copy(url, &display), display)
+            bytes,
+        }),
+        _ => display_copy(url, &display),
     };
     (preview, analysis_copy(display))
 }
@@ -104,7 +113,7 @@ fn keeps_file(length: usize, facts: &Facts, decoded: &Decoded) -> bool {
         .width
         .zip(facts.height)
         .is_some_and(|(width, height)| width.max(height) <= DISPLAY_SIDE);
-    fits && length <= KEEP_AS_IS_BYTES && !decoded.reoriented && decoded.animated != Some(true)
+    fits && length <= KEEP_AS_IS_BYTES && !decoded.reoriented() && decoded.animated != Some(true)
 }
 
 /// Re-encoded: a PNG while it has see-through parts, which only a PNG keeps right on both
@@ -133,6 +142,9 @@ fn analysis_copy(display: DynamicImage) -> Option<AnalysisImage> {
         height: image.height(),
     })
 }
+
+#[cfg(test)]
+mod worker_memory;
 
 #[cfg(test)]
 mod tests {

@@ -8,6 +8,8 @@ mod access;
 #[cfg(not(target_arch = "wasm32"))]
 mod cache;
 mod evidence;
+#[cfg(test)]
+mod heap;
 mod html;
 mod http;
 mod image;

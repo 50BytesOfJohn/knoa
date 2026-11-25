@@ -11,7 +11,7 @@ pub fn decode(bytes: &[u8], canvas: (u32, u32), allowance: &Allowance) -> Result
     if layout.canvas != canvas {
         return Err(Problem::Damaged);
     }
-    allowance.check(layout.peak_bytes())?;
+    allowance.check(layout.peak_bytes(), layout.output_bytes())?;
     let decoder = GifDecoder::new(Cursor::new(bytes)).map_err(|_| Problem::Damaged)?;
     still(
         DynamicImage::from_decoder(decoder),
@@ -73,9 +73,17 @@ impl Layout {
     /// The RGBA output, and the first frame's own RGBA buffer and color indices when it
     /// doesn't cover the canvas's full width.
     fn peak_bytes(&self) -> u64 {
-        let pixels = |(width, height): (u32, u32)| u64::from(width) * u64::from(height);
-        pixels(self.canvas) * 4 + pixels(self.first) * 5
+        self.output_bytes() + pixels(self.first) * 5
     }
+
+    /// The canvas, in RGBA.
+    fn output_bytes(&self) -> u64 {
+        pixels(self.canvas) * 4
+    }
+}
+
+fn pixels((width, height): (u32, u32)) -> u64 {
+    u64::from(width) * u64::from(height)
 }
 
 /// The bytes of a color table, from the flags byte announcing it.

@@ -12,8 +12,11 @@ use std::fmt;
 
 use image::{DynamicImage, metadata::Orientation};
 
-use super::facts::Codec;
-use budget::{Allowance, BUDGET, Budget};
+use super::{facts::Codec, scale};
+use budget::Allowance;
+#[cfg(test)]
+pub use budget::WORKER;
+pub use budget::{BUDGET, Budget};
 
 /// Why an image file has no pixels to show.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,27 +41,51 @@ impl fmt::Display for Problem {
 }
 
 pub struct Decoded {
-    /// Upright, and possibly smaller than the file (scaled JPEG decoding).
-    pub image: DynamicImage,
+    /// As the file stores it, not yet turned upright, and possibly smaller than the file:
+    /// a JPEG scaled in the DCT, a PNG shrunk as it is read.
+    image: DynamicImage,
+    orientation: Orientation,
     pub animated: Option<bool>,
-    /// The photo's orientation turned it a quarter turn, so its sides swapped.
-    pub turned: bool,
+}
+
+impl Decoded {
+    fn new(image: DynamicImage, orientation: Orientation, animated: Option<bool>) -> Decoded {
+        Decoded {
+            image,
+            orientation,
+            animated,
+        }
+    }
+
+    /// The photo's orientation turns it a quarter turn, so its sides swap.
+    pub fn turned(&self) -> bool {
+        matches!(
+            self.orientation,
+            Orientation::Rotate90
+                | Orientation::Rotate270
+                | Orientation::Rotate90FlipH
+                | Orientation::Rotate270FlipH
+        )
+    }
+
     /// The file's pixels aren't upright as stored, so they can't be shown as they are.
-    pub reoriented: bool,
+    pub fn reoriented(&self) -> bool {
+        self.orientation != Orientation::NoTransforms
+    }
+
+    /// Shrunk to fit `max_side`, then turned upright: a quarter turn copies the pixels, so
+    /// it copies the smaller image.
+    pub fn upright(self, max_side: u32) -> DynamicImage {
+        let mut image = scale::shrink(self.image, max_side);
+        image.apply_orientation(self.orientation);
+        image
+    }
 }
 
-/// Decodes `bytes`, `width`×`height` by its header, no larger than needed for
-/// `target_side` where the format allows. An animation decodes to its first frame.
+/// Decodes `bytes`, `width`×`height` by its header, within `budget`, no larger than
+/// needed for `target_side` where the format allows. An animation decodes to its first
+/// frame.
 pub fn decode(
-    bytes: &[u8],
-    codec: Codec,
-    size: (u32, u32),
-    target_side: u32,
-) -> Result<Decoded, Problem> {
-    decode_within(bytes, codec, size, target_side, BUDGET)
-}
-
-fn decode_within(
     bytes: &[u8],
     codec: Codec,
     (width, height): (u32, u32),
@@ -68,6 +95,7 @@ fn decode_within(
     let allowance = Allowance::new(
         budget,
         bytes.len() as u64,
+        upright_bytes(width, height, target_side),
         Problem::TooManyPixels { width, height },
     );
     if u64::from(width) * u64::from(height) > budget.pixels {
@@ -75,25 +103,20 @@ fn decode_within(
     }
     match codec {
         Codec::Jpeg => jpeg::decode(bytes, target_side, &allowance),
-        Codec::Png => png::decode(bytes, &allowance),
+        Codec::Png => png::decode(bytes, target_side, &allowance),
         Codec::Webp => webp::decode(bytes, (width, height), &allowance),
         Codec::Gif => gif::decode(bytes, (width, height), &allowance),
     }
 }
 
-fn upright(mut image: DynamicImage, orientation: Orientation) -> Decoded {
-    image.apply_orientation(orientation);
-    Decoded {
-        image,
-        animated: None,
-        turned: matches!(
-            orientation,
-            Orientation::Rotate90
-                | Orientation::Rotate270
-                | Orientation::Rotate90FlipH
-                | Orientation::Rotate270FlipH
-        ),
-        reoriented: orientation != Orientation::NoTransforms,
+/// What [`Decoded::upright`] holds beside the decoded pixels, at four channels: the
+/// resampler, or for an image that needs no shrinking, a quarter turn's copy.
+fn upright_bytes(width: u32, height: u32, max_side: u32) -> u64 {
+    let target = scale::fit(width, height, max_side);
+    if target == (width, height) {
+        u64::from(width) * u64::from(height) * 4
+    } else {
+        scale::Resampler::bytes((width, height), target, 4)
     }
 }
 
@@ -111,10 +134,5 @@ fn still(
     allowance: &Allowance,
 ) -> Result<Decoded, Problem> {
     let image = image.map_err(|err| refusal(&err, allowance))?;
-    Ok(Decoded {
-        image,
-        animated,
-        turned: false,
-        reoriented: false,
-    })
+    Ok(Decoded::new(image, Orientation::NoTransforms, animated))
 }
