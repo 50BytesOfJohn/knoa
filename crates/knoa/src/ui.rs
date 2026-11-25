@@ -1,5 +1,6 @@
 //! Views. The root shows onboarding until it's done, then the main screen.
 
+pub mod backdrop;
 pub mod choice;
 pub mod components;
 mod language_picker;
@@ -17,13 +18,17 @@ use gpui::{
 
 pub use main::{OpenSettings, bind_keys, traffic_light_position};
 
-use crate::state::{
-    library::Library,
-    settings::{SettingsFile, WindowFrame},
+use crate::{
+    state::{
+        library::Library,
+        settings::{SettingsFile, WindowFrame},
+    },
+    ui::{backdrop::Backdrop, theme::Theme},
 };
 
 pub struct RootView {
     library: Entity<Library>,
+    backdrop: Backdrop,
     onboarding: Option<Entity<onboarding::Onboarding>>,
     main: Option<main::MainScreen>,
 }
@@ -47,11 +52,22 @@ impl RootView {
             }
         })
         .detach();
+        cx.observe_global_in::<SettingsFile>(window, Self::sync_backdrop)
+            .detach();
+        cx.observe_global_in::<Theme>(window, Self::sync_backdrop)
+            .detach();
+        // Deferred: the gpui-component root that holds this view doesn't exist yet.
+        cx.defer_in(window, Self::sync_backdrop);
         RootView {
             library,
+            backdrop: Backdrop::new(),
             onboarding: None,
             main: None,
         }
+    }
+
+    fn sync_backdrop(&mut self, window: &mut Window, cx: &mut Context<'_, RootView>) {
+        self.backdrop.sync(window, cx);
     }
 }
 

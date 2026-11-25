@@ -21,7 +21,7 @@ use crate::{
         rewritten_images::RewrittenImages,
         settings::{self, SettingsFile},
     },
-    ui::{RootView, theme::Theme},
+    ui::{RootView, backdrop, theme::Theme},
 };
 
 pub fn app_name() -> &'static str {
@@ -50,6 +50,7 @@ pub fn init(cx: &mut App) -> anyhow::Result<()> {
         .context("moving settings into the workspace")?;
     let library = cx.new(|cx| Library::new(Arc::new(database), cx));
     housekeeping::run(&library, paths.thumbnails(), cx);
+    backdrop::remove_unused_copies(paths.support.clone(), cx);
     sync::init(&library, cx);
     let fetcher = Arc::new(knoa_fetch::Fetcher::new(paths.thumbnails())?);
     RewrittenImages::init(cx);

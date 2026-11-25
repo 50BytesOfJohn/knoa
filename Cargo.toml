@@ -71,16 +71,22 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "std",
   "NSAccessibility",
   "NSAlert",
+  "NSAppearance",
   "NSApplication",
   "NSButton",
   "NSControl",
+  "NSGraphics",
   "NSResponder",
   "NSView",
+  "NSVisualEffectView",
+  "NSWindow",
   "NSWorkspace",
 ] }
 objc2-foundation = "0.3"
 # Already in the tree through `url`; decodes a link's file name for saving.
 percent-encoding = "2"
+# Already in the tree through GPUI; reaches the NSView behind a GPUI window.
+raw-window-handle = "0.6"
 rust-embed = "8"
 reqwest = { version = "0.13", default-features = false, features = [
   "rustls",

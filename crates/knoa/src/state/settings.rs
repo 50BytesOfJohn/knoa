@@ -1,5 +1,7 @@
 //! User settings, kept as a small JSON file next to the database.
 
+mod background;
+
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
@@ -7,9 +9,11 @@ use std::{
 
 use gpui::{App, Global};
 use knoa_ai::ProviderConfig;
-use knoa_core::{Ink, Language, protocol::Account, unknown_language_as_default};
+use knoa_core::{Ink, Language, protocol::Account, unknown_as_default};
 use knoa_store::Store;
 use serde::{Deserialize, Serialize};
+
+pub use background::{Background, BackgroundImage, BackgroundStyle, Effect};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -22,7 +26,7 @@ pub struct Settings {
     pub ai: Option<ProviderConfig>,
     pub theme: String,
     /// The UI's language and the AI's. Signed in, the account's language wins.
-    #[serde(deserialize_with = "unknown_language_as_default")]
+    #[serde(deserialize_with = "unknown_as_default")]
     pub language: Language,
     /// Whether the account has the language the user picked here while signed in. Until
     /// it does, the account's language doesn't replace it.
@@ -31,6 +35,9 @@ pub struct Settings {
     pub show_summaries: bool,
     /// How the Events place shows events on this Mac.
     pub events_view: EventsView,
+    /// What the main window shows behind its panels. Kept on this Mac only.
+    #[serde(deserialize_with = "unknown_as_default")]
+    pub background: Background,
     /// Sidebar folders shown collapsed, by local id. Kept on this Mac only.
     pub collapsed_folders: BTreeSet<i64>,
     pub window: Option<WindowFrame>,
@@ -102,6 +109,7 @@ impl Default for Settings {
             show_up_next: true,
             show_summaries: true,
             events_view: EventsView::default(),
+            background: Background::default(),
             collapsed_folders: BTreeSet::new(),
             window: None,
             account: None,
@@ -137,11 +145,17 @@ impl SettingsFile {
 
     /// Changes settings and saves them. The write is small, so it happens right away.
     pub fn update(cx: &mut App, change: impl FnOnce(&mut Settings)) {
-        let file = cx.global_mut::<SettingsFile>();
-        change(&mut file.settings);
+        SettingsFile::update_unsaved(cx, change);
+        let file = cx.global::<SettingsFile>();
         if let Err(err) = save(&file.path, &file.settings) {
             tracing::error!("can't save settings: {err:#}");
         }
+    }
+
+    /// Changes settings in memory only, for a value still being dragged; the
+    /// [`SettingsFile::update`] that ends the drag saves it.
+    pub fn update_unsaved(cx: &mut App, change: impl FnOnce(&mut Settings)) {
+        change(&mut cx.global_mut::<SettingsFile>().settings);
     }
 }
 
@@ -181,4 +195,25 @@ fn save(path: &Path, settings: &Settings) -> anyhow::Result<()> {
     std::fs::write(&tmp, serde_json::to_vec_pretty(settings)?)?;
     std::fs::rename(&tmp, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // An invalid file resets every setting, so a value from a newer version must not
+    // make it invalid.
+    #[test]
+    fn an_unknown_background_value_falls_back_alone() {
+        let json = r#"{
+            "theme": "nord-dark",
+            "background": { "style": "aurora", "effect": "clear", "opacity": 3 }
+        }"#;
+        let settings: Settings = serde_json::from_str(json).expect("the file still reads");
+
+        assert_eq!(settings.theme, "nord-dark");
+        assert_eq!(settings.background.style, BackgroundStyle::Solid);
+        assert_eq!(settings.background.effect, Effect::Clear);
+        assert!((settings.background.opacity - 1.).abs() < f32::EPSILON);
+    }
 }

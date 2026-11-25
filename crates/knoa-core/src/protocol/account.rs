@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Language, unknown_language_as_default};
+use crate::{Language, unknown_as_default};
 
 /// `GET /v1/me`. An `account` message on the socket says this changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,7 +17,7 @@ pub struct Account {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub billing: Option<Billing>,
     /// `None` until a client sets it, and from servers that predate languages.
-    #[serde(default, deserialize_with = "unknown_language_as_default")]
+    #[serde(default, deserialize_with = "unknown_as_default")]
     pub language: Option<Language>,
 }
 

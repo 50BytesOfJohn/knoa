@@ -67,14 +67,14 @@ impl Language {
     }
 }
 
-/// For `#[serde(deserialize_with)]` on a `Language` or `Option<Language>` field: a code
-/// this build doesn't know reads as the default, `En` or `None`, so a newer server or a
-/// newer Knoa adding a language doesn't make the whole value unreadable.
+/// For `#[serde(deserialize_with)]` on any field with a default: a value this build
+/// can't read, say a language or option a newer server or a newer Knoa added, reads as
+/// the field's default instead of making the whole value unreadable.
 ///
 /// # Errors
 ///
 /// Only when the input isn't valid for the format at all.
-pub fn unknown_language_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub fn unknown_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: Deserialize<'de> + Default,
@@ -108,10 +108,10 @@ mod tests {
     }
 
     #[test]
-    fn unknown_language_as_default_keeps_known_codes_and_defaults_unknown_ones() {
+    fn unknown_as_default_keeps_known_codes_and_defaults_unknown_ones() {
         #[derive(Deserialize)]
         struct Holder {
-            #[serde(deserialize_with = "unknown_language_as_default")]
+            #[serde(deserialize_with = "unknown_as_default")]
             language: Option<Language>,
         }
         let read = |json: &str| {
