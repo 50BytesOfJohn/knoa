@@ -4,7 +4,7 @@
 use image::{DynamicImage, GrayImage, RgbImage, metadata::Orientation};
 use jpeg_decoder::{CodingProcess, PixelFormat};
 
-use super::{Decoded, Problem, budget::Allowance, upright};
+use super::{Decoded, Problem, budget::Allowance};
 use crate::image::scale;
 
 pub fn decode(bytes: &[u8], target_side: u32, allowance: &Allowance) -> Result<Decoded, Problem> {
@@ -47,7 +47,7 @@ pub fn decode(bytes: &[u8], target_side: u32, allowance: &Allowance) -> Result<D
         .exif_data()
         .and_then(Orientation::from_exif_chunk)
         .unwrap_or(Orientation::NoTransforms);
-    Ok(upright(image, orientation))
+    Ok(Decoded::new(image, orientation, None))
 }
 
 /// Lossless JPEGs decode at full size into 16-bit samples whatever the scale, and only
@@ -134,7 +134,12 @@ impl Frame {
             .into_iter()
             .rev()
             .filter(|&eighths| eighths <= preferred)
-            .find(|&eighths| allowance.fits(self.peak_bytes(eighths, progressive)))
+            .find(|&eighths| {
+                allowance.fits(
+                    self.peak_bytes(eighths, progressive),
+                    self.output_bytes(eighths),
+                )
+            })
     }
 
     /// The decoded size at a DCT scale of `eighths`, rounded up as jpeg-decoder does.
@@ -144,9 +149,9 @@ impl Frame {
     }
 
     /// What decoding at a DCT scale of `eighths` holds at its peak: each component's plane
-    /// at that scale, the interleaved pixels (a gray plane is its own) and an EXIF turn's
-    /// copy of them. A progressive file also keeps every coefficient, two bytes per sample
-    /// at full size, until its last scan.
+    /// at that scale and the interleaved pixels (a gray plane is its own). A progressive
+    /// file also keeps every coefficient, two bytes per sample at full size, until its
+    /// last scan. An EXIF turn comes after shrinking, so it adds nothing here.
     fn peak_bytes(&self, eighths: u32, progressive: bool) -> u64 {
         let max_h = self.sampling.iter().map(|s| s.0).max().unwrap_or(1);
         let max_v = self.sampling.iter().map(|s| s.1).max().unwrap_or(1);
@@ -161,11 +166,18 @@ impl Frame {
                 bytes += blocks * 64 * 2;
             }
         }
-        let (scaled_width, scaled_height) = self.scaled(eighths);
-        let components = self.sampling.len() as u64;
-        let pixels = components * u64::from(scaled_width) * u64::from(scaled_height);
-        let interleaved = if components > 1 { pixels } else { 0 };
-        bytes + interleaved + pixels
+        let interleaved = if self.sampling.len() > 1 {
+            self.output_bytes(eighths)
+        } else {
+            0
+        };
+        bytes + interleaved
+    }
+
+    /// The decoded pixels at a DCT scale of `eighths`, a byte a sample.
+    fn output_bytes(&self, eighths: u32) -> u64 {
+        let (width, height) = self.scaled(eighths);
+        self.sampling.len() as u64 * u64::from(width) * u64::from(height)
     }
 }
 
@@ -200,7 +212,7 @@ mod tests {
 
     /// What the Worker leaves a decoder beside a body of 600 KB.
     fn worker_allowance() -> Allowance {
-        Allowance::new(WORKER, 600_000, Problem::Damaged)
+        Allowance::new(WORKER, 600_000, 1600 * 1600 * 4, Problem::Damaged)
     }
 
     fn frame(width: u32, height: u32, sampling: &[(u32, u32)]) -> Frame {
@@ -215,18 +227,19 @@ mod tests {
     const SAMPLING_444: [(u32, u32); 3] = [(1, 1), (1, 1), (1, 1)];
 
     #[test]
-    fn a_progressive_7_mp_photo_decodes_at_full_size_in_the_worker() {
-        // wallhaven-6le97q: half size would be 1152×1536, under the display size.
+    fn a_progressive_7_mp_photo_decodes_at_half_size_in_the_worker() {
+        // wallhaven-6le97q: 1152×1536, just under the display size. Full size would hold
+        // 53 MB.
         let frame = frame(2304, 3072, &SAMPLING_420);
 
         let eighths = frame.eighths_within((1200, 1600), true, &worker_allowance());
 
-        assert_eq!(eighths, Some(8));
+        assert_eq!(eighths, Some(4));
     }
 
     #[test]
     fn a_progressive_photo_too_large_for_its_display_scale_decodes_smaller() {
-        let frame = frame(6000, 4000, &SAMPLING_420);
+        let frame = frame(3000, 2000, &SAMPLING_420);
 
         let eighths = frame.eighths_within((1600, 1067), true, &worker_allowance());
 
@@ -269,10 +282,7 @@ mod tests {
         file.extend(8000_u16.to_be_bytes());
         file.extend(8000_u16.to_be_bytes());
         file.extend([1, 1, 0x11, 0]);
-        let allowance = Allowance {
-            bytes: u64::MAX,
-            too_large: Problem::Damaged,
-        };
+        let allowance = Allowance::unlimited(Problem::Damaged);
 
         assert!(matches!(
             decode(&file, 1600, &allowance),

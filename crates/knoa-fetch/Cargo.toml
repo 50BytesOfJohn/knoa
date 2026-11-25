@@ -12,6 +12,8 @@ publish.workspace = true
 image.workspace = true
 imagesize.workspace = true
 jpeg-decoder.workspace = true
+# Reads a PNG a row at a time, so it can be shrunk as it is read; the version `image` uses.
+png = "0.18"
 knoa-core.workspace = true
 reqwest.workspace = true
 scraper.workspace = true

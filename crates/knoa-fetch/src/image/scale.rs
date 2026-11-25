@@ -1,9 +1,9 @@
 //! Shrinking images to a longest side, never enlarging them.
 
-use image::{
-    DynamicImage,
-    imageops::{self, FilterType},
-};
+mod resampler;
+
+use image::{ColorType, DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+pub use resampler::Resampler;
 
 /// The size that fits `width`×`height` within `max_side` on its longer side, keeping the
 /// aspect ratio. An image that already fits keeps its size.
@@ -17,53 +17,45 @@ pub fn fit(width: u32, height: u32, max_side: u32) -> (u32, u32) {
     (side(width), side(height))
 }
 
-/// How far past the target a box filter takes a large image first. The final filter
-/// works in 16-byte float RGBA over the source's width and the target's height: from a box
-/// reduction to 1.25 times a 1600 pixel square that is 51 MB, whatever the original's size,
-/// where a 4000 pixel wide original took 102 MB.
-const BOXED_TO: f64 = 1.25;
-
-/// `image` shrunk to fit `max_side`, or as it is when it already fits. It is dropped as
-/// soon as a box reduction replaces it.
+/// `image` shrunk to fit `max_side` in 8 bits a channel, or as it is when it already fits.
 pub fn shrink(image: DynamicImage, max_side: u32) -> DynamicImage {
-    let (width, height) = fit(image.width(), image.height(), max_side);
-    if (width, height) == (image.width(), image.height()) {
+    let source = (image.width(), image.height());
+    let target = fit(source.0, source.1, max_side);
+    if target == source {
         return image;
     }
-    let boxed_side = (f64::from(max_side) * BOXED_TO) as u32;
-    let image = if image.width().max(image.height()) > boxed_side {
-        let (boxed_width, boxed_height) = fit(image.width(), image.height(), boxed_side);
-        let boxed = box_filter(&image, boxed_width, boxed_height);
-        drop(image);
-        boxed
-    } else {
-        eight_bit(image)
-    };
-    // Catmull-Rom is sharp enough for a downscale and much cheaper than Lanczos, which
-    // matters in the Worker.
-    image.resize_exact(width, height, FilterType::CatmullRom)
+    let image = eight_bit(image);
+    let color = image.color();
+    let mut resampler = Resampler::new(source, target, color);
+    let row_len = source.0 as usize * usize::from(color.bytes_per_pixel());
+    for row in image.as_bytes().chunks_exact(row_len) {
+        resampler.push_row(row);
+    }
+    resampler
+        .finish()
+        .expect("every row of the source was pushed")
 }
 
-/// Each pixel the average of the area it covers, in 8 bits a channel whatever the source's
-/// depth, with no buffer beyond the result.
-fn box_filter(image: &DynamicImage, width: u32, height: u32) -> DynamicImage {
-    match image {
-        DynamicImage::ImageLuma8(_)
-        | DynamicImage::ImageLumaA8(_)
-        | DynamicImage::ImageRgb8(_)
-        | DynamicImage::ImageRgba8(_) => image.thumbnail_exact(width, height),
-        other => imageops::thumbnail(other, width, height).into(),
+/// `pixels` of an 8-bit `color` as an image; `None` when they don't fill `width`×`height`.
+pub fn from_raw(
+    width: u32,
+    height: u32,
+    color: ColorType,
+    pixels: Vec<u8>,
+) -> Option<DynamicImage> {
+    match color {
+        ColorType::L8 => GrayImage::from_raw(width, height, pixels).map(Into::into),
+        ColorType::La8 => GrayAlphaImage::from_raw(width, height, pixels).map(Into::into),
+        ColorType::Rgb8 => RgbImage::from_raw(width, height, pixels).map(Into::into),
+        _ => RgbaImage::from_raw(width, height, pixels).map(Into::into),
     }
 }
 
-/// A 16-bit or float image would keep its depth through the filter, doubling its result.
+/// The decoders hand out 8-bit pixels; anything deeper is brought down to them first.
 fn eight_bit(image: DynamicImage) -> DynamicImage {
-    match image {
-        DynamicImage::ImageLuma8(_)
-        | DynamicImage::ImageLumaA8(_)
-        | DynamicImage::ImageRgb8(_)
-        | DynamicImage::ImageRgba8(_) => image,
-        other => other.to_rgba8().into(),
+    match image.color() {
+        ColorType::L8 | ColorType::La8 | ColorType::Rgb8 | ColorType::Rgba8 => image,
+        _ => image.to_rgba8().into(),
     }
 }
 
@@ -86,6 +78,18 @@ mod tests {
 
         assert_eq!((shrunk.width(), shrunk.height()), (1600, 640));
         assert!(matches!(shrunk, DynamicImage::ImageRgba8(_)));
+    }
+
+    #[test]
+    fn fine_detail_averages_out_instead_of_aliasing() {
+        // A one-pixel checkerboard shrunk tenfold: sampling would leave black, white or a
+        // moiré; filtering over every source pixel leaves an even gray.
+        let checkers =
+            GrayImage::from_fn(1000, 1000, |x, y| image::Luma([((x + y) % 2 * 255) as u8]));
+
+        let shrunk = shrink(checkers.into(), 100).to_luma8();
+
+        assert!(shrunk.pixels().all(|p| (120..=135).contains(&p[0])));
     }
 
     #[test]

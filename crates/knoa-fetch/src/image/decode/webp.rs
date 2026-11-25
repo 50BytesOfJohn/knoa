@@ -15,7 +15,7 @@ pub fn decode(bytes: &[u8], canvas: (u32, u32), allowance: &Allowance) -> Result
     if layout.canvas != canvas {
         return Err(Problem::Damaged);
     }
-    allowance.check(layout.peak_bytes())?;
+    allowance.check(layout.peak_bytes(), layout.output_bytes())?;
     let decoder = WebPDecoder::new(Cursor::new(bytes)).map_err(|_| Problem::Damaged)?;
     still(
         DynamicImage::from_decoder(decoder),
@@ -95,7 +95,7 @@ impl Layout {
     /// canvas.
     fn peak_bytes(&self) -> u64 {
         let canvas = pixels(self.canvas.0, self.canvas.1);
-        let output = canvas * if self.alpha || self.animated { 4 } else { 3 };
+        let output = self.output_bytes();
         let frame = self.frames.first().map_or(0, |f| f.peak_bytes(self.alpha));
         if self.animated {
             let first = self.frames.first().map_or(0, |f| pixels(f.width, f.height));
@@ -103,6 +103,14 @@ impl Layout {
         } else {
             output + frame
         }
+    }
+}
+
+impl Layout {
+    /// The decoded first frame: RGB, or RGBA with alpha or for an animation's canvas.
+    fn output_bytes(&self) -> u64 {
+        let channels = if self.alpha || self.animated { 4 } else { 3 };
+        pixels(self.canvas.0, self.canvas.1) * channels
     }
 }
 
@@ -200,10 +208,7 @@ mod tests {
     use super::*;
 
     fn unlimited() -> Allowance {
-        Allowance {
-            bytes: u64::MAX,
-            too_large: Problem::Unsupported,
-        }
+        Allowance::unlimited(Problem::Unsupported)
     }
 
     fn chunk(id: [u8; 4], payload: &[u8]) -> Vec<u8> {

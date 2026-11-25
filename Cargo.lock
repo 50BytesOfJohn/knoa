@@ -3684,6 +3684,7 @@ dependencies = [
  "imagesize 0.15.0",
  "jpeg-decoder",
  "knoa-core",
+ "png 0.18.1",
  "reqwest",
  "scraper",
  "serde",
