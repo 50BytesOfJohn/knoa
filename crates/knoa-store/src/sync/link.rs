@@ -118,7 +118,11 @@ impl Store {
                  pending_image = CASE WHEN image_path IS NOT NULL THEN hex(randomblob(16)) END;
              -- Waiting for the cloud organizer, which no longer runs for this library.
              UPDATE bookmarks SET status = 'new'
-                 WHERE status = 'queued' AND id NOT IN (SELECT bookmark_id FROM jobs);",
+                 WHERE status = 'queued' AND id NOT IN (SELECT bookmark_id FROM jobs);
+             -- What it refused comes back to the local queue.
+             UPDATE bookmarks SET status = 'queued'
+                 WHERE id IN (SELECT bookmark_id FROM jobs WHERE refused_month IS NOT NULL);
+             UPDATE jobs SET refused_month = NULL;",
         )?;
         tx.commit()?;
         Ok(())

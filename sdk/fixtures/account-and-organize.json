@@ -139,6 +139,16 @@
     {
       "queued": 0,
       "pending": 5
+    },
+    {
+      "queued": 1,
+      "pending": 0,
+      "accepted": ["0190d6b0-7c1e-7000-8000-000000000001", "0190d6b0-7c1e-7000-8000-000000000002"]
+    },
+    {
+      "queued": 0,
+      "pending": 0,
+      "accepted": []
     }
   ]
 }

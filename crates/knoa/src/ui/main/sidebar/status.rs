@@ -22,6 +22,9 @@ pub(super) enum Status {
     ChangesNotSynced,
     PlanLimit,
     Organizing(Progress),
+    /// A free account used this month's cloud organizing, and this Mac has no key to
+    /// carry on with.
+    FreeAllowanceUsedUp,
     AiOff,
     Offline,
 }
@@ -61,6 +64,10 @@ impl Status {
             Some(Status::PlanLimit)
         } else if let Some(progress) = batch.filter(|_| ai_works) {
             Some(Status::Organizing(progress))
+        } else if *ai == AiStatus::Off
+            && noticed(|n| matches!(n, Notice::FreeAllowanceUsedUp { .. }))
+        {
+            Some(Status::FreeAllowanceUsedUp)
         } else if *ai == AiStatus::Off {
             Some(Status::AiOff)
         } else if sync == Some(&SyncStatus::Offline) {

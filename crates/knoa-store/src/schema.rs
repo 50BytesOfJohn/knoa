@@ -324,6 +324,11 @@ ALTER TABLE jobs ADD COLUMN snapshot TEXT;
 ALTER TABLE bookmarks ADD COLUMN summary_origin TEXT NOT NULL DEFAULT 'ai'
     CHECK (summary_origin IN ('ai', 'user'));
 ",
+    r"
+-- The UTC month ('YYYY-MM') the cloud organizer refused this job in: a free account
+-- without room. It waits for this Mac's organizer or the next month.
+ALTER TABLE jobs ADD COLUMN refused_month TEXT;
+",
 ];
 
 /// Runs with foreign keys off: rebuilding a table drops the old one, which would otherwise

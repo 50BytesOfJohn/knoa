@@ -8,13 +8,17 @@ use gpui::{
 use knoa_core::{Place, Query, WorkspaceId};
 
 use super::{
+    account::plan,
     form,
     reorganize::{Reorganize, Scope},
 };
 use crate::{
     format,
     i18n::t,
-    services::organizer::{AiStatus, Organizer},
+    services::{
+        cloud::Cloud,
+        organizer::{AiStatus, Organizer},
+    },
     state::library::{Library, LibraryChanged},
     ui::{
         choice::select,
@@ -217,7 +221,7 @@ impl OrganizePage {
             Some(0) => form::note(t!("settings-organize-none"), theme.muted),
             Some(waiting) => {
                 let about = if *status == AiStatus::Cloud {
-                    t!("settings-ai-included-in-pro")
+                    plan::cloud_included(Cloud::entity(cx).read(cx).account())
                 } else {
                     let cost = waiting as f64 * DOLLARS_PER_BOOKMARK;
                     t!("settings-ai-cost", cost = (format::usd(cost, 2)))

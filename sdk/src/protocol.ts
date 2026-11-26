@@ -89,7 +89,7 @@ export interface Bookmark {
 	deleted_at: number | null;
 	browser_folder: string | null;
 
-	// Written by whoever organizes: the cloud organizer or, for free accounts, a device.
+	// Written by whoever organizes: the cloud organizer or, for `device` accounts, a device.
 	status: BookmarkStatus;
 	kind: string | null;
 	summary: string | null;
@@ -327,10 +327,11 @@ export interface PlanLimits {
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
+	/** A small cloud allowance to try Knoa's AI; anyone who saves links regularly needs Pro. */
 	free: {
 		bookmarks: 10_000,
-		organized_per_month: 0,
-		folders_only_per_month: 0,
+		organized_per_month: 25,
+		folders_only_per_month: 250,
 	},
 	pro: {
 		bookmarks: 100_000,
@@ -352,9 +353,10 @@ export interface Account {
 	email: string | null;
 	plan: Plan;
 	/**
-	 * Who organizes this account's bookmarks. `cloud` for subscribers: devices leave their
-	 * own organizer off. `device` for free accounts: a Mac with the user's own key does it
-	 * and pushes the result.
+	 * Who organizes this account's bookmarks. `cloud` for subscribers, and for free accounts
+	 * while this month's free allowance has room: devices leave their own organizer off.
+	 * `device` for free accounts once it is used up: a Mac with the user's own key does it
+	 * and pushes the result. An `account` message on the socket says this changed.
 	 */
 	organizer: "cloud" | "device";
 	limits: Pick<PlanLimits, "bookmarks" | "organized_per_month">;
@@ -431,8 +433,10 @@ export const BILLING_ERROR = {
 } as const;
 
 /**
- * `POST /v1/organize`, subscribers only (403 otherwise): run the cloud organizer again.
- * New bookmarks are queued without asking.
+ * `POST /v1/organize`: run the cloud organizer again, within the month's allowance. New
+ * bookmarks are queued without asking. A free account's request takes only what this
+ * month's free room fits and answers `pending: 0`: nothing waits for the next month. Its
+ * folders-only runs, too, only while full runs have room, so while it organizes in the cloud.
  */
 export interface OrganizeRequest {
 	scope:
@@ -448,6 +452,14 @@ export interface OrganizeResponse {
 	queued: number;
 	/** Still to be queued this month, on the server's own schedule: no need to ask again. */
 	pending: number;
+	/**
+	 * Only for a `{ bookmarks }` scope: the requested ids the server has taken on, because
+	 * this call queued them, they already had a job, they are remembered to run later (Pro),
+	 * or they are no longer in the library so there is nothing to do. A client can forget
+	 * exactly these and keep asking about the rest, which were refused: a free account with
+	 * no room left this month. Missing from older servers and for other scopes.
+	 */
+	accepted?: BookmarkId[];
 }
 
 /** `GET /v1/workspaces`: the account's workspaces, for clients that keep no replica. */

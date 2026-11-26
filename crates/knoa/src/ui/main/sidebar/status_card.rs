@@ -160,6 +160,12 @@ impl Message {
                 mark: Mark::Mascot(Mood::Organizing),
                 action: None,
             },
+            Status::FreeAllowanceUsedUp => message(
+                t!("sidebar-status-free-allowance-used-up"),
+                Tone::Plain,
+                Mark::Mascot(Mood::Asleep),
+                Some((t!("sidebar-status-upgrade"), CardAction::Upgrade)),
+            ),
             Status::AiOff => message(
                 t!("sidebar-status-ai-off"),
                 Tone::Plain,

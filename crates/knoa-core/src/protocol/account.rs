@@ -34,8 +34,9 @@ pub enum Plan {
     Pro,
 }
 
-/// Who organizes the account's bookmarks: the cloud for subscribers, otherwise a Mac with
-/// the user's own key, which pushes the results.
+/// Who organizes the account's bookmarks: the cloud for subscribers, and for free accounts
+/// while this month's free allowance has room; otherwise a Mac with the user's own key,
+/// which pushes the results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Organizer {
@@ -80,7 +81,7 @@ pub enum ServerMessage {
     Account,
 }
 
-/// `POST /v1/organize`, subscribers only: run the cloud organizer again.
+/// `POST /v1/organize`: run the cloud organizer again, within the month's allowance.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrganizeRequest {
     pub scope: OrganizeScope,
@@ -97,13 +98,29 @@ pub enum OrganizeScope {
     All(bool),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrganizeResponse {
     /// Queued by this call.
     pub queued: u64,
     /// Still to be queued this month, on the server's own schedule; no need to ask again.
     #[serde(default)]
     pub pending: u64,
+    /// For a `bookmarks` scope, the requested ids the server took on: queued now, already
+    /// queued, kept for later, or no longer in the library. The rest were refused, which
+    /// happens to a free account without room this month. Older servers leave it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepted: Option<Vec<String>>,
+}
+
+impl OrganizeResponse {
+    /// Splits the `asked` ids into those the server accepted and those it refused. An
+    /// answer without `accepted` comes from a server that accepted all of them.
+    pub fn split(&self, asked: Vec<String>) -> (Vec<String>, Vec<String>) {
+        match &self.accepted {
+            Some(accepted) => asked.into_iter().partition(|id| accepted.contains(id)),
+            None => (asked, Vec::new()),
+        }
+    }
 }
 
 /// The answer to `PUT /v1/images/<bookmark_id>`.
@@ -117,4 +134,28 @@ pub struct ImageResponse {
 pub struct ErrorResponse {
     pub error: String,
     pub message: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn asked() -> Vec<String> {
+        vec!["a".into(), "b".into(), "c".into()]
+    }
+
+    #[test]
+    fn an_answer_without_accepted_accepts_everything_asked() {
+        let answer: OrganizeResponse = serde_json::from_str(r#"{"queued": 3}"#).unwrap();
+        assert_eq!(answer.split(asked()), (asked(), vec![]));
+    }
+
+    #[test]
+    fn ids_left_out_of_accepted_were_refused() {
+        let answer: OrganizeResponse =
+            serde_json::from_str(r#"{"queued": 1, "pending": 0, "accepted": ["c", "a"]}"#).unwrap();
+        let (accepted, refused) = answer.split(asked());
+        assert_eq!(accepted, ["a", "c"]);
+        assert_eq!(refused, ["b"]);
+    }
 }

@@ -6,12 +6,12 @@ mod pro;
 mod usage;
 
 use gpui::{
-    AppContext as _, Context, Div, Entity, IntoElement, ParentElement as _, Render,
+    App, AppContext as _, Context, Div, Entity, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Task, Window, div, px,
 };
 use gpui_component::input::InputState;
 
-use super::form;
+use super::{account::plan, form};
 use crate::{
     i18n::t,
     services::{
@@ -123,7 +123,7 @@ impl Render for AiPage {
             }
             AiStatus::Cloud => page.child(form::group(
                 &t!("settings-ai-provider"),
-                vec![form::note(t!("settings-ai-cloud-note"), theme.muted)],
+                vec![form::note(cloud_note(cx), theme.muted)],
                 &theme,
             )),
         };
@@ -179,5 +179,14 @@ impl AiPage {
             theme,
         ));
         form::group(&t!("settings-ai-provider"), rows, theme)
+    }
+}
+
+/// Where the cloud's organizing comes from, and what the key on this Mac is still for.
+fn cloud_note(cx: &App) -> String {
+    let cloud = Cloud::entity(cx);
+    match cloud.read(cx).account().and_then(plan::free_allowance) {
+        Some(allowance) => t!("settings-ai-cloud-note-free", allowance = (allowance)),
+        None => t!("settings-ai-cloud-note"),
     }
 }

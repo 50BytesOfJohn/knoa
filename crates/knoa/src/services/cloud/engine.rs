@@ -215,8 +215,10 @@ impl Engine {
         }
         // After the pull, so the queue is handed over knowing what other Macs organized:
         // the image backfill drops jobs whose answers arrived in it.
-        if pushed.is_ok() && organizer == Some(Who::Cloud) {
-            self.hand_jobs_to_cloud(cx).await?;
+        match organizer {
+            Some(Who::Cloud) if pushed.is_ok() => self.hand_jobs_to_cloud(cx).await?,
+            Some(Who::Device) => self.reclaim_refused_jobs(cx).await?,
+            _ => {}
         }
         pushed?;
         thumbnails.download(self, cx).await?;
