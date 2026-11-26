@@ -229,5 +229,9 @@ fn notice_text(notice: &Notice) -> String {
         Notice::Rejected(Rejection::Invalid) => t!("settings-account-notice-rejected"),
         Notice::Rejected(Rejection::TooLarge) => t!("settings-account-notice-too-large"),
         Notice::AllowanceUsedUp => t!("settings-account-notice-allowance-used-up"),
+        Notice::FreeAllowanceUsedUp { allowance } => t!(
+            "settings-account-notice-free-allowance-used-up",
+            allowance = (allowance)
+        ),
     }
 }

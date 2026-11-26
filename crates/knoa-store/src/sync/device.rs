@@ -39,34 +39,40 @@ pub struct ThumbnailDownload {
 /// Only evidence from the server permits work that needs the remote row.
 const ON_SERVER: &str = "b.sync_id IS NOT NULL AND b.delivery = 'confirmed'";
 
+/// The UTC month of the unix time bound to `?2`, as `jobs.refused_month` stores it.
+const MONTH: &str = "strftime('%Y-%m', ?2, 'unixepoch')";
+
 impl Store {
     /// Releases blocked bookmarks from the queue when the cloud organizes this library.
-    pub fn release_blocked_jobs(&mut self) -> Result<()> {
+    /// Returns whether any were.
+    pub fn release_blocked_jobs(&mut self) -> Result<bool> {
         let tx = self.write()?;
-        tx.execute(
+        let restored = tx.execute(
             "UPDATE bookmarks SET status = CASE WHEN organized_at IS NULL THEN 'new' ELSE 'organized' END
              WHERE status = 'queued' AND delivery IN ('blocked_quota', 'blocked_invalid')",
             [],
         )?;
-        tx.execute(
+        let released = tx.execute(
             "DELETE FROM jobs WHERE bookmark_id IN
              (SELECT id FROM bookmarks WHERE delivery IN ('blocked_quota', 'blocked_invalid'))",
             [],
         )?;
         tx.commit()?;
-        Ok(())
+        Ok(restored + released > 0)
     }
 
-    /// Up to `limit` jobs of this Mac's queue for bookmarks the server already has.
-    pub fn cloud_jobs(&mut self, limit: usize) -> Result<Vec<CloudJob>> {
+    /// Up to `limit` jobs of this Mac's queue for bookmarks the server already has. A job
+    /// the cloud refused waits for the next UTC month after `now`.
+    pub fn cloud_jobs(&mut self, limit: usize, now: i64) -> Result<Vec<CloudJob>> {
         let tx = self.write()?;
         drop_settled_backfills(&tx)?;
         let jobs = {
             let mut stmt = tx.prepare(&format!(
                 "SELECT b.sync_id, j.folders_only FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
-                 WHERE b.status = 'queued' AND {ON_SERVER} LIMIT ?1"
+                 WHERE (j.refused_month IS NULL AND b.status = 'queued' OR j.refused_month < {MONTH})
+                   AND {ON_SERVER} LIMIT ?1"
             ))?;
-            stmt.query_map([limit], |row| {
+            stmt.query_map(params![limit, now], |row| {
                 Ok(CloudJob {
                     bookmark: row.get(0)?,
                     folders_only: row.get(1)?,
@@ -78,16 +84,32 @@ impl Store {
         Ok(jobs)
     }
 
-    /// The cloud organizer took these bookmarks: they leave this Mac's queue. Their status
-    /// goes back to what it was until the server's own `queued` arrives in a pull. The
-    /// server retains deferred requests and queues them as allowance becomes available.
-    pub fn hand_to_cloud(&mut self, bookmarks: &[String]) -> Result<()> {
+    /// The cloud organizer answered a hand-over: the jobs it accepted leave this Mac's
+    /// queue, the ones it refused stay, marked with the month of `now`. Either way the
+    /// status goes back to what it was until the server's own `queued` arrives in a pull.
+    pub fn hand_to_cloud(
+        &mut self,
+        accepted: &[String],
+        refused: &[String],
+        now: i64,
+    ) -> Result<()> {
         let tx = self.write()?;
-        for key in bookmarks {
+        for key in accepted {
             tx.execute(
                 "DELETE FROM jobs WHERE bookmark_id = (SELECT id FROM bookmarks WHERE sync_id = ?1)",
                 [key],
             )?;
+        }
+        for key in refused {
+            tx.execute(
+                &format!(
+                    "UPDATE jobs SET refused_month = {MONTH}
+                     WHERE bookmark_id = (SELECT id FROM bookmarks WHERE sync_id = ?1)"
+                ),
+                params![key, now],
+            )?;
+        }
+        for key in accepted.iter().chain(refused) {
             tx.execute(
                 "UPDATE bookmarks SET status = CASE WHEN organized_at IS NULL THEN 'new' ELSE 'organized' END
                  WHERE sync_id = ?1 AND status = 'queued'",
@@ -96,6 +118,23 @@ impl Store {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    /// The account organizes on this Mac now: jobs the cloud refused join the local queue
+    /// again. Returns how many did.
+    pub fn reclaim_refused_jobs(&mut self) -> Result<usize> {
+        let tx = self.write()?;
+        tx.execute(
+            "UPDATE bookmarks SET status = 'queued'
+             WHERE id IN (SELECT bookmark_id FROM jobs WHERE refused_month IS NOT NULL)",
+            [],
+        )?;
+        let reclaimed = tx.execute(
+            "UPDATE jobs SET refused_month = NULL WHERE refused_month IS NOT NULL",
+            [],
+        )?;
+        tx.commit()?;
+        Ok(reclaimed)
     }
 
     /// Up to `limit` local thumbnails waiting for upload.
@@ -180,6 +219,7 @@ mod tests {
     use std::path::PathBuf;
 
     use knoa_core::{BookmarkId, Image};
+    use serde_json::{Value, json};
 
     use crate::{Store, test_support::*};
 
@@ -196,20 +236,131 @@ mod tests {
         let added = store
             .add_link(WORKSPACE, &crate::NewLink::new("https://a.dev/"), 10)
             .unwrap();
-        assert_eq!(store.cloud_jobs(10).unwrap().len(), 0);
+        assert_eq!(store.cloud_jobs(10, 0).unwrap().len(), 0);
 
         store.settle(&applied(&store)).unwrap();
-        let jobs = store.cloud_jobs(10).unwrap();
+        let jobs = store.cloud_jobs(10, 0).unwrap();
         assert_eq!(jobs.len(), 1);
         assert!(!jobs[0].folders_only);
 
-        store.hand_to_cloud(&[jobs[0].bookmark.clone()]).unwrap();
-        assert_eq!(store.cloud_jobs(10).unwrap().len(), 0);
+        store
+            .hand_to_cloud(&[jobs[0].bookmark.clone()], &[], 0)
+            .unwrap();
+        assert_eq!(store.cloud_jobs(10, 0).unwrap().len(), 0);
         assert!(store.take_jobs(i64::MAX, 10).unwrap().is_empty());
         let bookmark = store.bookmark(added.id).unwrap().unwrap();
         assert_eq!(bookmark.status, knoa_core::Status::New);
         // Handing over is this Mac's business: nothing goes to the server.
         assert_eq!(store.next_push().unwrap().len(), 0);
+    }
+
+    const URL: &str = "https://a.dev/";
+
+    /// The last hour of November 2026 and the first of December, in UTC.
+    const NOVEMBER: i64 = 1_796_079_600;
+    const DECEMBER: i64 = 1_796_083_200;
+
+    /// A bookmark this Mac saved, waiting to be handed to the cloud organizer.
+    fn saved(store: &mut Store) -> (BookmarkId, String) {
+        linked(store);
+        let added = store
+            .add_link(WORKSPACE, &crate::NewLink::new(URL), 10)
+            .unwrap();
+        store.settle(&applied(store)).unwrap();
+        let key = store.cloud_jobs(10, NOVEMBER).unwrap().remove(0).bookmark;
+        (added.id, key)
+    }
+
+    fn pull(store: &mut Store, key: &str, version: i64, edit: impl FnOnce(&mut Value)) {
+        let mut row = bookmark_row(key, WORKSPACE_KEY, URL, "A");
+        edit(&mut row);
+        store
+            .apply_remote(
+                &[change(
+                    json!({ "entity": "bookmark", "key": key, "version": version, "deleted": false, "data": row }),
+                )],
+                version,
+            )
+            .unwrap();
+    }
+
+    fn organized(row: &mut Value) {
+        row["status"] = json!("organized");
+        row["organized_at"] = json!(20);
+    }
+
+    #[test]
+    fn a_result_pulled_before_the_hand_over_is_not_asked_for_again() {
+        let mut store = Store::open_in_memory().unwrap();
+        let (id, key) = saved(&mut store);
+        pull(&mut store, &key, 2, organized);
+
+        assert_eq!(store.cloud_jobs(10, NOVEMBER).unwrap(), []);
+        assert!(store.take_jobs(i64::MAX, 10).unwrap().is_empty());
+        let bookmark = store.bookmark(id).unwrap().unwrap();
+        assert_eq!(bookmark.status, knoa_core::Status::Organized);
+    }
+
+    #[test]
+    fn a_job_the_server_queued_at_push_does_not_run_here_after_a_flip_to_device() {
+        let mut store = Store::open_in_memory().unwrap();
+        let (id, key) = saved(&mut store);
+        pull(&mut store, &key, 2, |row| row["status"] = json!("queued"));
+
+        assert_eq!(store.reclaim_refused_jobs().unwrap(), 0);
+        assert!(store.take_jobs(i64::MAX, 10).unwrap().is_empty());
+        let bookmark = store.bookmark(id).unwrap().unwrap();
+        assert_eq!(bookmark.status, knoa_core::Status::Queued);
+    }
+
+    #[test]
+    fn organize_again_survives_a_pull_of_the_earlier_run() {
+        let mut store = Store::open_in_memory().unwrap();
+        let (id, key) = saved(&mut store);
+        pull(&mut store, &key, 2, organized);
+        store.queue(id).unwrap();
+
+        pull(&mut store, &key, 3, |row| {
+            organized(row);
+            row["title"] = json!("Renamed elsewhere");
+        });
+
+        assert_eq!(store.cloud_jobs(10, NOVEMBER).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_refused_job_runs_here_once_the_account_organizes_on_this_mac() {
+        let mut store = Store::open_in_memory().unwrap();
+        let (id, key) = saved(&mut store);
+        store
+            .hand_to_cloud(&[], std::slice::from_ref(&key), NOVEMBER)
+            .unwrap();
+        assert!(store.take_jobs(i64::MAX, 10).unwrap().is_empty());
+
+        assert_eq!(store.reclaim_refused_jobs().unwrap(), 1);
+
+        let jobs = store.take_jobs(i64::MAX, 10).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].bookmark.id, id);
+    }
+
+    #[test]
+    fn a_refused_job_is_handed_again_only_in_a_later_month() {
+        let mut store = Store::open_in_memory().unwrap();
+        let (_, key) = saved(&mut store);
+        store
+            .hand_to_cloud(&[], std::slice::from_ref(&key), NOVEMBER)
+            .unwrap();
+
+        assert_eq!(store.cloud_jobs(10, NOVEMBER).unwrap(), []);
+        let next_month = store.cloud_jobs(10, DECEMBER).unwrap();
+        assert_eq!(next_month.len(), 1);
+        assert_eq!(next_month[0].bookmark, key);
+
+        store
+            .hand_to_cloud(std::slice::from_ref(&key), &[], DECEMBER)
+            .unwrap();
+        assert_eq!(store.cloud_jobs(10, DECEMBER).unwrap(), []);
     }
 
     #[test]
@@ -241,8 +392,6 @@ mod tests {
 
     #[test]
     fn a_pull_does_not_clear_a_pending_local_image() {
-        use serde_json::json;
-
         let mut store = Store::open_in_memory().unwrap();
         linked(&mut store);
         let url = "https://a.dev/";

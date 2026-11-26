@@ -33,6 +33,7 @@ pub(super) fn put(conn: &Connection, key: &str, row: Bookmark) -> Result<Outcome
         leave_queue(conn, id)?;
     }
     if let Some(status) = patch.status {
+        drop_taken_job(conn, id, status)?;
         set_status(conn, id, status)?;
     }
     if let Some(image_key) = &patch.image_key {
@@ -136,7 +137,24 @@ fn leave_queue(conn: &Connection, id: i64) -> Result<()> {
     Ok(())
 }
 
-/// While this Mac's queue has the bookmark, its status is the queue's.
+/// The server queued or organized a bookmark this Mac hasn't organized yet: it took the
+/// work this Mac's job was for, so the job goes rather than running twice. "Organize
+/// again" of an organized bookmark stays, as the pulled row may tell of the earlier run.
+/// Runs before the pulled `organized_at` is written.
+fn drop_taken_job(conn: &Connection, id: i64, status: BookmarkStatus) -> Result<()> {
+    if matches!(status, BookmarkStatus::Queued | BookmarkStatus::Organized) {
+        conn.execute(
+            "DELETE FROM jobs WHERE bookmark_id = ?1
+             AND (SELECT organized_at FROM bookmarks WHERE id = ?1) IS NULL",
+            [id],
+        )?;
+    }
+    Ok(())
+}
+
+/// While this Mac's queue has the bookmark, its status is the queue's. A job the cloud
+/// refused isn't running here, so the server's status shows, e.g. after an upgrade
+/// queued the bookmark there.
 fn set_status(conn: &Connection, id: i64, status: BookmarkStatus) -> Result<()> {
     let slug = match status {
         BookmarkStatus::New => "new",
@@ -146,7 +164,7 @@ fn set_status(conn: &Connection, id: i64, status: BookmarkStatus) -> Result<()> 
     };
     conn.execute(
         "UPDATE bookmarks SET status = ?2
-         WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1)",
+         WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM jobs WHERE bookmark_id = ?1 AND refused_month IS NULL)",
         params![id, slug],
     )?;
     Ok(())

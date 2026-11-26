@@ -43,18 +43,38 @@ pub(in crate::ui::main::settings) fn button(
         .on_click(move |_, _, cx| cx.open_url(url.as_str()))
 }
 
+/// How many bookmarks a free account gets organized in the cloud each month. `None` for
+/// Pro, and from servers that predate the free allowance.
+pub(in crate::ui::main::settings) fn free_allowance(account: &Account) -> Option<u64> {
+    let allowance = account.limits.organized_per_month;
+    (account.plan == Plan::Free && allowance > 0).then_some(allowance)
+}
+
+/// What the cloud's organizing costs the account, for where the UI offers it.
+pub(in crate::ui::main::settings) fn cloud_included(account: Option<&Account>) -> String {
+    match account.and_then(free_allowance) {
+        Some(allowance) => t!("settings-ai-included-in-free", allowance = (allowance)),
+        None => t!("settings-ai-included-in-pro"),
+    }
+}
+
 pub(super) fn usage_row(account: &Account, theme: &Theme) -> AnyElement {
     let (usage, limits) = (account.usage, account.limits);
     let (used, limit) = (usage.bookmarks, limits.bookmarks);
-    let about = match account.organizer {
-        Organizer::Device => t!("settings-account-usage-device", used = used, limit = limit),
-        Organizer::Cloud => t!(
+    // A free account that used its allowance is organized on the Mac again, but how much
+    // of it went is still what it needs to know.
+    let counts_organizing =
+        account.organizer == Organizer::Cloud || free_allowance(account).is_some();
+    let about = if counts_organizing {
+        t!(
             "settings-account-usage-cloud",
             used = used,
             limit = limit,
             organized = (usage.organized_this_month),
             allowance = (limits.organized_per_month)
-        ),
+        )
+    } else {
+        t!("settings-account-usage-device", used = used, limit = limit)
     };
     form::row(
         &t!("settings-account-usage"),
@@ -90,9 +110,12 @@ pub(super) fn description(account: &Account) -> String {
             t!("settings-account-plan-renews", date = date)
         });
     }
-    sentences.push(match account.organizer {
-        Organizer::Device => t!("settings-account-organized-on-device"),
-        Organizer::Cloud => t!("settings-account-organized-in-cloud"),
+    sentences.push(match (account.organizer, free_allowance(account)) {
+        (Organizer::Device, _) => t!("settings-account-organized-on-device"),
+        (Organizer::Cloud, Some(allowance)) => {
+            t!("settings-account-organized-free", allowance = (allowance))
+        }
+        (Organizer::Cloud, None) => t!("settings-account-organized-in-cloud"),
     });
     sentences.join(" ")
 }

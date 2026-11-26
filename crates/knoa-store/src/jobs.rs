@@ -82,7 +82,7 @@ impl Store {
         let due: Vec<(i64, u32, bool, Option<String>)> = {
             let mut stmt = tx.prepare(
                 "SELECT j.bookmark_id, j.attempts, j.folders_only, j.snapshot FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
-                 WHERE j.run_after <= ?1 AND b.status = 'queued' ORDER BY b.added_at DESC LIMIT ?2",
+                 WHERE j.run_after <= ?1 AND b.status = 'queued' AND j.refused_month IS NULL ORDER BY b.added_at DESC LIMIT ?2",
             )?;
             stmt.query_map(params![now, limit], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
@@ -133,7 +133,8 @@ impl Store {
         Ok(self
             .conn
             .query_row(
-                "SELECT min(j.run_after) FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id WHERE b.status = 'queued'",
+                "SELECT min(j.run_after) FROM jobs j JOIN bookmarks b ON b.id = j.bookmark_id
+                 WHERE b.status = 'queued' AND j.refused_month IS NULL",
                 [],
                 |row| row.get(0),
             )
@@ -361,7 +362,7 @@ fn enqueue(tx: &rusqlite::Transaction<'_>, id: i64, folders_only: bool) -> Resul
     )?;
     tx.execute(
         "INSERT INTO jobs (bookmark_id, folders_only) VALUES (?1, ?2) ON CONFLICT DO UPDATE
-         SET run_after = 0, folders_only = excluded.folders_only, vision_backfill = 0",
+         SET run_after = 0, folders_only = excluded.folders_only, vision_backfill = 0, refused_month = NULL",
         params![id, folders_only],
     )?;
     Ok(())

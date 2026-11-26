@@ -221,17 +221,8 @@ impl Cloud {
     /// What the user should know that isn't an error of the sync itself: the plan's
     /// limits holding back changes or organizing, or changes the server refused.
     pub fn notices(&self) -> Vec<Notice> {
-        let allowance = self.allowance_used_up().then_some(Notice::AllowanceUsedUp);
+        let allowance = self.account().and_then(Notice::of_allowance);
         self.push_notices.iter().copied().chain(allowance).collect()
-    }
-
-    /// Read from the account rather than remembered, so it goes away by itself with the
-    /// next month or an upgrade.
-    fn allowance_used_up(&self) -> bool {
-        self.account().is_some_and(|account| {
-            account.organizer == Who::Cloud
-                && account.usage.organized_this_month >= account.limits.organized_per_month
-        })
     }
 
     pub fn problem(&self) -> Option<&Problem> {

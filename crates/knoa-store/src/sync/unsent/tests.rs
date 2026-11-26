@@ -49,7 +49,7 @@ fn a_pulled_invalid_creation_accepts_the_server_row_without_retrying() {
 
     assert_eq!(store.bookmark(id).unwrap().unwrap().title, "Remote title");
     assert_eq!(pushed(&store), Vec::<Value>::new());
-    assert_eq!(store.cloud_jobs(10).unwrap().len(), 1);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap().len(), 1);
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn releasing_blocked_cloud_jobs_restores_status_and_preserves_pending_jobs() {
         .id;
     let outbox = pushed(&store);
 
-    assert_eq!(store.cloud_jobs(10).unwrap(), []);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap(), []);
     for id in [quota, invalid] {
         assert_eq!(store.bookmark(id).unwrap().unwrap().status, Status::Queued);
     }
@@ -151,7 +151,7 @@ fn a_pulled_parked_bookmark_retains_local_edits_and_resumes_syncing() {
     store.apply_remote(&changes, 4).unwrap();
 
     assert_eq!(
-        store.cloud_jobs(10).unwrap().len(),
+        store.cloud_jobs(10, 0).unwrap().len(),
         1,
         "a pulled live row confirms delivery"
     );
@@ -231,7 +231,7 @@ fn correcting_an_invalid_creation_retries_the_full_bookmark_before_handoff() {
         pushed(&store).is_empty(),
         "children wait with the refused creation"
     );
-    assert_eq!(store.cloud_jobs(10).unwrap(), []);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap(), []);
     assert_eq!(store.thumbnail_uploads(10).unwrap(), []);
     store
         .import(
@@ -261,14 +261,14 @@ fn correcting_an_invalid_creation_retries_the_full_bookmark_before_handoff() {
     assert_eq!(pending[0]["data"]["workspace_id"], WORKSPACE_KEY);
     assert_eq!(pending[1]["data"]["text"], "Full page text");
     assert_eq!(pending[2]["data"]["tag"], "rust");
-    assert_eq!(store.cloud_jobs(10).unwrap(), []);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap(), []);
     assert_eq!(store.thumbnail_uploads(10).unwrap(), []);
     store
         .settle(&[
             serde_json::from_value(json!({"mid": pending[0]["mid"], "status": "applied"})).unwrap(),
         ])
         .unwrap();
-    assert_eq!(store.cloud_jobs(10).unwrap().len(), 1);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap().len(), 1);
     assert_eq!(store.thumbnail_uploads(10).unwrap().len(), 1);
 }
 
@@ -297,7 +297,7 @@ fn a_bookmark_past_the_plans_limit_goes_again_whole_when_resent() {
             },
         )
         .unwrap();
-    assert_eq!(store.cloud_jobs(10).unwrap(), []);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap(), []);
     assert_eq!(store.thumbnail_uploads(10).unwrap(), []);
     store.add_tag(id, "rust", Origin::User).unwrap();
     let [put, tag] = <[Value; 2]>::try_from(pushed(&store)).unwrap();
@@ -318,7 +318,7 @@ fn a_bookmark_past_the_plans_limit_goes_again_whole_when_resent() {
     assert_eq!(store.unsent_bookmarks().unwrap(), 1);
 
     assert_eq!(
-        store.cloud_jobs(10).unwrap(),
+        store.cloud_jobs(10, 0).unwrap(),
         [],
         "quota parking must not publish the row"
     );
@@ -328,7 +328,7 @@ fn a_bookmark_past_the_plans_limit_goes_again_whole_when_resent() {
     assert_eq!(pending[0]["data"]["url"], "https://a.dev/");
     assert_eq!(pending[0]["data"]["title"], "A");
     assert_eq!(pending[0]["data"]["workspace_id"], WORKSPACE_KEY);
-    assert_eq!(store.cloud_jobs(10).unwrap(), []);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap(), []);
     assert_eq!(store.thumbnail_uploads(10).unwrap(), []);
     let entities: Vec<Value> = pushed(&store).iter().map(|m| m["entity"].clone()).collect();
     assert_eq!(
@@ -341,6 +341,6 @@ fn a_bookmark_past_the_plans_limit_goes_again_whole_when_resent() {
     );
     assert_eq!(store.unsent_bookmarks().unwrap(), 0);
     store.settle(&applied(&store)).unwrap();
-    assert_eq!(store.cloud_jobs(10).unwrap().len(), 1);
+    assert_eq!(store.cloud_jobs(10, 0).unwrap().len(), 1);
     assert_eq!(store.thumbnail_uploads(10).unwrap().len(), 1);
 }

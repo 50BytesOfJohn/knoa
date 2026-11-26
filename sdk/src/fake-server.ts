@@ -14,6 +14,9 @@ import {
 	MAX_PULL,
 	type Mutation,
 	type MutationResult,
+	type OrganizeRequest,
+	type OrganizeResponse,
+	PLAN_LIMITS,
 	type PullResponse,
 	type PushResponse,
 	type Rows,
@@ -54,6 +57,13 @@ export class FakeServer {
 	bookmarkLimit: number;
 	plan: Account["plan"];
 	language: Language | null = null;
+	/** Full runs and folders-only runs queued this month, as the server counts them. */
+	organized = 0;
+	foldersOnly = 0;
+	/** Bookmarks waiting for the organizer, which never runs here: each is charged once. */
+	private queued = new Set<Key>();
+	/** What a subscriber asked for beyond the month's room, kept to queue later. */
+	private deferred = new Set<Key>();
 
 	constructor(options: FakeServerOptions = {}) {
 		this.bookmarkLimit = options.bookmarkLimit ?? 10_000;
@@ -69,13 +79,18 @@ export class FakeServer {
 	push(mutations: Mutation[]): PushResponse {
 		this.pushes.push(mutations);
 		const before = this.version;
+		const created: Key[] = [];
 		const results = mutations.map((m) => {
 			const seen = this.results.get(m.mid);
 			if (seen) return seen;
+			const creating = isNewBookmark(m) && !this.tables.bookmark.has(m.key);
 			const result: MutationResult = { mid: m.mid, ...this.apply(m) };
 			this.results.set(m.mid, result);
+			if (creating && result.status === "applied") created.push(m.key);
 			return result;
 		});
+		// As the API does, new bookmarks of a cloud account are queued without asking.
+		if (this.me().organizer === "cloud") this.queue(created, false);
 		if (this.version > before) this.poke();
 		return { results, version: this.version };
 	}
@@ -117,12 +132,12 @@ export class FakeServer {
 			user_id: "user_fake",
 			email: "someone@example.com",
 			plan: this.plan,
-			organizer: pro ? "cloud" : "device",
+			organizer: pro || this.room(false) > 0 ? "cloud" : "device",
 			limits: {
 				bookmarks: this.bookmarkLimit,
-				organized_per_month: pro ? 1000 : 0,
+				organized_per_month: PLAN_LIMITS[this.plan].organized_per_month,
 			},
-			usage: { bookmarks, organized_this_month: 0 },
+			usage: { bookmarks, organized_this_month: this.organized },
 			billing: {
 				status: pro ? "active" : "none",
 				period_end: null,
@@ -131,6 +146,72 @@ export class FakeServer {
 			},
 			language: this.language,
 		};
+	}
+
+	/**
+	 * Queues what fits this month's room. A subscriber's server keeps the rest as pending;
+	 * a free account's refuses it, and organizing goes back to the user's own devices once
+	 * the full-run room is used up. For a `bookmarks` scope it says which ids it took on.
+	 */
+	organize({ scope, folders_only }: OrganizeRequest): OrganizeResponse {
+		const before = this.version;
+		const asked = "bookmarks" in scope ? scope.bookmarks : this.inScope(scope);
+		const { queued, accepted } = this.queue(asked, folders_only);
+		if (this.version > before) this.poke();
+		const pending = this.plan === "pro" ? this.deferred.size : 0;
+		return "bookmarks" in scope
+			? { queued, pending, accepted }
+			: { queued, pending };
+	}
+
+	/** Queues what fits the room, charging a bookmark only while it isn't queued yet. */
+	private queue(
+		keys: Key[],
+		foldersOnly: boolean,
+	): { queued: number; accepted: Key[] } {
+		const organizer = this.me().organizer;
+		let queued = 0;
+		const accepted: Key[] = [];
+		for (const key of keys) {
+			const bookmark = this.tables.bookmark.get(key);
+			if (!bookmark || bookmark.deleted_at !== null || this.queued.has(key)) {
+				accepted.push(key);
+			} else if (this.room(foldersOnly) > 0) {
+				if (foldersOnly) this.foldersOnly += 1;
+				else this.organized += 1;
+				this.queued.add(key);
+				this.deferred.delete(key);
+				this.tables.bookmark.set(key, { ...bookmark, status: "queued" });
+				this.bump("bookmark", key, false);
+				queued += 1;
+				accepted.push(key);
+			} else if (this.plan === "pro") {
+				this.deferred.add(key);
+				accepted.push(key);
+			}
+		}
+		if (this.me().organizer !== organizer) this.accountChanged();
+		return { queued, accepted };
+	}
+
+	/** A free account's folders-only runs need room for full runs too. */
+	private room(foldersOnly: boolean): number {
+		const limits = PLAN_LIMITS[this.plan];
+		const full = Math.max(0, limits.organized_per_month - this.organized);
+		if (!foldersOnly) return full;
+		if (this.plan === "free" && full === 0) return 0;
+		return Math.max(0, limits.folders_only_per_month - this.foldersOnly);
+	}
+
+	/** The live bookmarks a workspace or `all` scope names. */
+	private inScope(scope: { workspace: string } | { all: true }): Key[] {
+		return [...this.tables.bookmark.entries()]
+			.filter(
+				([, b]) =>
+					b.deleted_at === null &&
+					(!("workspace" in scope) || b.workspace_id === scope.workspace),
+			)
+			.map(([key]) => key);
 	}
 
 	/** Tells connected clients the account changed, as the server does after a plan change. */
@@ -164,10 +245,7 @@ export class FakeServer {
 			return this.setLanguage(init);
 		}
 		if (method === "POST" && url.pathname === "/v1/organize") {
-			if (this.plan !== "pro") {
-				return json({ error: "forbidden", message: "Pro only" }, 403);
-			}
-			return json({ queued: 0, pending: 0 });
+			return json(this.organize(JSON.parse(String(init?.body))));
 		}
 		if (method === "POST" && url.pathname.startsWith("/v1/billing/")) {
 			return this.billing(url.pathname.slice("/v1/billing/".length), init);
@@ -338,6 +416,16 @@ export class FakeServer {
 		const message = JSON.stringify({ type: "poke", version: this.version });
 		for (const socket of this.sockets) socket.deliver(message);
 	}
+}
+
+/** A user's put of a bookmark not organized yet, which the API queues on arrival. */
+function isNewBookmark(m: Mutation): m is Mutation & { op: "put" } {
+	return (
+		m.op === "put" &&
+		m.entity === "bookmark" &&
+		m.actor !== "ai" &&
+		(m.data as Rows["bookmark"]).status !== "organized"
+	);
 }
 
 const ID_KEYED: ReadonlySet<Entity> = new Set(["workspace", "folder", "bookmark"]);
