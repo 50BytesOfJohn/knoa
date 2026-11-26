@@ -3,6 +3,11 @@
 What changed in each Knoa release. Downloads are on the
 [releases page](https://github.com/50BytesOfJohn/knoa/releases).
 
+## [0.13.0](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.13.0) - 2026-11-26
+
+### Changed
+
+- Give Free accounts 25 cloud organizes a month ([#57](https://github.com/50BytesOfJohn/knoa/pull/57))
 ## [0.12.1](https://github.com/50BytesOfJohn/knoa/releases/tag/v0.12.1) - 2026-11-25
 
 ### Changed
